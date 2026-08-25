@@ -527,9 +527,9 @@ for (const m of MODULES) {
 
   // The scrape must pre-tick, and the taxonomy must not duplicate it.
   const st = S.fresh();
-  st.m.services = { trade: "plumbing" };
+  st.m.services = { trades: ["plumbing"] };
   const plumbing = T.getTrade("plumbing").services;
-  const universe = S.serviceUniverse(st, bfp, plumbing, "plumbing");
+  const universe = S.serviceUniverse(st, bfp, [T.getTrade("plumbing")]);
   const uIds = universe.map((x) => x.id);
   if (new Set(uIds).size !== uIds.length) fail("serviceUniverse produced duplicate ids");
   const ticked = universe.filter((x) => x.on);
@@ -544,23 +544,23 @@ for (const m of MODULES) {
   S.setPriority(st, "drains", "high");
   S.setPriority(st, "toilets", "low");
   S.setPriority(st, "sewers", "high");
-  const buckets = S.servicesByPriority(st, bfp, plumbing, "plumbing");
+  const buckets = S.servicesByPriority(st, bfp, [T.getTrade("plumbing")]);
   if (buckets.high.length !== 2 || buckets.low.length !== 1) fail("priority buckets did not fill correctly");
-  const order = S.serviceOrder(st, bfp, plumbing, "plumbing").map((x) => x.id);
+  const order = S.serviceOrder(st, bfp, [T.getTrade("plumbing")]).map((x) => x.id);
   if (order.indexOf("drains") > order.indexOf("toilets")) fail("build order put a Low above a High");
 
   // reordering inside a bucket must not disturb the others
   S.reorderBucket(st, ["sewers", "drains"]);
-  const after = S.servicesByPriority(st, bfp, plumbing, "plumbing");
+  const after = S.servicesByPriority(st, bfp, [T.getTrade("plumbing")]);
   if (after.high[0].id !== "sewers") fail("reorderBucket did not reorder within the band");
   if (after.low[0].id !== "toilets") fail("reorderBucket disturbed another band");
 
   // toggling: scraped services deny-list, taxonomy-only allow-list
   S.toggleService(st, "drains", false);
-  if (S.onServices(st, bfp, plumbing, "plumbing").some((x) => x.id === "drains")) fail("could not untick a scraped service");
+  if (S.onServices(st, bfp, [T.getTrade("plumbing")]).some((x) => x.id === "drains")) fail("could not untick a scraped service");
   const scopedBackflow = S.scopedId("plumbing", "backflow-testing");
   S.toggleService(st, scopedBackflow, true);
-  if (!S.onServices(st, bfp, plumbing, "plumbing").some((x) => x.id === scopedBackflow)) {
+  if (!S.onServices(st, bfp, [T.getTrade("plumbing")]).some((x) => x.id === scopedBackflow)) {
     fail("could not tick a taxonomy-only service");
   }
 
@@ -568,14 +568,14 @@ for (const m of MODULES) {
   // a priority and a note that would vanish with it.
   const svcMod = MODULES.find((m) => m.id === "services");
   const sw = S.fresh();
-  sw.m.services = { trade: "plumbing" };
+  sw.m.services = { trades: ["plumbing"] };
   const bfId = S.scopedId("plumbing", "backflow-testing");
   const meta = svcMod.serviceMeta(ctxFor(bfp, sw), bfId);
   if (!meta || !meta.name) fail("serviceMeta() returned nothing for a taxonomy service");
   S.toggleService(sw, bfId, true, meta);
   S.setPriority(sw, bfId, "high");
-  sw.m.services.trade = "hvac";
-  const survivor = S.onServices(sw, bfp, T.getTrade("hvac").services, "hvac")
+  sw.m.services.trades = ["hvac"];
+  const survivor = S.onServices(sw, bfp, [T.getTrade("hvac")])
     .find((x) => x.id === bfId);
   if (!survivor) fail("a ticked taxonomy service vanished when the trade changed");
   else {
@@ -589,7 +589,7 @@ for (const m of MODULES) {
   // be replaced by the taxonomy's list.
   const oddClient = JSON.parse(JSON.stringify(bfp));
   oddClient.services = [{ id: "drains", name: "Drains", subs: ["Drain Cleaning", "Grease Traps"], hasPage: true, verify: null }];
-  const merged = S.serviceUniverse(S.fresh(), oddClient, plumbing, "plumbing").find((x) => x.id === "drains");
+  const merged = S.serviceUniverse(S.fresh(), oddClient, [T.getTrade("plumbing")]).find((x) => x.id === "drains");
   const subNames = merged.subs.map((x) => x.name);
   if (subNames.indexOf("Grease Traps") < 0) fail("a scraped sub-service was dropped by the taxonomy merge");
   if (subNames.indexOf("Hydrojetting") < 0) fail("the taxonomy subs were lost in the merge");
@@ -597,9 +597,9 @@ for (const m of MODULES) {
 
   // Unprioritized services must not appear in the build order with a rank.
   const bo = S.fresh();
-  bo.m.services = { trade: "plumbing" };
+  bo.m.services = { trades: ["plumbing"] };
   S.setPriority(bo, "drains", "high");
-  const built = S.serviceOrder(bo, bfp, plumbing, "plumbing");
+  const built = S.serviceOrder(bo, bfp, [T.getTrade("plumbing")]);
   if (built.some((x) => !x.prio)) fail("an unranked service appeared in the build order");
   if (built.length !== 1) fail(`build order has ${built.length} entries, expected only the 1 prioritized`);
   const boSum = svcMod.summary(ctxFor(bfp, bo));
@@ -611,12 +611,12 @@ for (const m of MODULES) {
   // 16 service ids mean different things in different trades. Ticking one
   // must never tick its namesake in another trade.
   const clash = S.fresh();
-  clash.m.services = { trade: "plumbing" };
+  clash.m.services = { trades: ["plumbing"] };
   const commercialPlumbing = S.scopedId("plumbing", "commercial");
   S.toggleService(clash, commercialPlumbing, true, { name: "Commercial Plumbing", subs: [] });
   S.setPriority(clash, commercialPlumbing, "high");
-  clash.m.services.trade = "hvac";
-  const hvacList = S.onServices(clash, bfp, T.getTrade("hvac").services, "hvac");
+  clash.m.services.trades = ["hvac"];
+  const hvacList = S.onServices(clash, bfp, [T.getTrade("hvac")]);
   const commercialHvac = hvacList.find((x) => x.id === S.scopedId("hvac", "commercial"));
   if (commercialHvac) fail("ticking Commercial Plumbing also ticked Commercial HVAC");
   if (!hvacList.some((x) => x.id === commercialPlumbing)) {
@@ -625,11 +625,81 @@ for (const m of MODULES) {
 
   // a sub dropped on a service with no priority must still reach the readout
   const subDrop = S.fresh();
-  subDrop.m.services = { trade: "plumbing", subsOff: { drains: ["Hydrojetting"] } };
+  subDrop.m.services = { trades: ["plumbing"], subsOff: { drains: ["Hydrojetting"] } };
   const subSum = svcMod.summary(ctxFor(bfp, subDrop));
   const dropRow = (subSum.rows || []).find((r) => r[0] === "Sub-services dropped");
   if (!dropRow || dropRow[1].indexOf("Hydrojetting") < 0) {
     fail("a dropped sub vanished because its service had no priority");
+  }
+
+  // Two trades at once — the common plumbing+HVAC / plumbing+restoration shape.
+  const multi = S.fresh();
+  multi.m.services = { trades: ["plumbing", "hvac"] };
+  const both = S.serviceUniverse(multi, bfp, [T.getTrade("plumbing"), T.getTrade("hvac")]);
+  const labels = both.map((x) => x.name);
+  if (new Set(labels).size !== labels.length) {
+    fail("two trades produced duplicate service labels: " +
+      labels.filter((n, i, a) => a.indexOf(n) !== i).join(", "));
+  }
+  if (both.filter((x) => x.on).length !== bfp.services.length) {
+    fail("adding a second trade changed what the scrape pre-ticked");
+  }
+  // a scraped page stands in for ONE row; the other trade's namesake is
+  // still a page they don't have
+  if (!both.some((x) => x.name === "Commercial Plumbing" && x.on)) fail("scraped Commercial did not claim the plumbing row");
+  if (!both.some((x) => x.name === "Commercial HVAC" && !x.on)) fail("Commercial HVAC was swallowed by the scraped Commercial page");
+  // ...but an identical service in both trades is one row, not two
+  if (labels.filter((n) => n === "Water Heaters").length !== 1) fail("Water Heaters appeared once per trade");
+  if (!both.every((x) => x.tradeId || x.source === "scrape" || x.source === "added")) {
+    fail("a taxonomy service arrived without a trade to group it under");
+  }
+
+  // Pre-scoping sessions: every key tied to a service id moves together.
+  for (const [label, withTrade, fallback] of [["explicit", true, null], ["inferred", false, "plumbing"]]) {
+    const old = {
+      v: 2, step: "services",
+      m: { services: {
+        on: ["backflow-testing"],
+        subsOff: { "backflow-testing": ["Annual Test"] },
+        prio: { "backflow-testing": "high", drains: "med" },
+        snap: { "backflow-testing": { name: "Backflow Testing", subs: [] } },
+      } },
+      order: {}, skipped: [],
+      notes: { "services:backflow-testing": "Bob does these", "services:drains": "scraped note" },
+    };
+    if (withTrade) old.m.services.trade = "plumbing";
+    const st2 = S.validate(JSON.parse(JSON.stringify(old)));
+    S.reconcileServiceScoping(st2, fallback);
+    const sm = st2.m.services;
+    const want = "plumbing:backflow-testing";
+    if (sm.on[0] !== want) fail(`${label} session: tick not re-keyed (${sm.on[0]})`);
+    if (sm.prio[want] !== "high") fail(`${label} session: priority lost in the re-key`);
+    if (!sm.subsOff[want]) fail(`${label} session: dropped subs lost in the re-key`);
+    if (!sm.snap[want]) fail(`${label} session: snapshot lost in the re-key`);
+    if (st2.notes["services:" + want] !== "Bob does these") fail(`${label} session: note lost in the re-key`);
+    if (sm.prio.drains !== "med") fail(`${label} session: a scraped service was wrongly re-keyed`);
+    if (st2.notes["services:drains"] !== "scraped note") fail(`${label} session: a scraped note was wrongly re-keyed`);
+    if (sm.trade !== undefined) fail(`${label} session: the old single trade key survived`);
+    // running it again must change nothing
+    const before = JSON.stringify(st2);
+    S.reconcileServiceScoping(st2, fallback);
+    if (JSON.stringify(st2) !== before) fail(`${label} session: reconcile is not idempotent`);
+  }
+
+  // Adding a second trade must not drop the first when the first was
+  // inferred from the handoff and never written to state.
+  const svcMod2 = MODULES.find((m) => m.id === "services");
+  const inferredOnly = S.fresh();
+  const ctxInf = ctxFor(bfp, inferredOnly);
+  const shown = svcMod2.trades(ctxInf);
+  if (shown.length !== 1 || shown[0] !== "plumbing") {
+    fail(`trade not inferred from the handoff: ${JSON.stringify(shown)}`);
+  }
+  // an explicitly empty list must stay empty, or the last trade can never
+  // be removed
+  inferredOnly.m.services = { trades: [] };
+  if (svcMod2.trades(ctxFor(bfp, inferredOnly)).length !== 0) {
+    fail("clearing every trade resurrected the inferred one");
   }
 
   // the old rank screen is gone and nothing still points at it

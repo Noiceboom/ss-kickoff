@@ -212,7 +212,7 @@ export const PRIORITIES = ["high", "med", "low"];
 export function svcState(state) {
   const s = state.m.services || EMPTY;
   return {
-    trade: typeof s.trade === "string" ? s.trade : "",
+    trades: Array.isArray(s.trades) ? s.trades : (typeof s.trade === "string" && s.trade ? [s.trade] : []),
     off: Array.isArray(s.off) ? s.off : [],
     on: Array.isArray(s.on) ? s.on : [],
     prio: s.prio && typeof s.prio === "object" ? s.prio : EMPTY,
@@ -240,12 +240,17 @@ export function svcState(state) {
  */
 export function scopedId(trade, id) { return trade + ":" + id; }
 
-export function serviceUniverse(state, client, tradeServices, tradeId) {
+/**
+ * @param trades array of trade objects {id, label, services} — plenty of
+ *   companies run two trades (plumbing and HVAC, plumbing and restoration),
+ *   so the list is the union of everything they do.
+ */
+export function serviceUniverse(state, client, trades) {
   const v = svcState(state);
   const seen = new Set();
   const out = [];
 
-  const push = (it, source) => {
+  const push = (it, source, trade) => {
     if (!it || !it.id || seen.has(it.id)) return;
     seen.add(it.id);
     out.push({
@@ -253,25 +258,46 @@ export function serviceUniverse(state, client, tradeServices, tradeId) {
       name: it.label || it.name || it.id,
       subs: Array.isArray(it.subs) ? it.subs : [],
       source: source,
+      tradeId: trade ? trade.id : "",
+      tradeLabel: trade ? trade.label : "",
       hasPage: !!it.hasPage,
       verify: it.verify || null,
     });
   };
 
-  const trade = tradeId || v.trade || "trade";
   const scraped = new Map((client.services || []).map((x) => [x.id, x]));
-  for (const t of tradeServices || []) {
-    const hit = scraped.get(t.id);
-    if (!hit) { push({ ...t, id: scopedId(trade, t.id) }, "trade"); continue; }
-    // Union the sub lists. Taking the taxonomy's alone would silently drop
-    // a sub-service the client actually has a page for just because the
-    // industry list doesn't happen to name it.
-    const subs = (t.subs || []).slice();
-    for (const sub of hit.subs || []) if (subs.indexOf(sub) < 0) subs.push(sub);
-    push({ ...t, subs: subs, hasPage: hit.hasPage, verify: hit.verify }, "both");
+  // Two trades often name the same service identically — both plumbing and
+  // HVAC list Water Heaters. That's one service, not two tiles. Where the
+  // label differs it genuinely is two ("Commercial Plumbing" vs
+  // "Commercial HVAC"), so the label is part of the key.
+  const seenService = new Set();
+  // A scraped page can only stand in for ONE taxonomy row. Their existing
+  // "Commercial" page is the plumbing one; if they also do HVAC, Commercial
+  // HVAC is a page they don't have yet and still needs offering.
+  const claimed = new Set();
+
+  for (const trade of trades || []) {
+    for (const t of trade.services || []) {
+      const key = t.id + "|" + t.label;
+      if (seenService.has(key)) continue;
+      seenService.add(key);
+
+      const hit = scraped.get(t.id);
+      if (hit && !claimed.has(t.id)) {
+        claimed.add(t.id);
+        // Union the sub lists. Taking the taxonomy's alone would silently
+        // drop a sub-service the client actually has a page for just
+        // because the industry list doesn't happen to name it.
+        const subs = (t.subs || []).slice();
+        for (const sub of hit.subs || []) if (subs.indexOf(sub) < 0) subs.push(sub);
+        push({ ...t, subs: subs, hasPage: hit.hasPage, verify: hit.verify }, "both", trade);
+        continue;
+      }
+      push({ ...t, id: scopedId(trade.id, t.id) }, "trade", trade);
+    }
   }
-  for (const c of client.services || []) push(c, "scrape");
-  for (const a of v.added) push(a, "added");
+  for (const c of client.services || []) push(c, "scrape", null);
+  for (const a of v.added) push(a, "added", null);
 
   // A taxonomy service ticked under one trade would otherwise disappear
   // the moment the trade changed, taking its priority and note with it.
@@ -291,13 +317,13 @@ export function serviceUniverse(state, client, tradeServices, tradeId) {
   }));
 }
 
-export function onServices(state, client, tradeServices, tradeId) {
-  return serviceUniverse(state, client, tradeServices, tradeId).filter((x) => x.on);
+export function onServices(state, client, trades) {
+  return serviceUniverse(state, client, trades).filter((x) => x.on);
 }
 
 /** Selected services grouped H → M → L, ordered within each bucket. */
-export function servicesByPriority(state, client, tradeServices, tradeId) {
-  const list = onServices(state, client, tradeServices, tradeId);
+export function servicesByPriority(state, client, trades) {
+  const list = onServices(state, client, trades);
   const order = state.order.services || [];
   const rank = (id) => { const i = order.indexOf(id); return i < 0 ? Infinity : i; };
   const buckets = { high: [], med: [], low: [], "": [] };
@@ -315,8 +341,8 @@ export function servicesByPriority(state, client, tradeServices, tradeId) {
  * rank next to a decision nobody made — "#7" reads as agreed, not as
  * "we never got to it". They surface as an open item instead.
  */
-export function serviceOrder(state, client, tradeServices, tradeId) {
-  const b = servicesByPriority(state, client, tradeServices, tradeId);
+export function serviceOrder(state, client, trades) {
+  const b = servicesByPriority(state, client, trades);
   return b.high.concat(b.med, b.low);
 }
 
@@ -529,16 +555,53 @@ function pruneChannelDetail(m) {
  * taken at tick-time, so nothing carries into another trade by accident.
  */
 function migrateServiceScoping(m) {
-  if (!m || !Array.isArray(m.on) || !m.trade) return;
-  const snap = m.snap && typeof m.snap === "object" ? m.snap : {};
-  const prio = m.prio && typeof m.prio === "object" ? m.prio : {};
-  m.on = m.on.map((id) => {
-    if (id.indexOf(":") > -1) return id;
-    const scoped = m.trade + ":" + id;
-    if (snap[id]) { snap[scoped] = snap[id]; delete snap[id]; }
-    if (prio[id]) { prio[scoped] = prio[id]; delete prio[id]; }
-    return scoped;
-  });
+  if (!m) return;
+  // b15 and earlier held a single trade; companies commonly run two.
+  if (typeof m.trade === "string") {
+    if (m.trade && !Array.isArray(m.trades)) m.trades = [m.trade];
+    if (m.trade) m._wasTrade = m.trade;
+    delete m.trade;
+  }
+}
+
+/**
+ * Re-key taxonomy ticks made before ids were scoped to their trade.
+ *
+ * Every key hanging off a service id has to move together — the tick, its
+ * snapshot, its priority, its dropped sub-services and its note. Migrating
+ * only some is worse than migrating none: the service comes back having
+ * quietly lost what was said about it.
+ *
+ * `fallbackTrade` covers sessions where the trade was never picked
+ * explicitly and came from the sales handoff, so state has nothing to
+ * re-key against. Only app.js knows that, hence the separate call.
+ */
+export function reconcileServiceScoping(state, fallbackTrade) {
+  const m = state.m.services;
+  if (!m || !Array.isArray(m.on) || !m.on.length) return;
+
+  const trade = m._wasTrade || (Array.isArray(m.trades) && m.trades[0]) || fallbackTrade;
+  delete m._wasTrade;
+  if (!trade) return;
+
+  const bare = m.on.filter((id) => id.indexOf(":") < 0);
+  if (!bare.length) return;
+
+  const move = (obj, from, to) => {
+    if (obj && obj[from] !== undefined && obj[to] === undefined) {
+      obj[to] = obj[from];
+      delete obj[from];
+    }
+  };
+
+  for (const id of bare) {
+    const scoped = trade + ":" + id;
+    move(m.snap, id, scoped);
+    move(m.prio, id, scoped);
+    move(m.subsOff, id, scoped);
+    move(state.notes, "services:" + id, "services:" + scoped);
+  }
+  m.on = m.on.map((id) => (id.indexOf(":") < 0 ? trade + ":" + id : id));
 }
 
 function migrate(state) {

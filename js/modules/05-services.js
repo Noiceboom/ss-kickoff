@@ -29,40 +29,50 @@ const BUCKETS = [
   { key: "low", label: "Low", note: "Eventually" },
 ];
 
-/** The trade in play: explicitly chosen, else inferred from the scrape. */
-export function activeTrade(ctx) {
-  const chosen = svcState(ctx.state).trade;
-  if (chosen) return chosen;
-  return resolveTrade((ctx.client.client || {}).trade) || "";
+/**
+ * The trades in play: whatever was picked, else the one inferred from the
+ * sales handoff. Plenty of companies run two — plumbing and HVAC, plumbing
+ * and restoration — so this is a list.
+ */
+export function activeTrades(ctx) {
+  // A stored array is authoritative even when empty — otherwise clearing
+  // the last trade would resurrect the inferred one and it could never be
+  // turned off.
+  const s = ctx.state.m.services;
+  if (s && Array.isArray(s.trades)) return s.trades;
+  const inferred = resolveTrade((ctx.client.client || {}).trade);
+  return inferred ? [inferred] : [];
 }
 
-function tradeServices(ctx) {
-  const t = getTrade(activeTrade(ctx));
-  return t ? t.services : [];
+function tradeObjects(ctx) {
+  return activeTrades(ctx).map(getTrade).filter(Boolean);
 }
 
 /* ── industry ─────────────────────────────────────────── */
 
 function industryCard(ctx) {
-  const active = activeTrade(ctx);
-  const inferred = !svcState(ctx.state).trade && active;
+  const active = activeTrades(ctx);
+  const stored = ctx.state.m.services && Array.isArray(ctx.state.m.services.trades);
+  const inferred = !stored && active.length;
   const chips = TRADES.map((t) =>
-    '<button class="chip' + (t.id === active ? " on" : "") + '" data-chip="' + ID + "|trade|" + esc(t.id) + '" ' +
-    'data-multi="0">' + esc(t.label) + "</button>"
+    '<button class="chip' + (active.indexOf(t.id) > -1 ? " on" : "") + '" data-chip="' +
+    ID + "|trades|" + esc(t.id) + '" data-multi="1">' + esc(t.label) + "</button>"
   ).join("");
+
+  const note = inferred
+    ? "Set from the sales handoff. Tap to change it, or add a second trade."
+    : active.length > 1
+      ? "Both service lists are loaded below, grouped by trade."
+      : "Tick every trade they run — plenty do two.";
 
   return (
     '<div class="card">' +
       '<div class="mlabel">Industry</div>' +
       '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
-        "Picking the trade loads its full service list. Anything already on their site comes through ticked." +
+        "Loads each trade's full service list. Anything already on their site comes through ticked." +
       "</div>" +
       '<div class="chips" style="margin-top:18px">' + chips + "</div>" +
-      (inferred
-        ? '<div style="margin-top:14px;font-size:13.5px;color:var(--muted)">' +
-          "Set from the sales handoff. Tap another to change it." +
-          "</div>"
-        : "") +
+      '<div style="margin-top:14px;font-size:13.5px;color:var(--muted)">' + esc(note) + "</div>" +
     "</div>"
   );
 }
@@ -113,9 +123,28 @@ function tile(ctx, it) {
   );
 }
 
+function groupedGrid(ctx, all) {
+  const trades = tradeObjects(ctx);
+  if (trades.length < 2) {
+    return '<div class="pickgrid" style="margin-top:18px">' + all.map((it) => tile(ctx, it)).join("") + "</div>";
+  }
+  // With two trades the list runs to 50-odd services; grouping is the
+  // difference between scanning it and scrolling past it.
+  const groups = trades.map((t) => ({ label: t.label, items: all.filter((x) => x.tradeId === t.id) }));
+  const loose = all.filter((x) => !x.tradeId);
+  if (loose.length) groups.push({ label: "From their site", items: loose });
+
+  return groups.filter((g) => g.items.length).map((g) => {
+    const on = g.items.filter((x) => x.on).length;
+    return '<div class="pickcat" data-filter-cat>' + esc(g.label) +
+      '<span style="color:var(--faint);margin-left:8px">' + on + " / " + g.items.length + "</span></div>" +
+      '<div class="pickgrid">' + g.items.map((it) => tile(ctx, it)).join("") + "</div>";
+  }).join("");
+}
+
 function servicesCard(ctx) {
-  const trade = getTrade(activeTrade(ctx));
-  const all = serviceUniverse(ctx.state, ctx.client, tradeServices(ctx), activeTrade(ctx));
+  const trades = tradeObjects(ctx);
+  const all = serviceUniverse(ctx.state, ctx.client, tradeObjects(ctx));
   const on = all.filter((x) => x.on).length;
   const query = (ctx.transient[ID] || {}).filter || "";
 
@@ -130,7 +159,7 @@ function servicesCard(ctx) {
   return (
     '<div class="card">' +
       '<div class="pickhead">' +
-        "<div><h3>" + esc(trade ? trade.label + " services" : "Services") + "</h3>" +
+        "<div><h3>" + esc(trades.length ? trades.map((t) => t.label).join(" + ") + " services" : "Services") + "</h3>" +
           "<p>Untick anything they don't actually do. Everything ticked needs a priority.</p></div>" +
         '<div class="pickcount"><span class="v' + (on ? "" : " zero") + '">' + on + "</span>" +
           '<span class="l">of ' + all.length + "</span></div>" +
@@ -141,7 +170,7 @@ function servicesCard(ctx) {
         '<input data-filter="' + ID + '|svc" autocomplete="off" value="' + esc(query) + '" ' +
           'placeholder="Filter ' + all.length + ' services&hellip;">' +
       "</div>" +
-      '<div class="pickgrid" style="margin-top:18px">' + all.map((it) => tile(ctx, it)).join("") + "</div>" +
+      groupedGrid(ctx, all) +
       '<div class="pickother">' +
         '<div class="mlabel">Something we missed</div>' +
         '<div class="newrow">' +
@@ -168,7 +197,7 @@ function orderRow(it, n) {
 }
 
 function orderCard(ctx) {
-  const b = servicesByPriority(ctx.state, ctx.client, tradeServices(ctx), activeTrade(ctx));
+  const b = servicesByPriority(ctx.state, ctx.client, tradeObjects(ctx));
   const total = b.high.length + b.med.length + b.low.length + b[""].length;
   if (!total) return "";
 
@@ -228,37 +257,39 @@ export default {
    * uses this to reorder within a band without needing to know how the
    * buckets are assembled.
    */
+  /** The trades currently in play, inferred ones included. */
+  trades(ctx) { return activeTrades(ctx); },
+
   /** Name and subs for one service, so app.js can snapshot it on tick. */
   serviceMeta(ctx, id) {
-    const hit = serviceUniverse(ctx.state, ctx.client, tradeServices(ctx), activeTrade(ctx)).find((x) => x.id === id);
+    const hit = serviceUniverse(ctx.state, ctx.client, tradeObjects(ctx)).find((x) => x.id === id);
     return hit ? { name: hit.name, subs: hit.subs.map((s) => s.name) } : null;
   },
 
   bucketIds(ctx, bucketKey) {
-    const b = servicesByPriority(ctx.state, ctx.client, tradeServices(ctx), activeTrade(ctx));
+    const b = servicesByPriority(ctx.state, ctx.client, tradeObjects(ctx));
     const key = bucketKey === "none" ? "" : bucketKey;
     return (b[key] || []).map((x) => x.id);
   },
 
   status(ctx) {
-    const v = svcState(ctx.state);
-    if (!activeTrade(ctx)) return "empty";
-    const on = onServices(ctx.state, ctx.client, tradeServices(ctx), activeTrade(ctx));
+    if (!activeTrades(ctx).length) return "empty";
+    const on = onServices(ctx.state, ctx.client, tradeObjects(ctx));
     if (!on.length) return "partial";
     return on.every((x) => x.prio) ? "done" : "partial";
   },
 
   summary(ctx) {
-    const trade = getTrade(activeTrade(ctx));
-    const all = serviceUniverse(ctx.state, ctx.client, tradeServices(ctx), activeTrade(ctx));
+    const trades = tradeObjects(ctx);
+    const all = serviceUniverse(ctx.state, ctx.client, tradeObjects(ctx));
     if (!all.length) return null;
 
-    const ordered = serviceOrder(ctx.state, ctx.client, tradeServices(ctx), activeTrade(ctx));
-    const b = servicesByPriority(ctx.state, ctx.client, tradeServices(ctx), activeTrade(ctx));
+    const ordered = serviceOrder(ctx.state, ctx.client, tradeObjects(ctx));
+    const b = servicesByPriority(ctx.state, ctx.client, tradeObjects(ctx));
     const off = all.filter((x) => !x.on && x.source !== "trade");
 
     const rows = [];
-    if (trade) rows.push(["Industry", trade.label]);
+    if (trades.length) rows.push(["Industry", trades.map((t) => t.label).join(" + ")]);
     const selected = all.filter((x) => x.on);
     rows.push(["Services selected", selected.length + " of " + all.length]);
     if (b.high.length) rows.push(["High priority", b.high.map((x) => x.name).join(", ")]);
@@ -274,7 +305,7 @@ export default {
     if (droppedSubs.length) rows.push(["Sub-services dropped", droppedSubs.join(" · ")]);
 
     const open = [];
-    if (!trade) open.push({ what: "Industry", detail: "No trade picked — the service list is whatever the scrape found" });
+    if (!trades.length) open.push({ what: "Industry", detail: "No trade picked — the service list is whatever the scrape found" });
     if (b[""].length) {
       open.push({
         what: "Services with no priority",

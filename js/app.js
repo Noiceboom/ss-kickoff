@@ -6,12 +6,13 @@ import * as S from "./state.js";
 import { esc, ICON, pageNote, sliderValue, sliderPos, snapNice, formatSlider } from "./ui.js";
 import * as rank from "./rank.js";
 import MODULES from "./modules/index.js";
+import { resolveTrade } from "./trades/index.js";
 
 /* ── constants ────────────────────────────────────────── */
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b15";
+export const BUILD = "b16";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -535,6 +536,19 @@ document.addEventListener("click", (e) => {
 
   if ((el = t.closest("[data-chip]"))) {
     const [mod, key, val] = el.getAttribute("data-chip").split("|");
+    if (mod === "services" && key === "trades") {
+      // Seed from what's on screen, not from what's stored: the first
+      // trade is usually inferred from the sales handoff and has never
+      // been written down, so starting from state would silently drop it
+      // the moment a second trade was added.
+      const svcMod = moduleAt("services");
+      const list = (svcMod.trades ? svcMod.trades(ctx()) : []).slice();
+      const at = list.indexOf(val);
+      if (at > -1) list.splice(at, 1);
+      else list.push(val);
+      S.ensure(R.state, "services").trades = list;
+      render(); queueSave(); return;
+    }
     if (mod === "services" && key.indexOf("prio_") === 0) {
       S.setPriority(R.state, key.slice(5), val);
       render(); queueSave(); return;
@@ -858,6 +872,11 @@ async function boot() {
   }
 
   if (!byId.has(R.state.step)) R.state.step = MODULES[0].id;
+
+  // Taxonomy ticks made before ids were scoped need the trade they were
+  // made under. When it was never picked explicitly it came from the
+  // sales handoff, which only the client file knows.
+  S.reconcileServiceScoping(R.state, resolveTrade((R.client.client || {}).trade));
   R.mismatch = findMismatch();
 
   render();
