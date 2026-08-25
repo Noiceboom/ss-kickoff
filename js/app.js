@@ -11,7 +11,7 @@ import MODULES from "./modules/index.js";
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b6";
+export const BUILD = "b7";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -374,11 +374,14 @@ function refreshDerived() {
   const m = moduleAt(R.state.step);
   if (!m || typeof m.derive !== "function") return;
   let out;
-  try { out = m.derive(ctx()) || {}; } catch (e) { return; }
-  for (const k of Object.keys(out)) {
-    const el = document.querySelector('[data-derived="' + cssAttr(k) + '"]');
-    if (el) el.innerHTML = out[k];
-  }
+  try { out = m.derive(ctx()) || {}; } catch (e) { out = {}; }
+  // Clear every line the module no longer produces. Leaving the last
+  // computed value on screen after an input is cleared shows stale maths
+  // that reads exactly like current maths.
+  document.querySelectorAll("[data-derived]").forEach((el) => {
+    const k = el.getAttribute("data-derived");
+    el.innerHTML = Object.prototype.hasOwnProperty.call(out, k) ? out[k] : "";
+  });
 }
 
 /* ── input events — write only, NEVER re-render ───────── */
@@ -408,8 +411,23 @@ document.addEventListener("input", (e) => {
   if (f) {
     const [mod, key] = f.split("|");
     if (guardSecret(el.value)) { el.value = ""; S.setField(R.state, mod, key, ""); return; }
-    S.setField(R.state, mod, key, el.value);
-    if (el.getAttribute("data-slnum")) onSliderType(el);
+    if (el.getAttribute("data-slnum")) {
+      // Store the parsed number, not whatever was typed — "$180k" and
+      // "180,000" must not reach the exports as literal strings, and a
+      // value outside the scale must not leave the track pinned silently.
+      const range = document.querySelector('[data-slrange="' + cssAttr(el.getAttribute("data-slnum")) + '"]');
+      const raw = String(el.value).replace(/[^0-9.\-]/g, "");
+      if (raw === "" || !isFinite(Number(raw))) {
+        S.setField(R.state, mod, key, "");
+      } else {
+        const sc = range ? scaleOf(range) : { min: 0, max: Infinity };
+        S.setField(R.state, mod, key, String(Math.min(sc.max, Math.max(sc.min, Number(raw)))));
+      }
+      onSliderType(el);
+    } else {
+      S.setField(R.state, mod, key, el.value);
+    }
+    refreshDerived();
     queueSave();
     return;
   }
@@ -440,6 +458,20 @@ document.addEventListener("input", (e) => {
     queueSave();
   }
 });
+
+// Tidy a typed readout on blur — never while typing, which would fight
+// the caret as commas appear.
+document.addEventListener("blur", (e) => {
+  const el = e.target;
+  if (!el || !el.getAttribute || !el.getAttribute("data-slnum")) return;
+  const name = el.getAttribute("data-slnum");
+  const [mod, key] = name.split("|");
+  const range = document.querySelector('[data-slrange="' + cssAttr(name) + '"]');
+  if (!range) return;
+  const stored = S.getField(R.state, mod, key, "");
+  const sc = scaleOf(range);
+  el.value = stored === "" ? "" : formatSlider(Number(stored), sc.mode, sc.max);
+}, true);
 
 // selects fire change, not input
 document.addEventListener("change", (e) => {

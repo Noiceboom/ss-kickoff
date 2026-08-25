@@ -327,6 +327,51 @@ for (const m of MODULES) {
   if (blanked) fail("readout reported a noted screen as blank — status rule drifted");
 }
 
+{
+  // A lone figure must say which end of the span it is, or the brief reads
+  // a target as today's revenue.
+  const goals = MODULES.find((m) => m.id === "goals");
+  const only = (key, val) => {
+    const st = S.fresh();
+    st.m.goals = { [key]: val };
+    const sum = goals.summary(ctxFor(bfp, st));
+    const row = (sum.rows || []).find((r) => r[0] === "Revenue / mo");
+    return row ? row[1] : "";
+  };
+  if (!/today/i.test(only("revNow", "180000"))) fail("a revenue-only summary does not say it is today's figure");
+  if (!/target/i.test(only("revTarget", "300000"))) fail("a target-only summary does not say it is the target");
+
+  const both = S.fresh();
+  both.m.goals = { revNow: "180000", revTarget: "300000" };
+  const spanRow = (goals.summary(ctxFor(bfp, both)).rows || []).find((r) => r[0] === "Revenue / mo");
+  if (!spanRow || spanRow[1].indexOf("→") < 0) fail("a full span lost its arrow");
+
+  // derive() must stop producing a line once its inputs are incomplete —
+  // app.js clears the node, but only for keys derive() omits.
+  const full = S.fresh();
+  full.m.goals = { revNow: "180000", revTarget: "300000", avgTicket: "1400", closeRate: "35" };
+  if (!goals.derive(ctxFor(bfp, full))["goals:gap"]) fail("derive() produced no gap line from complete inputs");
+
+  const partial = S.fresh();
+  partial.m.goals = { revNow: "180000" };
+  if ("goals:gap" in goals.derive(ctxFor(bfp, partial))) {
+    fail("derive() still emits a gap line with no target — the stale line would never clear");
+  }
+  if (Object.keys(goals.derive(ctxFor(bfp, S.fresh()))).length) {
+    fail("derive() emitted lines from an empty state");
+  }
+
+  // slider values must survive as plain numbers, whatever was typed
+  const u = await import(url("js/ui.js"));
+  for (const [typed, want] of [["$180,000", 180000], ["180000", 180000], ["1,400", 1400]]) {
+    const parsed = Number(String(typed).replace(/[^0-9.\-]/g, ""));
+    if (parsed !== want) fail(`typed slider value "${typed}" parses to ${parsed}, expected ${want}`);
+  }
+  if (u.formatSlider(u.snapNice(1437, "money"), "money") !== "$1,400") {
+    fail("slider snap/format round-trip changed shape");
+  }
+}
+
 /* ── report ───────────────────────────────────────────── */
 
 for (const w of warns) console.log("WARN  " + w);

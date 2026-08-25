@@ -275,11 +275,15 @@ export default {
       const hit = list.find((o) => o.value === val);
       return hit ? hit.label : val;
     };
+    // A single figure with no arrow is ambiguous — someone reading the
+    // brief cannot tell today's revenue from the target they asked for.
     const span = (a, b, fmt) => {
       const A = filled(s[a]) ? fmt(s[a]) : "";
       const B = filled(s[b]) ? fmt(s[b]) : "";
       if (A && B) return A + " → " + B;
-      return A || B || "";
+      if (A) return A + " (today, no target set)";
+      if (B) return B + " (target, today not captured)";
+      return "";
     };
 
     const rows = [];
