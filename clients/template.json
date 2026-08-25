@@ -1,0 +1,16 @@
+{
+  "slug": "template",
+  "client": {
+    "name": "",
+    "market": "",
+    "website": "",
+    "trade": ""
+  },
+  "source": {
+    "scrapedAt": "",
+    "from": "",
+    "method": "manual"
+  },
+  "services": [],
+  "locations": []
+}

@@ -1,0 +1,432 @@
+{
+  "slug": "bfp-kc",
+  "client": {
+    "name": "Benjamin Franklin Plumbing",
+    "market": "Kansas City",
+    "website": "https://www.benjaminfranklinplumbing.com",
+    "trade": "Plumbing"
+  },
+  "source": {
+    "scrapedAt": "2026-08-25",
+    "from": "Site services mega-menu + areas-we-service footer",
+    "method": "manual"
+  },
+  "services": [
+    {
+      "id": "bathtubs",
+      "name": "Bathtubs",
+      "subs": [],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "commercial",
+      "name": "Commercial Plumbing Services",
+      "subs": [],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "drains",
+      "name": "Drains",
+      "subs": [
+        "Drain Cleaning",
+        "Drain Installation",
+        "Hydrojetting",
+        "Clogged Drains"
+      ],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "emergency",
+      "name": "Emergency Plumbing Services",
+      "subs": [],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "faucets",
+      "name": "Faucets",
+      "subs": [],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "garbage-disposals",
+      "name": "Garbage Disposals",
+      "subs": [
+        "Garbage Disposal Installation",
+        "Garbage Disposal Repair"
+      ],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "gas-lines",
+      "name": "Gas Lines",
+      "subs": [],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "leak-detection",
+      "name": "Leak Detection",
+      "subs": [
+        "Leak Repair"
+      ],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "piping-repiping",
+      "name": "Piping & Repiping",
+      "subs": [
+        "Frozen Pipes",
+        "Leaking Pipes",
+        "Pipe Repair"
+      ],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "plumbing-repairs",
+      "name": "Plumbing Repairs",
+      "subs": [
+        "Plumbing Installation",
+        "Plumbing Inspection & Diagnosis"
+      ],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "pumps",
+      "name": "Pumps",
+      "subs": [
+        "Sump Pumps"
+      ],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "sewers",
+      "name": "Sewers",
+      "subs": [
+        "Sewer Line Repair",
+        "Sewer Line Replacement and Installation",
+        "Trenchless Sewers"
+      ],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "showers",
+      "name": "Showers",
+      "subs": [
+        "Shower Installation",
+        "Shower Repair"
+      ],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "sinks",
+      "name": "Sinks",
+      "subs": [
+        "Sink Installation",
+        "Sink Repair"
+      ],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "toilets",
+      "name": "Toilets",
+      "subs": [
+        "Toilet Repair",
+        "Toilet Installation"
+      ],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "water-lines",
+      "name": "Water Lines",
+      "subs": [],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "water-heaters",
+      "name": "Water Heaters",
+      "subs": [
+        "Tankless Water Heaters",
+        "Water Heater Installation",
+        "Water Heater Repair"
+      ],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "water-treatment",
+      "name": "Water Treatment",
+      "subs": [],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "residential",
+      "name": "Residential Plumbing",
+      "subs": [],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "bathroom",
+      "name": "Bathroom Plumbing",
+      "subs": [],
+      "hasPage": false,
+      "verify": null
+    }
+  ],
+  "locations": [
+    {
+      "id": "belton",
+      "name": "Belton",
+      "state": "MO",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "blue-springs",
+      "name": "Blue Springs",
+      "state": "MO",
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "buckner",
+      "name": "Buckner",
+      "state": "MO",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "de-soto",
+      "name": "De Soto",
+      "state": "KS",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "edwardsville",
+      "name": "Edwardsville",
+      "state": "KS",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "excelsior-springs",
+      "name": "Excelsior Springs",
+      "state": "MO",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "fairway",
+      "name": "Fairway",
+      "state": "KS",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "gladstone",
+      "name": "Gladstone",
+      "state": "MO",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "grandview",
+      "name": "Grandview",
+      "state": "MO",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "greenwood",
+      "name": "Greenwood",
+      "state": "MO",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "harrisonville",
+      "name": "Harrisonville",
+      "state": "MO",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "independence",
+      "name": "Independence",
+      "state": "MO",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "kansas-city",
+      "name": "Kansas City",
+      "state": "MO",
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "leawood",
+      "name": "Leawood",
+      "state": "KS",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "lees-summit",
+      "name": "Lees Summit",
+      "state": "MO",
+      "hasPage": false,
+      "verify": "Spelled Lee's Summit locally — confirm which we use"
+    },
+    {
+      "id": "lenexa",
+      "name": "Lenexa",
+      "state": "KS",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "merriam",
+      "name": "Merriam",
+      "state": "KS",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "mission",
+      "name": "Mission",
+      "state": "KS",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "mission-hills",
+      "name": "Mission Hills",
+      "state": "KS",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "north-kansas-city",
+      "name": "North Kansas City",
+      "state": "MO",
+      "hasPage": false,
+      "verify": "Its own city, separate from KCMO — confirm you cover both"
+    },
+    {
+      "id": "olathe",
+      "name": "Olathe",
+      "state": "KS",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "overland-park",
+      "name": "Overland Park",
+      "state": "KS",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "pleasant-hill",
+      "name": "Pleasant Hill",
+      "state": "MO",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "prairie-village",
+      "name": "Prairie Village",
+      "state": "KS",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "raymore",
+      "name": "Raymore",
+      "state": "MO",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "raytown",
+      "name": "Raytown",
+      "state": "MO",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "riverside",
+      "name": "Riverside",
+      "state": "MO",
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "roland-park",
+      "name": "Roland Park",
+      "state": "KS",
+      "hasPage": false,
+      "verify": "Likely means Roeland Park, KS — confirm spelling"
+    },
+    {
+      "id": "shawnee",
+      "name": "Shawnee",
+      "state": "KS",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "shawnee-mission",
+      "name": "Shawnee Mission",
+      "state": "KS",
+      "hasPage": false,
+      "verify": "Postal area, not a city — may cannibalise Shawnee/Overland Park"
+    },
+    {
+      "id": "spring-hill",
+      "name": "Spring Hill",
+      "state": "KS",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "stanley",
+      "name": "Stanley",
+      "state": "KS",
+      "hasPage": false,
+      "verify": "Unincorporated, inside Overland Park — confirm it earns its own page"
+    },
+    {
+      "id": "westwood",
+      "name": "Westwood",
+      "state": "KS",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "westwood-hills",
+      "name": "Westwood Hills",
+      "state": "KS",
+      "hasPage": false,
+      "verify": null
+    }
+  ]
+}
