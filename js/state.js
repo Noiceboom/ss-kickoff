@@ -312,10 +312,13 @@ function migrateChannels(m) {
     const name = String((row && row.channel) || "").trim();
     if (!name) continue;
     const id = resolveChannel(name);
+    // Separated with a middot, never a comma: this text can end up in the
+    // free-text channel box, and a comma there would split one channel
+    // into several bogus ones.
     const detail = [
       row.spend ? "spend " + row.spend : "",
       row.who ? "run by " + row.who : "",
-    ].filter(Boolean).join(", ");
+    ].filter(Boolean).join(" · ");
 
     if (id) {
       if (picked.indexOf(id) < 0) picked.push(id);
@@ -326,7 +329,7 @@ function migrateChannels(m) {
       // everything they told us — including the verdict, which has nowhere
       // else to live once the row is gone.
       const bits = [detail, row.working ? "was " + String(row.working).toLowerCase() : ""]
-        .filter(Boolean).join(", ");
+        .filter(Boolean).join(" · ");
       leftovers.push(bits ? name + " — " + bits : name);
     }
   }

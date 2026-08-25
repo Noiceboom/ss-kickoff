@@ -28,10 +28,16 @@ function selected(s) {
   return Array.isArray(s.chan) ? s.chan : [];
 }
 
-/** Channels added on the call that aren't in the built-in list. */
+/**
+ * Channels added on the call that aren't in the built-in list.
+ *
+ * One per LINE, never comma-separated: plenty of real answers contain a
+ * comma ("Radio, mornings only"), and splitting on them turns a single
+ * channel into several fictional ones in the readout.
+ */
 function customChannels(s) {
   return String(s.otherChan || "")
-    .split(/[\n,]/).map((x) => x.trim()).filter(Boolean);
+    .split("\n").map((x) => x.trim()).filter(Boolean);
 }
 
 /* ── rendering ────────────────────────────────────────── */
@@ -142,7 +148,7 @@ export default {
             field(ID, "otherChan", "Other channels", v("otherChan"), {
               type: "longtext", rows: 2,
               placeholder: "Direct mail, truck wraps, the radio spot on 98.1…",
-              help: "One per line. Anything that isn't in the list above.",
+              help: "One per line — commas stay part of the name. Anything not in the list above.",
             }) +
           "</div>" +
         "</div>" +

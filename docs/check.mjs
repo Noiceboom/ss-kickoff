@@ -450,6 +450,31 @@ for (const m of MODULES) {
     fail("detail for a deselected channel survived load — it would ride every share link");
   }
 
+  // A migrated custom channel must stay ONE channel. The detail text
+  // contains spend and owner, and a comma separator used to split it into
+  // several fictional rows in the readout.
+  const mk0 = MODULES.find((m) => m.id === "marketing");
+  const oneRow = S.fresh();
+  oneRow.m.marketing = { channels: [{ channel: "Truck wraps", spend: "$300", who: "Owner", working: "Working" }] };
+  const migrated = S.validate(JSON.parse(JSON.stringify(oneRow)));
+  const tbl = mk0.summary(ctxFor(bfp, migrated)).table;
+  const custom = (tbl ? tbl.body : []).filter((r) => r[1] === "Other");
+  if (custom.length !== 1) {
+    fail(`a migrated custom channel became ${custom.length} rows in the readout, expected 1`);
+  }
+  if (custom[0] && !/^Truck wraps/.test(custom[0][0])) {
+    fail(`migrated custom channel name is mangled: ${JSON.stringify(custom[0] && custom[0][0])}`);
+  }
+
+  // and a comma someone genuinely types stays part of the name
+  const typed = S.fresh();
+  typed.m.marketing = { otherChan: "Radio, mornings only\nTruck wraps" };
+  const typedTbl = mk0.summary(ctxFor(bfp, typed)).table;
+  const names = (typedTbl ? typedTbl.body : []).map((r) => r[0]);
+  if (names.length !== 2 || names[0] !== "Radio, mornings only") {
+    fail(`free-text channels split wrongly: ${JSON.stringify(names)}`);
+  }
+
   // channels typed in the free-text box count as answering the question
   const mk = MODULES.find((m) => m.id === "marketing");
   const customOnly = S.fresh();
