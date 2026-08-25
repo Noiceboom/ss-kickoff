@@ -888,6 +888,47 @@ for (const m of MODULES) {
     }
   }
 
+  // The base city is a NATIONAL lookup. Searching only the client's region
+  // meant "Dallas" on a Kansas City kickoff could never find Texas.
+  const idxRows = JSON.parse(readFileSync(path.join(ROOT, "data/places-index.json"), "utf8"))
+    .map((r) => ({ name: r[0], state: r[1], lat: r[2], lng: r[3], pop: r[4] }));
+  if (idxRows.length < 8000) fail(`the national place index has only ${idxRows.length} entries`);
+
+  const dallas = P.search(idxRows, "Dallas", 5);
+  if (!dallas.length) fail("searching for Dallas found nothing");
+  else if (dallas[0].name !== "Dallas" || dallas[0].state !== "TX") {
+    fail(`searching "Dallas" returned ${dallas[0].name}, ${dallas[0].state} first, expected Dallas, TX`);
+  }
+  for (const [q, wantName, wantState] of [
+    ["Kansas City", "Kansas City", "MO"],
+    ["Springfield", "Springfield", "MO"],
+    ["Phoenix", "Phoenix", "AZ"],
+    ["Columbus", "Columbus", "OH"],
+  ]) {
+    const hit = P.search(idxRows, q, 1)[0];
+    if (!hit || hit.name !== wantName || hit.state !== wantState) {
+      fail(`searching "${q}" returned ${hit ? hit.name + ", " + hit.state : "nothing"}, expected ${wantName}, ${wantState}`);
+    }
+  }
+
+  // A pasted street address must resolve to its city, not return nothing.
+  for (const [addr, city, st] of [
+    ["3090 W Market St Ste 124-2, Akron, OH 44333", "Akron", "OH"],
+    ["1420 Baltimore Ave, Kansas City, MO 64108", "Kansas City", "MO"],
+    ["Overland Park, KS 66210", "Overland Park", "KS"],
+    ["Akron OH", "Akron", "OH"],
+    ["Dallas", "Dallas", ""],
+  ]) {
+    const parsed = P.parseLocation(addr);
+    if (parsed.city !== city || parsed.state !== st) {
+      fail(`parseLocation("${addr}") gave ${JSON.stringify(parsed)}, expected ${city} / ${st || "(none)"}`);
+    }
+    const hit = P.search(idxRows, addr, 1)[0];
+    if (!hit || hit.name !== city) {
+      fail(`searching "${addr}" found ${hit ? hit.name : "nothing"}, expected ${city}`);
+    }
+  }
+
   // a radius result the scrape already covers is not a duplicate. The two
   // use different id conventions — "raytown" vs "raytown-mo".
   const lst = S.fresh();

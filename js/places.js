@@ -70,10 +70,72 @@ export async function loadRegion(codes) {
   return lists.flat();
 }
 
+/**
+ * National search index — every place over 1,000 people, loaded once.
+ *
+ * Searching only the client's own region was a real bug: a Kansas City
+ * kickoff loaded ten states around Missouri, so typing "Dallas" could
+ * never find Texas and offered Dallas Center, Iowa instead. The base city
+ * is a national question; the radius is a regional one.
+ */
+let INDEX = null;
+export async function loadIndex() {
+  if (!INDEX) {
+    INDEX = fetch("data/places-index.json", { cache: "force-cache" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows) => rows.map((r) => ({ name: r[0], state: r[1], lat: r[2], lng: r[3], pop: r[4] })))
+      .catch(() => []);
+  }
+  return INDEX;
+}
+
 /* ── search ───────────────────────────────────────────── */
 
 function norm(s) {
   return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+const STATE_SET = new Set(Object.keys(ADJACENT));
+
+/**
+ * Pull a city and state out of whatever was typed — a bare city, a
+ * "City, ST", or a full street address off a business card.
+ *
+ *   "3090 W Market St Ste 124-2, Akron, OH 44333" -> { city: "Akron", state: "OH" }
+ *
+ * Street lines are discarded rather than searched: nothing in the dataset
+ * would ever match them, which is why pasting an address returned nothing
+ * at all.
+ */
+export function parseLocation(raw) {
+  let q = String(raw || "").trim();
+  if (!q) return { city: "", state: "" };
+
+  // strip a trailing ZIP, with or without the +4
+  q = q.replace(/\s*\b\d{5}(-\d{4})?\s*$/, "").trim().replace(/,\s*$/, "");
+
+  const parts = q.split(",").map((x) => x.trim()).filter(Boolean);
+  let state = "";
+
+  if (parts.length) {
+    const last = parts[parts.length - 1];
+    const asState = last.toUpperCase();
+    if (STATE_SET.has(asState)) {
+      state = asState;
+      parts.pop();
+    } else {
+      // "Akron OH" with no comma
+      const m = /^(.*?)[\s]+([A-Za-z]{2})$/.exec(last);
+      if (m && STATE_SET.has(m[2].toUpperCase())) {
+        state = m[2].toUpperCase();
+        parts[parts.length - 1] = m[1].trim();
+      }
+    }
+  }
+
+  // The city is the last remaining segment; anything before it is street.
+  const city = parts.length ? parts[parts.length - 1] : "";
+  return { city: city, state: state };
 }
 
 /**
@@ -82,22 +144,29 @@ function norm(s) {
  * one, not Kansas City, Kansas's smaller namesake showing up first.
  */
 export function search(places, query, limit) {
-  const q = norm(query);
-  if (q.length < 2) return [];
-  const stateMatch = /,\s*([a-z]{2})\s*$/i.exec(query);
-  const wantState = stateMatch ? stateMatch[1].toUpperCase() : null;
-  const bare = norm(query.replace(/,\s*[a-z]{2}\s*$/i, ""));
+  const { city, state } = parseLocation(query);
+  const bare = norm(city);
+  if (bare.length < 2) return [];
 
   const out = [];
+  const seen = new Set();
   for (const p of places) {
-    if (wantState && p.state !== wantState) continue;
+    if (state && p.state !== state) continue;
     const n = norm(p.name);
     let score = 0;
-    if (n === bare) score = 3;
+    if (n === bare) score = 4;                       // Dallas === Dallas
+    else if (n.indexOf(bare + " ") === 0) score = 3; // Dallas Center
     else if (n.indexOf(bare) === 0) score = 2;
-    else if (n.indexOf(bare) > -1) score = 1;
-    if (score) out.push({ place: p, score });
+    else if (n.indexOf(" " + bare) > -1) score = 1;  // Melcher-Dallas
+    else if (n.indexOf(bare) > -1) score = 0.5;
+    if (!score) continue;
+    const key = n + "|" + p.state;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ place: p, score });
   }
+  // Population breaks ties, so an exact match on a big city always beats an
+  // exact match on a hamlet, and "Dallas" lands on Texas.
   out.sort((a, b) => b.score - a.score || b.place.pop - a.place.pop);
   return out.slice(0, limit || 8).map((x) => x.place);
 }

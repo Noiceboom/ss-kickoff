@@ -13,7 +13,7 @@ import * as places from "./places.js";
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b24";
+export const BUILD = "b25";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -774,41 +774,35 @@ function reorderFor(key, fromId, toId) {
 // ARE saved, so a reload recomputes them rather than carrying 80 rows in
 // the share link.
 
+let baseSeq = 0;
+
 function locT() {
   if (!R.transient.locations) R.transient.locations = {};
   return R.transient.locations;
 }
 
-function statesToLoad() {
-  const seen = new Set();
-  for (const l of R.client.locations || []) if (l.state) seen.add(l.state);
-  const typed = /,\s*([A-Za-z]{2})\s*$/.exec(S.getField(R.state, "locations", "base", ""));
-  if (typed) seen.add(typed[1].toUpperCase());
-  return [...seen];
-}
-
-async function ensurePlaces() {
-  const t = locT();
-  const want = statesToLoad().sort().join(",");
-  if (t.loadedFor === want && t.all) return t.all;
-  t.all = await places.loadRegion(statesToLoad());
-  t.loadedFor = want;
-  return t.all;
-}
-
-/** Offer matches for what's been typed into the base-city box. */
-let baseSeq = 0;
-
+/**
+ * Matches for whatever has been typed. The base city is a NATIONAL
+ * question — searching only the client's own region is why "Dallas" used
+ * to offer Dallas Center, Iowa. When a state is named we also pull that
+ * state's full list, which reaches places too small for the index.
+ */
 async function suggestBase() {
-  const q = S.getField(R.state, "locations", "base", "");
+  const raw = S.getField(R.state, "locations", "base", "");
   const t = locT();
   const mine = ++baseSeq;
-  if (String(q).trim().length < 3) { t.matches = []; render(); return; }
-  const all = await ensurePlaces();
+  const parsed = places.parseLocation(raw);
+  if (String(parsed.city || "").trim().length < 2) { t.matches = []; render(); return; }
+
+  let pool = await places.loadIndex();
+  if (parsed.state) {
+    const local = await places.loadRegion([parsed.state]);
+    pool = pool.concat(local.filter((p) => p.state === parsed.state));
+  }
   // A slower earlier lookup must not land on top of a newer one and show
   // matches for a city that has already been typed over.
   if (mine !== baseSeq) return;
-  t.matches = places.search(all, q, 6).map((p) => ({ ...p, id: places.placeId(p) }));
+  t.matches = places.search(pool, raw, 6).map((p) => ({ ...p, id: places.placeId(p) }));
   render();
 }
 
@@ -825,7 +819,9 @@ async function pickBase(id) {
 async function runRadius() {
   const t = locT();
   if (!t.base) { render(); return; }
-  const all = await ensurePlaces();
+  // Around the BASE city's state, not the client's — the shop is what the
+  // radius is drawn from.
+  const all = await places.loadRegion([t.base.state]);
   const miles = S.getField(R.state, "locations", "radius", 25);
   t.nearby = places.within(all, t.base, Number(miles) || 25)
     .map((p) => ({ ...p, id: places.placeId(p) }));

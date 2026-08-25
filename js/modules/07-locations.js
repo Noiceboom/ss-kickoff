@@ -90,8 +90,8 @@ function coverageCard(ctx) {
       "</div>" +
       '<div class="fields two" style="margin-top:18px">' +
         field(ID, "base", "Base city", v.base, {
-          placeholder: "Kansas City, MO",
-          help: "Where the trucks leave from. Type a city, then pick from the matches.",
+          placeholder: "1420 Baltimore Ave, Kansas City, MO 64108",
+          help: "Where the trucks leave from. A city or a full address — paste the one off their invoice.",
         }) +
       "</div>" +
       (t.matches && t.matches.length
