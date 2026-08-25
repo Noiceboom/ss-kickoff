@@ -918,6 +918,12 @@ for (const m of MODULES) {
     ["Overland Park, KS 66210", "Overland Park", "KS"],
     ["Akron OH", "Akron", "OH"],
     ["Dallas", "Dallas", ""],
+    // an address copied off a Google listing arrives on two lines, and a
+    // single-line input turns the break into a space
+    ["3090 W Market St Ste 124-2\nAkron, OH 44333", "Akron", "OH"],
+    ["3090 W Market St Ste 124-2 Akron, OH 44333", "Akron", "OH"],
+    ["1420 Baltimore Ave\nKansas City, MO 64108", "Kansas City", "MO"],
+    ["1420 Baltimore Ave Kansas City, MO", "Kansas City", "MO"],
   ]) {
     const parsed = P.parseLocation(addr);
     if (parsed.city !== city || parsed.state !== st) {
@@ -927,6 +933,12 @@ for (const m of MODULES) {
     if (!hit || hit.name !== city) {
       fail(`searching "${addr}" found ${hit ? hit.name : "nothing"}, expected ${city}`);
     }
+  }
+
+  // A place name that begins with a digit must survive street-stripping.
+  const numeric = P.parseLocation("29 Palms, CA");
+  if (numeric.city !== "29 Palms" || numeric.state !== "CA") {
+    fail(`street-stripping mangled a numeric place name: ${JSON.stringify(numeric)}`);
   }
 
   // a radius result the scrape already covers is not a duplicate. The two

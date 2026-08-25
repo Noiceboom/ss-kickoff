@@ -114,7 +114,10 @@ export function parseLocation(raw) {
   // strip a trailing ZIP, with or without the +4
   q = q.replace(/\s*\b\d{5}(-\d{4})?\s*$/, "").trim().replace(/,\s*$/, "");
 
-  const parts = q.split(",").map((x) => x.trim()).filter(Boolean);
+  // Newlines count as separators too. An address copied off a Google
+  // listing arrives as two lines, and a single-line input turns the break
+  // into a space — so the street and the city end up in one segment.
+  const parts = q.split(/[\n\r,]+/).map((x) => x.trim()).filter(Boolean);
   let state = "";
 
   if (parts.length) {
@@ -134,8 +137,39 @@ export function parseLocation(raw) {
   }
 
   // The city is the last remaining segment; anything before it is street.
-  const city = parts.length ? parts[parts.length - 1] : "";
+  const city = parts.length ? stripStreet(parts[parts.length - 1]) : "";
   return { city: city, state: state };
+}
+
+const STREET_WORDS = new Set([
+  "st", "street", "ave", "avenue", "rd", "road", "blvd", "boulevard", "dr", "drive",
+  "ln", "lane", "way", "ct", "court", "pkwy", "parkway", "hwy", "highway", "pl",
+  "place", "ter", "terrace", "cir", "circle", "trl", "trail", "loop", "sq", "square",
+  "ste", "suite", "unit", "apt", "apartment", "bldg", "building", "fl", "floor", "rm",
+]);
+
+/**
+ * "3090 W Market St Ste 124-2 Akron" -> "Akron".
+ *
+ * Only touches segments that begin with a house number, and only when a
+ * street or unit word is actually present — so a real place whose name
+ * starts with a digit is left alone.
+ */
+function stripStreet(seg) {
+  const raw = String(seg || "").trim();
+  if (!/^\d/.test(raw)) return raw;
+
+  const tokens = raw.split(/\s+/);
+  let last = -1;
+  tokens.forEach((t, i) => {
+    if (STREET_WORDS.has(t.toLowerCase().replace(/[.,#]/g, ""))) last = i;
+  });
+  if (last < 0) return raw;
+
+  // Anything after the final street or unit word that isn't itself a unit
+  // number is the city.
+  const rest = tokens.slice(last + 1).filter((t) => !/\d/.test(t));
+  return rest.length ? rest.join(" ") : raw;
 }
 
 /**
