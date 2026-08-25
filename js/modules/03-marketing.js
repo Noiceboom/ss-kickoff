@@ -17,7 +17,7 @@ import { CATEGORIES, RATINGS, ALL, BY_ID } from "../channels.js";
 
 const ID = "marketing";
 
-const CORE = ["chan", "worked", "burned"];
+const CORE = ["chanAny", "worked", "burned"];
 
 /** Per-channel keys, kept flat so they ride the field kit unchanged. */
 const rateKey = (id) => "rate_" + id;
@@ -68,7 +68,7 @@ function tile(s, ch, on) {
   );
 }
 
-function picker(s) {
+function picker(s, query) {
   const on = new Set(selected(s));
   const count = on.size;
 
@@ -89,7 +89,8 @@ function picker(s) {
     '<div class="pickfilter">' +
       '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" ' +
       'stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>' +
-      '<input data-filter="chan" autocomplete="off" placeholder="Filter ' + ALL.length + ' channels&hellip;">' +
+      '<input data-filter="' + ID + '|chan" autocomplete="off" value="' + esc(query) + '" ' +
+        'placeholder="Filter ' + ALL.length + ' channels&hellip;">' +
     "</div>" +
     body
   );
@@ -134,7 +135,7 @@ export default {
         "</div>" +
       "</div>" +
 
-      '<div class="card">' + picker(s) +
+      '<div class="card">' + picker(s, (ctx.transient[ID] || {}).filter || "") +
         '<div class="pickother">' +
           '<div class="mlabel">Something we missed</div>' +
           '<div class="fields one" style="margin-top:12px">' +
@@ -168,7 +169,13 @@ export default {
     );
   },
 
-  status(ctx) { return statusFor(ctx.state.m[ID], CORE); },
+  status(ctx) {
+    const s = ctx.state.m[ID] || {};
+    // Channels typed into the free-text box count just as much as tiles —
+    // someone who ran only direct mail and radio has still answered this.
+    const shim = { ...s, chanAny: selected(s).length || customChannels(s).length ? "y" : "" };
+    return statusFor(shim, CORE);
+  },
 
   summary(ctx) {
     const s = ctx.state.m[ID] || {};

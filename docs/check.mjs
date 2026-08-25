@@ -414,6 +414,50 @@ for (const m of MODULES) {
   if (!/98\.1/.test(mig.otherChan || "")) fail("an unknown legacy channel was dropped entirely");
   if (/Google Ads/.test(mig.otherChan || "")) fail("a matched channel was duplicated into the free text");
 
+  // Short labels from the old channel list must still resolve, or every
+  // legacy LSA / GBP / Meta / Angi row silently becomes free text.
+  const chx = await import(url("js/channels.js"));
+  for (const [name, want] of [
+    ["LSA", "local-services-ads-lsa"],
+    ["GBP", "google-business-profile-maps"],
+    ["Meta", "meta-facebook-instagram"],
+    ["Angi", "angi-angi-leads"],
+    ["Google Ads", "google-ads"],
+    ["SEO", "seo"],
+  ]) {
+    if (chx.resolveChannel(name) !== want) {
+      fail(`legacy channel "${name}" resolved to ${chx.resolveChannel(name)}, expected ${want}`);
+    }
+  }
+  for (const name of ["Truck wraps", "Radio/TV", ""]) {
+    if (chx.resolveChannel(name)) fail(`"${name}" should not resolve to a built-in channel`);
+  }
+
+  // a verdict on an unmatched channel has nowhere to live but the free text
+  const withVerdict = S.fresh();
+  withVerdict.m.marketing = { channels: [{ channel: "Truck wraps", spend: "$300", working: "Working" }] };
+  const wv = S.validate(JSON.parse(JSON.stringify(withVerdict))).m.marketing;
+  if (!/was working/i.test(wv.otherChan || "")) fail("migration dropped the verdict on a custom channel");
+
+  // detail for a deselected channel is dropped on load, not carried forever
+  const orphan = S.fresh();
+  orphan.m.marketing = {
+    chan: ["google-ads"], "note_google-ads": "keep", "rate_yelp": "waste", "note_yelp": "drop",
+  };
+  const op = S.validate(JSON.parse(JSON.stringify(orphan))).m.marketing;
+  if (op["note_google-ads"] !== "keep") fail("pruning removed detail for a SELECTED channel");
+  if (op["rate_yelp"] !== undefined || op["note_yelp"] !== undefined) {
+    fail("detail for a deselected channel survived load — it would ride every share link");
+  }
+
+  // channels typed in the free-text box count as answering the question
+  const mk = MODULES.find((m) => m.id === "marketing");
+  const customOnly = S.fresh();
+  customOnly.m.marketing = { otherChan: "Truck wraps", worked: "word of mouth", burned: "an agency" };
+  if (mk.status(ctxFor(bfp, customOnly)) !== "done") {
+    fail("a screen with only custom channels does not read as captured");
+  }
+
   // channels.js is the single source — module 03 and state.js must agree
   const ch = await import(url("js/channels.js"));
   if (ch.ALL.length !== 34) fail(`channel list is ${ch.ALL.length}, expected 34`);

@@ -11,7 +11,7 @@ import MODULES from "./modules/index.js";
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b9";
+export const BUILD = "b10";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -260,6 +260,7 @@ function render() {
   renderPills();
   renderHeader();
   document.querySelectorAll("[data-slrange]").forEach(paintTrack);
+  document.querySelectorAll("[data-filter]").forEach((el) => { if (el.value) applyFilter(el); });
   refreshDerived();
   restoreFocus(f);
 }
@@ -391,6 +392,17 @@ function refreshDerived() {
  */
 function applyFilter(input) {
   const q = String(input.value || "").trim().toLowerCase();
+
+  // Selecting a result re-renders the grid. Without stashing the query
+  // the box empties and all 34 tiles reappear, losing your place in the
+  // list you were working through.
+  const name = input.getAttribute("data-filter") || "";
+  const mod = name.split("|")[0];
+  if (mod) {
+    if (!R.transient[mod]) R.transient[mod] = {};
+    R.transient[mod].filter = input.value;
+  }
+
   const scope = input.closest(".card") || document;
 
   scope.querySelectorAll("[data-filter-item]").forEach((el) => {

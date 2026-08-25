@@ -7,7 +7,7 @@
 // share links short and lets a re-scrape land without invalidating an
 // in-progress kickoff.
 
-import { isKnownChannel } from "./channels.js";
+import { resolveChannel, isKnownChannel, CHANNEL_KEY_PREFIXES } from "./channels.js";
 
 export const VERSION = 2;
 
@@ -304,7 +304,6 @@ function migrateChannels(m) {
   const rows = m.channels;
   delete m.channels;
 
-  const slug = (x) => String(x).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const verdict = { Working: "good", Mixed: "mixed", "Not working": "waste" };
   const picked = Array.isArray(m.chan) ? m.chan.slice() : [];
   const leftovers = [];
@@ -312,20 +311,23 @@ function migrateChannels(m) {
   for (const row of rows) {
     const name = String((row && row.channel) || "").trim();
     if (!name) continue;
-    const id = slug(name);
+    const id = resolveChannel(name);
     const detail = [
       row.spend ? "spend " + row.spend : "",
       row.who ? "run by " + row.who : "",
     ].filter(Boolean).join(", ");
 
-    if (isKnownChannel(id)) {
+    if (id) {
       if (picked.indexOf(id) < 0) picked.push(id);
       if (row.working && verdict[row.working] && !m["rate_" + id]) m["rate_" + id] = verdict[row.working];
       if (detail && !m["note_" + id]) m["note_" + id] = detail;
     } else {
-      // No tile will ever render for this one, so keep the name (and what
-      // they told us about it) in the free-text box instead of losing it.
-      leftovers.push(detail ? name + " — " + detail : name);
+      // No tile will ever render for this one, so keep the name and
+      // everything they told us — including the verdict, which has nowhere
+      // else to live once the row is gone.
+      const bits = [detail, row.working ? "was " + String(row.working).toLowerCase() : ""]
+        .filter(Boolean).join(", ");
+      leftovers.push(bits ? name + " — " + bits : name);
     }
   }
 
@@ -333,6 +335,22 @@ function migrateChannels(m) {
   if (leftovers.length) {
     const prior = String(m.otherChan || "").trim();
     m.otherChan = (prior ? prior + "\n" : "") + leftovers.join("\n");
+  }
+}
+
+/**
+ * Rating, volume and note for a channel that is no longer selected. Kept
+ * during the session so an accidental deselect doesn't destroy a note,
+ * dropped on load so they don't accumulate in the fragment forever.
+ */
+function pruneChannelDetail(m) {
+  if (!m) return;
+  const picked = new Set(Array.isArray(m.chan) ? m.chan : []);
+  for (const key of Object.keys(m)) {
+    const prefix = CHANNEL_KEY_PREFIXES.find((p) => key.indexOf(p) === 0);
+    if (!prefix) continue;
+    const id = key.slice(prefix.length);
+    if (!picked.has(id)) delete m[key];
   }
 }
 
@@ -344,6 +362,7 @@ function migrate(state) {
     delete m[from];
   }
   migrateChannels(state.m.marketing);
+  pruneChannelDetail(state.m.marketing);
   for (const [mod, key] of REMOVED) {
     const m = state.m[mod];
     if (m && m[key] !== undefined) delete m[key];
