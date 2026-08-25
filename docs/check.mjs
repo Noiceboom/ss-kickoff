@@ -768,6 +768,38 @@ for (const m of MODULES) {
     }
   }
 
+  // The taxonomies are module constants. Rendering must never write to them.
+  const roofStorm2 = T.getTrade("roofing").services.find((x) => /Storm Damage/i.test(x.label));
+  const beforeSubs = JSON.stringify(roofStorm2.subs);
+  const purity = S.fresh();
+  purity.m.services = { trades: ["roofing", "restoration"] };
+  for (let i = 0; i < 3; i++) {
+    S.serviceUniverse(purity, emptyClient, [T.getTrade("roofing"), T.getTrade("restoration")]);
+  }
+  if (JSON.stringify(roofStorm2.subs) !== beforeSubs) {
+    fail("building the service list mutated a trade taxonomy — it is shared by every client");
+  }
+
+  // Merging a snapshot into a visible row must carry the tick and priority,
+  // or the user's own selection silently disappears.
+  const carried = S.fresh();
+  carried.m.services = {
+    trades: ["restoration"],
+    on: ["roofing:storm-damage"],
+    prio: { "roofing:storm-damage": "high" },
+    subsOff: { "roofing:storm-damage": ["Hurricane Damage"] },
+    snap: { "roofing:storm-damage": { name: "Storm Damage Restoration", subs: [] } },
+  };
+  const carriedRows = S.serviceUniverse(carried, emptyClient, [T.getTrade("restoration")])
+    .filter((x) => /Storm Damage/i.test(x.name));
+  if (carriedRows.length !== 1) fail("the merged snapshot did not collapse to one row");
+  else {
+    if (!carriedRows[0].on) fail("merging a snapshot unticked a service the user had selected");
+    if (carriedRows[0].prio !== "high") fail("merging a snapshot lost the priority the user set");
+    const hurricane = carriedRows[0].subs.find((x) => x.name === "Hurricane Damage");
+    if (hurricane && hurricane.on) fail("merging a snapshot lost a dropped sub-service");
+  }
+
   // the old rank screen is gone and nothing still points at it
   if (MODULES.some((m) => m.id === "servicesRank")) fail("servicesRank module is still registered");
 }

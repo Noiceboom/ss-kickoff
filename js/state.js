@@ -256,7 +256,11 @@ export function serviceUniverse(state, client, trades) {
     out.push({
       id: it.id,
       name: it.label || it.name || it.id,
-      subs: Array.isArray(it.subs) ? it.subs : [],
+      // COPY. The taxonomies are module-level constants and mergeInto
+      // pushes into this array — sharing the reference would corrupt the
+      // trade definition for every client until the page reloaded.
+      subs: Array.isArray(it.subs) ? it.subs.slice() : [],
+      aliases: [],
       source: source,
       tradeId: trade ? trade.id : "",
       tradeLabel: trade ? trade.label : "",
@@ -370,20 +374,32 @@ export function serviceUniverse(state, client, trades) {
     // no longer showing must not reappear beside its namesake in one that is.
     const key = norm(v.snap[id].name);
     const already = byLabel.get(key);
-    if (already) { mergeInto(already, v.snap[id].subs); continue; }
+    if (already) {
+      // Same service, already on screen under another trade's id. Merge
+      // into it rather than showing it twice — but carry the id across, or
+      // the tick and priority the user set would silently disappear.
+      mergeInto(already, v.snap[id].subs);
+      already.aliases.push(id);
+      continue;
+    }
     push({ id: id, ...v.snap[id] }, "trade");
     byLabel.set(key, out[out.length - 1]);
   }
 
-  return out.map((it) => ({
-    ...it,
-    on: it.source === "trade" ? v.on.indexOf(it.id) > -1 : v.off.indexOf(it.id) < 0,
-    prio: v.prio[it.id] || "",
-    subs: it.subs.map((name) => ({
-      name,
-      on: (v.subsOff[it.id] || []).indexOf(name) < 0,
-    })),
-  }));
+  return out.map((it) => {
+    // A row can answer to more than one id once a snapshot has merged into
+    // it, so selection, priority and dropped subs resolve across all of them.
+    const ids = [it.id].concat(it.aliases);
+    const dropped = ids.reduce((acc, id) => acc.concat(v.subsOff[id] || []), []);
+    return {
+      ...it,
+      on: it.source === "trade"
+        ? ids.some((id) => v.on.indexOf(id) > -1)
+        : v.off.indexOf(it.id) < 0,
+      prio: ids.map((id) => v.prio[id]).find(Boolean) || "",
+      subs: it.subs.map((name) => ({ name, on: dropped.indexOf(name) < 0 })),
+    };
+  });
 }
 
 export function onServices(state, client, trades) {
