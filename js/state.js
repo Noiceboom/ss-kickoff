@@ -227,7 +227,20 @@ export function svcState(state) {
  * taxonomy first, then scraped services the taxonomy doesn't know about,
  * then anything typed in on the call.
  */
-export function serviceUniverse(state, client, tradeServices) {
+/**
+ * Taxonomy-only services carry a trade-scoped id.
+ *
+ * 26 service ids appear in more than one trade and 16 of those mean
+ * different things — "commercial" is in 15 taxonomies, "new-construction"
+ * in 12. With bare ids, ticking Commercial Plumbing would silently tick
+ * Commercial HVAC the moment the trade changed, and hand it the same
+ * priority. Scoping only the taxonomy-only ones keeps scraped services
+ * client-level, where they belong, since those are real things this
+ * client sells regardless of which list is on screen.
+ */
+export function scopedId(trade, id) { return trade + ":" + id; }
+
+export function serviceUniverse(state, client, tradeServices, tradeId) {
   const v = svcState(state);
   const seen = new Set();
   const out = [];
@@ -245,10 +258,11 @@ export function serviceUniverse(state, client, tradeServices) {
     });
   };
 
+  const trade = tradeId || v.trade || "trade";
   const scraped = new Map((client.services || []).map((x) => [x.id, x]));
   for (const t of tradeServices || []) {
     const hit = scraped.get(t.id);
-    if (!hit) { push(t, "trade"); continue; }
+    if (!hit) { push({ ...t, id: scopedId(trade, t.id) }, "trade"); continue; }
     // Union the sub lists. Taking the taxonomy's alone would silently drop
     // a sub-service the client actually has a page for just because the
     // industry list doesn't happen to name it.
@@ -277,13 +291,13 @@ export function serviceUniverse(state, client, tradeServices) {
   }));
 }
 
-export function onServices(state, client, tradeServices) {
-  return serviceUniverse(state, client, tradeServices).filter((x) => x.on);
+export function onServices(state, client, tradeServices, tradeId) {
+  return serviceUniverse(state, client, tradeServices, tradeId).filter((x) => x.on);
 }
 
 /** Selected services grouped H → M → L, ordered within each bucket. */
-export function servicesByPriority(state, client, tradeServices) {
-  const list = onServices(state, client, tradeServices);
+export function servicesByPriority(state, client, tradeServices, tradeId) {
+  const list = onServices(state, client, tradeServices, tradeId);
   const order = state.order.services || [];
   const rank = (id) => { const i = order.indexOf(id); return i < 0 ? Infinity : i; };
   const buckets = { high: [], med: [], low: [], "": [] };
@@ -301,8 +315,8 @@ export function servicesByPriority(state, client, tradeServices) {
  * rank next to a decision nobody made — "#7" reads as agreed, not as
  * "we never got to it". They surface as an open item instead.
  */
-export function serviceOrder(state, client, tradeServices) {
-  const b = servicesByPriority(state, client, tradeServices);
+export function serviceOrder(state, client, tradeServices, tradeId) {
+  const b = servicesByPriority(state, client, tradeServices, tradeId);
   return b.high.concat(b.med, b.low);
 }
 
@@ -509,6 +523,24 @@ function pruneChannelDetail(m) {
   }
 }
 
+/**
+ * b14 and earlier stored taxonomy-only ticks under a bare service id.
+ * Re-key them to the trade they were ticked under, using the snapshot
+ * taken at tick-time, so nothing carries into another trade by accident.
+ */
+function migrateServiceScoping(m) {
+  if (!m || !Array.isArray(m.on) || !m.trade) return;
+  const snap = m.snap && typeof m.snap === "object" ? m.snap : {};
+  const prio = m.prio && typeof m.prio === "object" ? m.prio : {};
+  m.on = m.on.map((id) => {
+    if (id.indexOf(":") > -1) return id;
+    const scoped = m.trade + ":" + id;
+    if (snap[id]) { snap[scoped] = snap[id]; delete snap[id]; }
+    if (prio[id]) { prio[scoped] = prio[id]; delete prio[id]; }
+    return scoped;
+  });
+}
+
 function migrate(state) {
   for (const [mod, from, to] of RENAMES) {
     const m = state.m[mod];
@@ -516,6 +548,7 @@ function migrate(state) {
     if (m[to] === undefined || m[to] === "") m[to] = m[from];
     delete m[from];
   }
+  migrateServiceScoping(state.m.services);
   migrateChannels(state.m.marketing);
   pruneChannelDetail(state.m.marketing);
   for (const [mod, key] of REMOVED) {

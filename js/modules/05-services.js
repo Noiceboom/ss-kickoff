@@ -115,7 +115,7 @@ function tile(ctx, it) {
 
 function servicesCard(ctx) {
   const trade = getTrade(activeTrade(ctx));
-  const all = serviceUniverse(ctx.state, ctx.client, tradeServices(ctx));
+  const all = serviceUniverse(ctx.state, ctx.client, tradeServices(ctx), activeTrade(ctx));
   const on = all.filter((x) => x.on).length;
   const query = (ctx.transient[ID] || {}).filter || "";
 
@@ -168,7 +168,7 @@ function orderRow(it, n) {
 }
 
 function orderCard(ctx) {
-  const b = servicesByPriority(ctx.state, ctx.client, tradeServices(ctx));
+  const b = servicesByPriority(ctx.state, ctx.client, tradeServices(ctx), activeTrade(ctx));
   const total = b.high.length + b.med.length + b.low.length + b[""].length;
   if (!total) return "";
 
@@ -230,12 +230,12 @@ export default {
    */
   /** Name and subs for one service, so app.js can snapshot it on tick. */
   serviceMeta(ctx, id) {
-    const hit = serviceUniverse(ctx.state, ctx.client, tradeServices(ctx)).find((x) => x.id === id);
+    const hit = serviceUniverse(ctx.state, ctx.client, tradeServices(ctx), activeTrade(ctx)).find((x) => x.id === id);
     return hit ? { name: hit.name, subs: hit.subs.map((s) => s.name) } : null;
   },
 
   bucketIds(ctx, bucketKey) {
-    const b = servicesByPriority(ctx.state, ctx.client, tradeServices(ctx));
+    const b = servicesByPriority(ctx.state, ctx.client, tradeServices(ctx), activeTrade(ctx));
     const key = bucketKey === "none" ? "" : bucketKey;
     return (b[key] || []).map((x) => x.id);
   },
@@ -243,18 +243,18 @@ export default {
   status(ctx) {
     const v = svcState(ctx.state);
     if (!activeTrade(ctx)) return "empty";
-    const on = onServices(ctx.state, ctx.client, tradeServices(ctx));
+    const on = onServices(ctx.state, ctx.client, tradeServices(ctx), activeTrade(ctx));
     if (!on.length) return "partial";
     return on.every((x) => x.prio) ? "done" : "partial";
   },
 
   summary(ctx) {
     const trade = getTrade(activeTrade(ctx));
-    const all = serviceUniverse(ctx.state, ctx.client, tradeServices(ctx));
+    const all = serviceUniverse(ctx.state, ctx.client, tradeServices(ctx), activeTrade(ctx));
     if (!all.length) return null;
 
-    const ordered = serviceOrder(ctx.state, ctx.client, tradeServices(ctx));
-    const b = servicesByPriority(ctx.state, ctx.client, tradeServices(ctx));
+    const ordered = serviceOrder(ctx.state, ctx.client, tradeServices(ctx), activeTrade(ctx));
+    const b = servicesByPriority(ctx.state, ctx.client, tradeServices(ctx), activeTrade(ctx));
     const off = all.filter((x) => !x.on && x.source !== "trade");
 
     const rows = [];
@@ -266,7 +266,9 @@ export default {
     if (b.low.length) rows.push(["Low priority", b.low.map((x) => x.name).join(", ")]);
     if (off.length) rows.push(["Dropped", off.map((x) => x.name).join(", ")]);
 
-    const droppedSubs = ordered
+    // From everything selected, not just what's been prioritized — a
+    // dropped sub is a decision about the service, not about its rank.
+    const droppedSubs = selected
       .filter((x) => x.subs.some((s) => !s.on))
       .map((x) => x.name + " — " + x.subs.filter((s) => !s.on).map((s) => s.name).join(", "));
     if (droppedSubs.length) rows.push(["Sub-services dropped", droppedSubs.join(" · ")]);
