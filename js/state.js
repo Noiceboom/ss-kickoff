@@ -20,7 +20,10 @@ export function fresh() {
     order: {},        // { services: [id…], locations: [id…] }
     skipped: [],      // module ids marked "didn't cover"
     notes: {},        // "services:drains" -> "…"
-    mig: {},          // one-shot migration stamps, never re-run
+    // A brand-new session has nothing legacy to migrate, so it starts
+    // stamped. validate() clears this when loading a saved state that
+    // predates the stamp, which is what keeps real migrations running.
+    mig: { rank: true },
   };
 }
 
@@ -594,6 +597,10 @@ export function locationUniverse(state, client, nearby) {
       if (!twin.state && it.state) {
         twin.state = it.state;
         byPlace.set(placeKey(twin.name, it.state), twin);
+        // It has a state now, so it can no longer stand in for a
+        // same-named city in a DIFFERENT state — two Springfields are two
+        // cities, and the second must get its own row.
+        byPlace.delete(placeKey(twin.name, ""));
       }
       if (!twin.hasPage && it.hasPage) twin.hasPage = true;
       if (!twin.verify && it.verify) twin.verify = it.verify;
@@ -1016,7 +1023,10 @@ export function validate(obj) {
   if (obj.order && typeof obj.order === "object") s.order = obj.order;
   if (Array.isArray(obj.skipped)) s.skipped = obj.skipped;
   if (obj.notes && typeof obj.notes === "object") s.notes = obj.notes;
-  if (obj.mig && typeof obj.mig === "object") s.mig = obj.mig;
+  // Explicitly reset rather than defaulting: a saved state with no `mig`
+  // predates the stamp and DOES need migrating, so fresh()'s stamp must
+  // not leak through and skip it.
+  s.mig = obj.mig && typeof obj.mig === "object" ? obj.mig : {};
   return migrate(s);
 }
 

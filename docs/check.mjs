@@ -1025,6 +1025,34 @@ for (const m of MODULES) {
     fail("an ambiguous stateless city swallowed every same-named place in range");
   }
 
+  // A session created after the stamp landed must not re-fabricate either.
+  // fresh() starts stamped; validate() clears the stamp only for saved
+  // states that predate it, which is what keeps real migrations running.
+  const newSession = S.fresh();
+  newSession.order.locations = ["olathe", "lenexa"];
+  const newReloaded = S.validate(JSON.parse(JSON.stringify(newSession)));
+  const newPrio = (newReloaded.m.locations || {}).prio;
+  if (newPrio && Object.keys(newPrio).length) {
+    fail("a brand-new session had priorities fabricated from its own drag order");
+  }
+  if (!S.fresh().mig || !S.fresh().mig.rank) fail("fresh() should start already stamped");
+
+  // Two same-named cities in different states, both selected, must stay
+  // two rows — the stateless scraped entry can only stand in for one.
+  const twoClient = JSON.parse(JSON.stringify(bfp));
+  twoClient.locations = [{ id: "springfield", name: "Springfield", state: "", hasPage: false, verify: null }];
+  const twoState = S.fresh();
+  S.addLocations(twoState, [
+    { id: "springfield-mo", name: "Springfield", state: "MO", pop: 169176, miles: 5 },
+    { id: "springfield-il", name: "Springfield", state: "IL", pop: 114394, miles: 9 },
+  ]);
+  const springs = S.locationUniverse(twoState, twoClient, []).filter((x) => /Springfield/.test(x.name));
+  if (springs.length !== 2) {
+    fail(`two Springfields in different states collapsed into ${springs.length} row(s)`);
+  } else if (new Set(springs.map((x) => x.state)).size !== 2) {
+    fail("the two Springfield rows ended up with the same state");
+  }
+
   // a client file whose cities carry no state must still match the Census
   const noState = JSON.parse(JSON.stringify(bfp));
   noState.locations = [{ id: "raytown", name: "Raytown", state: "", hasPage: false, verify: null }];
