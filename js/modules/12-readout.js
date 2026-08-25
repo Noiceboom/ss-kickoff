@@ -135,7 +135,7 @@ function notesBlock(parts) {
  * Modules that carry their own ranked list. Services builds its order from
  * priority buckets on its own screen; locations still has a rank screen.
  */
-const RANKED = { services: "services", locations: "locationsRank" };
+const RANKED = { services: "services", locations: "locations" };
 
 function ranksFor(parts) {
   const pick = (id) => {
@@ -192,7 +192,6 @@ function briefView(ctx, parts) {
 
   const detail = parts
     .filter((p) => p.sum && (p.sum.rows || p.sum.table))
-    .filter((p) => p.mod.id !== RANKED.locations)
     .map((p) =>
       '<div class="card"><div class="mlabel">' + esc(p.mod.nav) + "</div>" +
       dl(p.sum.rows) + (isRanked(p.mod.id) ? "" : table(p.sum.table)) + "</div>"
@@ -316,7 +315,6 @@ function buildText(ctx, parts, mode) {
     }
     for (const p of parts) {
       if (p.skipped || !p.sum || (!p.sum.rows && !p.sum.table)) continue;
-      if (p.mod.id === RANKED.locations) continue;
       L.push(p.mod.nav.toUpperCase());
       if (p.sum.rows) for (const [k, v] of p.sum.rows) L.push("  " + k + ": " + v);
       // its table is the ranked list, already printed above

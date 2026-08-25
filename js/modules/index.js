@@ -13,7 +13,6 @@ import marketing from "./03-marketing.js";
 import competitors from "./04-competitors.js";
 import services from "./05-services.js";
 import locations from "./07-locations.js";
-import locationsRank from "./08-locations-rank.js";
 import constraints from "./09-constraints.js";
 import brand from "./10-brand.js";
 import access from "./11-access.js";
@@ -27,7 +26,6 @@ export default [
   competitors,
   services,
   locations,
-  locationsRank,
   constraints,
   brand,
   access,

@@ -833,6 +833,94 @@ for (const m of MODULES) {
   }
 }
 
+{
+  // ── cities: coverage, exclusions, priority ──
+  const P = await import(url("js/places.js"));
+  const locMod = MODULES.find((m) => m.id === "locations");
+  if (!locMod) fail("the locations module is missing");
+  if (MODULES.some((m) => m.id === "locationsRank")) fail("the rank-cities screen is still registered");
+
+  // the dataset must actually cover a real metro — a name-matched dataset
+  // silently lost ten Kansas City suburbs, which is how this got caught
+  const kcPlaces = JSON.parse(readFileSync(path.join(ROOT, "data/places/KS.json"), "utf8"))
+    .map((r) => ({ name: r[0], state: "KS", lat: r[1], lng: r[2], pop: r[3] }))
+    .concat(JSON.parse(readFileSync(path.join(ROOT, "data/places/MO.json"), "utf8"))
+      .map((r) => ({ name: r[0], state: "MO", lat: r[1], lng: r[2], pop: r[3] })));
+  const kc = P.search(kcPlaces, "Kansas City, MO", 1)[0];
+  if (!kc) fail("could not find Kansas City, MO in the bundled dataset");
+  else {
+    const near = P.within(kcPlaces, kc, 25).map((x) => x.name.toLowerCase());
+    for (const suburb of ["merriam", "raytown", "north kansas city", "gladstone",
+                          "fairway", "roeland park", "westwood", "prairie village",
+                          "overland park", "lenexa", "leawood", "shawnee", "olathe"]) {
+      if (near.indexOf(suburb) < 0) fail(`the places dataset is missing ${suburb} within 25mi of Kansas City`);
+    }
+    if (kc.pop < 400000) fail(`Kansas City population looks wrong: ${kc.pop}`);
+  }
+  // every state file must parse and be non-trivial
+  for (const st of ["KS", "MO", "TX", "CA", "RI"]) {
+    const rows = JSON.parse(readFileSync(path.join(ROOT, `data/places/${st}.json`), "utf8"));
+    if (!rows.length) fail(`data/places/${st}.json is empty`);
+    for (const r of rows.slice(0, 5)) {
+      if (r.length !== 4 || typeof r[0] !== "string" || typeof r[1] !== "number") {
+        fail(`data/places/${st}.json has a malformed row`);
+      }
+    }
+  }
+
+  // a radius result the scrape already covers is not a duplicate. The two
+  // use different id conventions — "raytown" vs "raytown-mo".
+  const lst = S.fresh();
+  const found = P.within(kcPlaces, kc, 25).map((p) => ({ ...p, id: P.placeId(p) }));
+  const cands = S.radiusCandidates(lst, bfp, found);
+  const scrapedNames = new Set(bfp.locations.map((l) => l.name.toLowerCase() + "|" + l.state));
+  for (const c of cands) {
+    if (scrapedNames.has(c.name.toLowerCase() + "|" + c.state)) {
+      fail(`${c.name}, ${c.state} was offered as a candidate but the scrape already has it`);
+    }
+  }
+  if (cands.length >= found.length) fail("radiusCandidates filtered nothing at all");
+
+  // Kansas City MO and KS are different cities and must both survive
+  const uni = S.locationUniverse(lst, bfp, found);
+  const kcRows = uni.filter((x) => /^kansas city$/i.test(x.name));
+  if (kcRows.length !== 1) fail(`expected only the scraped Kansas City row, got ${kcRows.length}`);
+  const names = uni.map((x) => x.name.toLowerCase() + "|" + x.state);
+  if (new Set(names).size !== names.length) fail("locationUniverse produced duplicate cities");
+
+  // excluded is a separate state from unticked
+  const ex = S.fresh();
+  S.toggleExcluded(ex, "raytown");
+  const exUni = S.locationUniverse(ex, bfp, []);
+  const ray = exUni.find((x) => x.id === "raytown");
+  if (!ray || !ray.excluded) fail("toggleExcluded did not bar the city");
+  if (ray.on) fail("an excluded city still counted as selected");
+  if (!S.excludedLocations(ex, bfp, []).length) fail("excludedLocations returned nothing");
+  // choosing it again clears the bar
+  S.toggleLocation(ex, "raytown", false);
+  if (S.locationUniverse(ex, bfp, []).find((x) => x.id === "raytown").excluded) {
+    fail("picking a barred city did not clear the exclusion");
+  }
+  // excluding clears any priority — a barred city has no build slot
+  S.setLocationPriority(ex, "raytown", "high");
+  S.toggleExcluded(ex, "raytown");
+  if (S.locationOrder(ex, bfp, []).some((x) => x.id === "raytown")) {
+    fail("an excluded city stayed in the build order");
+  }
+
+  // priority bands, and unranked cities kept out of the order
+  const lp = S.fresh();
+  S.setLocationPriority(lp, "olathe", "high");
+  S.setLocationPriority(lp, "raytown", "low");
+  const lorder = S.locationOrder(lp, bfp, []);
+  if (lorder.some((x) => !x.prio)) fail("an unranked city appeared in the city build order");
+  if (lorder[0].id !== "olathe") fail("the city build order put a Low above a High");
+  S.reorderLocationBucket(lp, ["raytown"]);
+  if (S.locationsByPriority(lp, bfp, []).high[0].id !== "olathe") {
+    fail("reordering one band disturbed another");
+  }
+}
+
 /* ── report ───────────────────────────────────────────── */
 
 for (const w of warns) console.log("WARN  " + w);

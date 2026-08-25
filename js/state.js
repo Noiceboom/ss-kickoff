@@ -478,6 +478,15 @@ export function toggleService(state, idOrIds, isTradeOnly, meta) {
     if (wasOn) { if (i < 0) list.push(id); }
     else if (i > -1) list.splice(i, 1);
   }
+  // A scraped row can carry a taxonomy alias. Leaving that id in `on`
+  // would bring the service back ticked as soon as the trade changed,
+  // undoing an untick the user had already made.
+  if (wasOn && Array.isArray(s.on)) {
+    for (const id of ids) {
+      const j = s.on.indexOf(id);
+      if (j > -1) s.on.splice(j, 1);
+    }
+  }
 }
 
 /** @param idOrIds see toggleService — every alias must move together. */
@@ -488,7 +497,10 @@ export function setPriority(state, idOrIds, value) {
   const current = ids.map((id) => s.prio[id]).find(Boolean) || "";
   const next = current === value ? "" : value;
   for (const id of ids) delete s.prio[id];
-  if (next) s.prio[ids[0]] = next;
+  // Written to every id, not just the primary. Which id is primary depends
+  // on which trades are showing, so storing it once would lose the priority
+  // the moment the owning trade was deselected.
+  if (next) for (const id of ids) s.prio[id] = next;
   if (!Object.keys(s.prio).length) delete s.prio;
 }
 
@@ -496,6 +508,194 @@ export function setPriority(state, idOrIds, value) {
 export function reorderBucket(state, bucketIds) {
   const order = (state.order.services || []).filter((id) => bucketIds.indexOf(id) < 0);
   state.order.services = order.concat(bucketIds);
+}
+
+/* ── locations: coverage, priority, exclusions ────────── */
+//
+// Same two-sided selection as services: a scraped city is ON unless turned
+// off, a city pulled in from a radius search is OFF unless turned on. On
+// top of that a city can be EXCLUDED, which is a different thing from
+// unticked — see below.
+
+export function locState(state) {
+  const s = state.m.locations || EMPTY;
+  return {
+    off: Array.isArray(s.off) ? s.off : [],
+    on: Array.isArray(s.on) ? s.on : [],
+    excluded: Array.isArray(s.excluded) ? s.excluded : [],
+    prio: s.prio && typeof s.prio === "object" ? s.prio : EMPTY,
+    added: Array.isArray(s.added) ? s.added : [],
+    base: typeof s.base === "string" ? s.base : "",
+    radius: Number(s.radius) || 25,
+  };
+}
+
+/**
+ * Every city in play: whatever the scrape found, plus anything pulled in
+ * from a radius search or typed on the call.
+ *
+ * @param nearby places returned by places.within(), already carrying a
+ *   distance. Only those already selected or explicitly excluded are kept
+ *   — the rest live in the radius picker until someone chooses them.
+ */
+/** name + state, so "Kansas City MO" and "Kansas City KS" stay distinct. */
+function placeKey(name, st) {
+  return String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() + "|" + String(st || "").toUpperCase();
+}
+
+/**
+ * Radius results the list doesn't already cover.
+ *
+ * The scrape and the Census use different id conventions — "raytown" versus
+ * "raytown-mo" — so matching on id alone showed eleven Kansas City suburbs
+ * twice. Matched on name and state instead.
+ */
+export function radiusCandidates(state, client, nearby) {
+  const known = new Set();
+  for (const c of client.locations || []) known.add(placeKey(c.name, c.state));
+  for (const a of locState(state).added) known.add(placeKey(a.name, a.state));
+  return (nearby || []).filter((p) => !known.has(placeKey(p.name, p.state)));
+}
+
+export function locationUniverse(state, client, nearby) {
+  const v = locState(state);
+  const seen = new Set();
+  const byPlace = new Map();
+  const out = [];
+
+  const push = (it, source) => {
+    if (!it || !it.id) return;
+    const key = placeKey(it.name, it.state);
+    const twin = byPlace.get(key);
+    if (twin) {
+      // Same city reached by a different route. Keep the row we already
+      // have — usually the scraped one, which carries hasPage and verify —
+      // and take the distance and population the radius search knows.
+      if (twin.miles == null && it.miles != null) twin.miles = it.miles;
+      if (!twin.pop && it.pop) twin.pop = it.pop;
+      return;
+    }
+    if (seen.has(it.id)) return;
+    seen.add(it.id);
+    const row = {
+      id: it.id,
+      name: it.name,
+      state: it.state || "",
+      source: source,
+      miles: it.miles == null ? null : it.miles,
+      pop: it.pop || 0,
+      hasPage: !!it.hasPage,
+      verify: it.verify || null,
+    };
+    out.push(row);
+    byPlace.set(key, row);
+  };
+
+  for (const c of client.locations || []) push(c, "scrape");
+  for (const a of v.added) push(a, "added");
+  // A nearby place only becomes a row once someone has acted on it.
+  for (const n of nearby || []) {
+    if (v.on.indexOf(n.id) > -1 || v.excluded.indexOf(n.id) > -1) push(n, "radius");
+  }
+
+  return out.map((it) => ({
+    ...it,
+    excluded: v.excluded.indexOf(it.id) > -1,
+    on: v.excluded.indexOf(it.id) > -1
+      ? false
+      : (it.source === "radius" ? v.on.indexOf(it.id) > -1 : v.off.indexOf(it.id) < 0),
+    prio: v.prio[it.id] || "",
+  }));
+}
+
+export function onLocations(state, client, nearby) {
+  return locationUniverse(state, client, nearby).filter((x) => x.on);
+}
+
+export function excludedLocations(state, client, nearby) {
+  return locationUniverse(state, client, nearby).filter((x) => x.excluded);
+}
+
+export function locationsByPriority(state, client, nearby) {
+  const list = onLocations(state, client, nearby);
+  const order = state.order.locations || [];
+  const rank = (id) => { const i = order.indexOf(id); return i < 0 ? Infinity : i; };
+  const b = { high: [], med: [], low: [], "": [] };
+  for (const it of list) (b[it.prio] || b[""]).push(it);
+  for (const k of Object.keys(b)) b[k].sort((a, c) => rank(a.id) - rank(c.id) || a.name.localeCompare(c.name));
+  return b;
+}
+
+/** Build order: High, then Medium, then Low. Unranked cities are omitted. */
+export function locationOrder(state, client, nearby) {
+  const b = locationsByPriority(state, client, nearby);
+  return b.high.concat(b.med, b.low);
+}
+
+export function toggleLocation(state, id, isRadius) {
+  const s = ensure(state, "locations");
+  if (!Array.isArray(s.off)) s.off = [];
+  if (!Array.isArray(s.on)) s.on = [];
+  // Choosing a city clears any exclusion — the two are opposites, and
+  // leaving both set would make the row read as included and excluded.
+  if (Array.isArray(s.excluded)) {
+    const e = s.excluded.indexOf(id);
+    if (e > -1) { s.excluded.splice(e, 1); if (!s.excluded.length) delete s.excluded; return; }
+  }
+  const list = isRadius ? s.on : s.off;
+  const i = list.indexOf(id);
+  if (i > -1) list.splice(i, 1);
+  else list.push(id);
+}
+
+/**
+ * "Do not market here" is not the same as unticked. Unticked means no page
+ * for now; excluded means keep the ad money out of this city, and it has
+ * to survive as an explicit list because a negative geo-target is
+ * something you act on, not an absence.
+ */
+export function toggleExcluded(state, id, meta) {
+  const s = ensure(state, "locations");
+  if (!Array.isArray(s.excluded)) s.excluded = [];
+  const i = s.excluded.indexOf(id);
+  if (i > -1) {
+    s.excluded.splice(i, 1);
+    if (!s.excluded.length) delete s.excluded;
+    return;
+  }
+  s.excluded.push(id);
+  // Excluding also clears any priority — an excluded city has no place in
+  // the build order.
+  if (s.prio) { delete s.prio[id]; if (!Object.keys(s.prio).length) delete s.prio; }
+  if (meta && meta.name) {
+    if (!Array.isArray(s.added)) s.added = [];
+    if (!s.added.some((x) => x.id === id) && meta.fromRadius) {
+      if (!Array.isArray(s.on)) s.on = [];
+    }
+  }
+}
+
+export function setLocationPriority(state, id, value) {
+  const s = ensure(state, "locations");
+  if (!s.prio || typeof s.prio !== "object") s.prio = {};
+  if (s.prio[id] === value || !value) delete s.prio[id];
+  else s.prio[id] = value;
+  if (!Object.keys(s.prio).length) delete s.prio;
+}
+
+export function addLocations(state, items) {
+  const s = ensure(state, "locations");
+  if (!Array.isArray(s.on)) s.on = [];
+  if (!Array.isArray(s.added)) s.added = [];
+  for (const it of items) {
+    if (!s.added.some((x) => x.id === it.id)) s.added.push(it);
+    if (s.on.indexOf(it.id) < 0) s.on.push(it.id);
+  }
+}
+
+export function reorderLocationBucket(state, bucketIds) {
+  const order = (state.order.locations || []).filter((id) => bucketIds.indexOf(id) < 0);
+  state.order.locations = order.concat(bucketIds);
 }
 
 /* ── notes ────────────────────────────────────────────── */

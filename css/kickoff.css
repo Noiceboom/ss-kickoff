@@ -195,6 +195,31 @@ h3{margin:0;font-family:"OSCondensed",sans-serif;font-weight:800;font-size:19px;
 .pickother{margin-top:26px;padding-top:20px;border-top:1px solid var(--line)}
 .pickempty{font-size:14px;color:var(--muted);padding:14px 0}
 
+/* radius search */
+.radiuslist{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:var(--body);
+  max-height:320px;overflow-y:auto}
+.radrow{display:flex;align-items:center;gap:12px;width:100%;padding:9px 14px;border:none;
+  border-bottom:1px solid var(--line);background:transparent;text-align:left;font-size:14px}
+.radrow:last-child{border-bottom:none}
+.radpick{cursor:pointer}
+.radpick:hover{background:var(--soft-orange)}
+.radname{flex:1;min-width:0;font-family:"OSCondensed",sans-serif;font-weight:800;font-size:15px;
+  letter-spacing:.4px;text-transform:uppercase;display:flex;align-items:baseline;gap:7px}
+.radst{font-family:"JetBrains Mono",monospace;font-weight:400;font-size:10px;letter-spacing:1px;color:var(--faint)}
+.radmeta{flex:none;font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.6px;color:var(--muted)}
+.radrow .btn{flex:none}
+.barbtn{width:100%;margin-top:9px;background:transparent;border:1px dashed var(--line);border-radius:7px;
+  padding:6px 8px;cursor:pointer;font-family:"OSCondensed",sans-serif;font-weight:800;font-size:10.5px;
+  letter-spacing:1px;text-transform:uppercase;color:var(--faint);transition:all 150ms var(--ease)}
+.barbtn:hover{border-color:var(--risk);color:var(--risk);border-style:solid}
+.card.excluded{border-color:var(--risk);box-shadow:0 5px 0 0 var(--risk);background:rgba(181,67,32,.03)}
+.card.excluded h3{color:var(--risk)}
+.card.excluded .chip.strike{border-color:var(--risk);color:var(--risk);background:rgba(181,67,32,.07);
+  text-decoration:none;cursor:pointer}
+.card.excluded .chip.strike:hover{background:rgba(181,67,32,.16)}
+.card.excluded .pickcount .v{color:var(--risk)}
+.card.excluded .pickcount .v.zero{color:var(--track)}
+
 /* sliders */
 .sl{gap:0}
 .slhead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px}
@@ -443,6 +468,8 @@ pre.raw{background:var(--char);color:var(--cream);border-radius:14px;padding:20p
   .dl{grid-template-columns:1fr;gap:3px 0}
   .dl dd{margin-bottom:10px}
   .rrow{grid-template-columns:1fr !important}
+  .radrow{flex-wrap:wrap;gap:6px}
+  .radmeta{width:100%}
   .slnum{font-size:32px}
   .fields.sliders{grid-template-columns:1fr;gap:26px}
   .rowhead{display:none !important}

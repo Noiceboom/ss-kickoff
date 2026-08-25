@@ -7,12 +7,13 @@ import { esc, ICON, pageNote, sliderValue, sliderPos, snapNice, formatSlider } f
 import * as rank from "./rank.js";
 import MODULES from "./modules/index.js";
 import { resolveTrade } from "./trades/index.js";
+import * as places from "./places.js";
 
 /* ── constants ────────────────────────────────────────── */
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b20";
+export const BUILD = "b21";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -463,6 +464,12 @@ document.addEventListener("input", (e) => {
     } else {
       S.setField(R.state, mod, key, el.value);
     }
+    // Typing a base city offers matches, debounced so it isn't searching
+    // 7,000 places on every keystroke.
+    if (f === "locations|base") {
+      clearTimeout(R.baseTimer);
+      R.baseTimer = setTimeout(suggestBase, 300);
+    }
     refreshDerived();
     queueSave();
     return;
@@ -614,6 +621,57 @@ document.addEventListener("click", (e) => {
     render(); queueSave(); return;
   }
 
+  if ((el = t.closest("[data-loc]"))) {
+    const [id, isRadius] = el.getAttribute("data-loc").split("|");
+    S.toggleLocation(R.state, id, isRadius === "1");
+    render(); queueSave(); return;
+  }
+
+  if ((el = t.closest("[data-locprio]"))) {
+    const [id, val] = el.getAttribute("data-locprio").split("|");
+    S.setLocationPriority(R.state, id, val);
+    render(); queueSave(); return;
+  }
+
+  if ((el = t.closest("[data-barplace]"))) {
+    const id = el.getAttribute("data-barplace");
+    const hit = (R.transient.locations && R.transient.locations.nearby || []).find((p) => p.id === id);
+    if (hit) S.addLocations(R.state, [{ id: hit.id, name: hit.name, state: hit.state, pop: hit.pop, miles: hit.miles }]);
+    S.toggleExcluded(R.state, id);
+    render(); queueSave(); return;
+  }
+
+  if ((el = t.closest("[data-addplace]"))) {
+    const id = el.getAttribute("data-addplace");
+    const hit = (R.transient.locations && R.transient.locations.nearby || []).find((p) => p.id === id);
+    if (hit) S.addLocations(R.state, [{ id: hit.id, name: hit.name, state: hit.state, pop: hit.pop, miles: hit.miles }]);
+    render(); queueSave(); return;
+  }
+
+  if ((el = t.closest("[data-addall]"))) {
+    const how = el.getAttribute("data-addall");
+    const t2 = R.transient.locations || {};
+    // Candidates only — filtering by id would re-add cities the scrape
+    // already covers under a different id and pick them as "the biggest".
+    const chosen = new Set(S.locationUniverse(R.state, R.client, t2.nearby || []).map((x) => x.id));
+    let pool = S.radiusCandidates(R.state, R.client, t2.nearby || [])
+      .filter((p) => !chosen.has(p.id));
+    if (how === "15") pool = pool.slice().sort((a, b) => b.pop - a.pop).slice(0, 15);
+    else if (how === "near") pool = pool.slice(0, 10);
+    S.addLocations(R.state, pool.map((p) => ({ id: p.id, name: p.name, state: p.state, pop: p.pop, miles: p.miles })));
+    render(); queueSave(); toast("Added " + pool.length + " cities"); return;
+  }
+
+  if ((el = t.closest("[data-radius]"))) {
+    S.ensure(R.state, "locations").radius = Number(el.getAttribute("data-radius"));
+    runRadius(); return;
+  }
+
+  if ((el = t.closest("[data-pickbase]"))) {
+    pickBase(el.getAttribute("data-pickbase"));
+    return;
+  }
+
   if ((el = t.closest("[data-item]"))) {
     const [key, id] = el.getAttribute("data-item").split("|");
     S.toggleItem(R.state, key, id);
@@ -685,6 +743,16 @@ document.addEventListener("click", (e) => {
  * helpers. Returns false when the move isn't possible.
  */
 function reorderFor(key, fromId, toId) {
+  if (key.indexOf("locprio-") === 0) {
+    const mod = moduleAt("locations");
+    const ids = mod.bucketIds ? mod.bucketIds(ctx(), key.slice(8)) : [];
+    const from = ids.indexOf(fromId);
+    const to = ids.indexOf(toId);
+    if (from < 0 || to < 0 || from === to) return false;
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    S.reorderLocationBucket(R.state, ids);
+    return true;
+  }
   if (key.indexOf("prio-") === 0) {
     const mod = moduleAt("services");
     const items = mod.bucketIds ? mod.bucketIds(ctx(), key.slice(5)) : [];
@@ -696,6 +764,67 @@ function reorderFor(key, fromId, toId) {
     return true;
   }
   return rank.moveTo(R.state, key, itemsFor(key), fromId, toId);
+}
+
+/* ── radius search ────────────────────────────────────── */
+//
+// The place dataset is sharded by state and only fetched when this screen
+// needs it, so the other eleven screens never pay for it. Results live in
+// transient — they're derived from the base city and radius, both of which
+// ARE saved, so a reload recomputes them rather than carrying 80 rows in
+// the share link.
+
+function locT() {
+  if (!R.transient.locations) R.transient.locations = {};
+  return R.transient.locations;
+}
+
+function statesToLoad() {
+  const seen = new Set();
+  for (const l of R.client.locations || []) if (l.state) seen.add(l.state);
+  const typed = /,\s*([A-Za-z]{2})\s*$/.exec(S.getField(R.state, "locations", "base", ""));
+  if (typed) seen.add(typed[1].toUpperCase());
+  return [...seen];
+}
+
+async function ensurePlaces() {
+  const t = locT();
+  const want = statesToLoad().sort().join(",");
+  if (t.loadedFor === want && t.all) return t.all;
+  t.all = await places.loadRegion(statesToLoad());
+  t.loadedFor = want;
+  return t.all;
+}
+
+/** Offer matches for what's been typed into the base-city box. */
+async function suggestBase() {
+  const q = S.getField(R.state, "locations", "base", "");
+  const t = locT();
+  if (String(q).trim().length < 3) { t.matches = []; render(); return; }
+  const all = await ensurePlaces();
+  t.matches = places.search(all, q, 6).map((p) => ({ ...p, id: places.placeId(p) }));
+  render();
+}
+
+async function pickBase(id) {
+  const t = locT();
+  const hit = (t.matches || []).find((m) => m.id === id);
+  if (!hit) return;
+  t.base = hit;
+  t.matches = [];
+  S.setField(R.state, "locations", "base", hit.name + ", " + hit.state);
+  await runRadius();
+}
+
+async function runRadius() {
+  const t = locT();
+  if (!t.base) { render(); return; }
+  const all = await ensurePlaces();
+  const miles = S.getField(R.state, "locations", "radius", 25);
+  t.nearby = places.within(all, t.base, Number(miles) || 25)
+    .map((p) => ({ ...p, id: places.placeId(p) }));
+  render();
+  queueSave();
 }
 
 /* ── drag + keyboard reordering ───────────────────────── */
@@ -718,7 +847,16 @@ document.addEventListener("keydown", (e) => {
   if (g && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
     e.preventDefault();
     const [key, id] = g.getAttribute("data-grip").split("|");
-    if (key.indexOf("prio-") === 0) {
+    if (key.indexOf("locprio-") === 0) {
+      const mod = moduleAt("locations");
+      const ids = mod.bucketIds ? mod.bucketIds(ctx(), key.slice(8)) : [];
+      const i = ids.indexOf(id);
+      const j = i + (e.key === "ArrowUp" ? -1 : 1);
+      if (i >= 0 && j >= 0 && j < ids.length) {
+        ids.splice(j, 0, ids.splice(i, 1)[0]);
+        S.reorderLocationBucket(R.state, ids);
+      }
+    } else if (key.indexOf("prio-") === 0) {
       const mod = moduleAt("services");
       const ids = mod.bucketIds ? mod.bucketIds(ctx(), key.slice(5)) : [];
       const i = ids.indexOf(id);
@@ -884,6 +1022,13 @@ async function boot() {
 
   render();
   document.getElementById("boot").remove();
+
+  // base city and radius are saved; the result list is derived, so rebuild
+  // it once rather than carrying 80 rows around in the share link
+  if (S.getField(R.state, "locations", "base", "")) suggestBase().then(() => {
+    const t = locT();
+    if (!t.base && t.matches && t.matches.length) { t.base = t.matches[0]; t.matches = []; runRadius(); }
+  });
 }
 
 boot().catch((e) => {
