@@ -520,3 +520,10 @@ pre.raw{background:var(--char);color:var(--cream);border-radius:14px;padding:20p
   .dark .mlabel,.dark .kpi .l,.dark .dl dt{color:var(--muted)}
   pre.raw{background:#fff;color:var(--char);border:1px solid var(--line)}
 }
+
+/* the Leadsie link — a URL you copy, not a field you edit */
+.linkrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px;
+  padding:14px 16px;background:var(--light);border:2px solid var(--line);border-radius:12px}
+.linkrow code{flex:1;min-width:220px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:13px;color:var(--char);word-break:break-all;line-height:1.4}
+.linkrow .btn{flex:none}

@@ -1224,6 +1224,63 @@ for (const m of MODULES) {
   }
 }
 
+/* ── access: leadsie first, no owner/how anywhere ──────── */
+{
+  const acc = MODULES.find((m) => m.id === "access");
+
+  const filled = S.fresh();
+  const html = acc.render({ ...ctxFor(bfp, filled), num: "08" });
+  if (html.indexOf("app.leadsie.com/connect/servicescalers/manage") === -1) {
+    fail("the Leadsie link is not on the access screen");
+  }
+  if (/data-f="access\|owner_|data-f="access\|how_/.test(html)) {
+    fail("access still renders an owner or how-do-we-get-it field");
+  }
+  // the eight that appear without being asked for
+  for (const k of ["ga4", "gsc", "gads", "gtm", "crm", "web", "host", "meta"]) {
+    if (html.indexOf('data-status="access|status_' + k + '|') === -1) {
+      fail(`the core account "${k}" is missing from the access screen`);
+    }
+  }
+  // and the ones that should stay behind the picker until asked for
+  for (const k of ["gbp", "dns", "reviews"]) {
+    if (html.indexOf('data-status="access|status_' + k + '|') > -1) {
+      fail(`optional account "${k}" is on screen before anyone said it exists`);
+    }
+    if (html.indexOf('data-chip="access|extra|' + k + '"') === -1) {
+      fail(`optional account "${k}" has no way to be switched on`);
+    }
+  }
+  // switching one on has to reveal its status picker
+  const withExtra = S.fresh();
+  withExtra.m.access = { extra: ["gbp"] };
+  if (acc.render({ ...ctxFor(bfp, withExtra), num: "08" })
+        .indexOf('data-status="access|status_gbp|') === -1) {
+    fail("switching an optional account on did not reveal its status");
+  }
+
+  // a session that answered the old owner/how questions must not lose them
+  const legacy = S.validate({
+    v: 2, step: "access", order: {}, skipped: [], notes: {},
+    m: { access: { status_gbp: "pending", owner_gbp: "Mike", how_ga4: "Client sends invite" } },
+  });
+  if ((legacy.m.access.extra || []).indexOf("gbp") === -1) {
+    fail("an optional account with a saved status was not switched back on");
+  }
+  if ("owner_gbp" in legacy.m.access) fail("the old owner field was left in state");
+  if (!/Mike/.test(legacy.notes["access:_page"] || "")) {
+    fail("a saved account owner was deleted rather than carried into the note");
+  }
+
+  // leadsie not sent is the first thing the readout should be shouting about
+  const sent = S.fresh();
+  sent.m.access = { leadsie: "sent", leadsieWho: "Mike" };
+  const opens = (acc.summary(ctxFor(bfp, sent)).open || []).map((o) => o.what);
+  if (!opens.some((w) => /Leadsie/i.test(w))) {
+    fail("a Leadsie link left unclicked did not reach the readout");
+  }
+}
+
 /* ── the CSP has to permit what the app actually renders ── */
 {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");

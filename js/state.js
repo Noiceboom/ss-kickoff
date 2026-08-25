@@ -984,6 +984,72 @@ function migrateRankNotes(state) {
 }
 
 /**
+ * Access used to ask for an owner and a "how do we get it" per account.
+ * Both came out. Anything already typed is folded into the page note
+ * rather than dropped — it was said on a call, and a silent delete is
+ * worse than a slightly untidy note.
+ *
+ * The account roster also shrank to eight, with the rest behind a picker,
+ * so any account that already has a status has to be switched back on or
+ * its answer would vanish from the screen.
+ *
+ * The key lists are frozen copies of the OLD shape on purpose. This
+ * describes what used to be stored; it must not track later edits to the
+ * module.
+ */
+const ACCESS_WAS_OPTIONAL = ["gbp", "dns", "calls", "reviews", "email"];
+const ACCESS_OLD_LABELS = {
+  gbp: "Google Business Profile", gads: "Google Ads", ga4: "Google Analytics",
+  gsc: "Search Console", gtm: "Google Tag Manager", meta: "Meta",
+  calls: "Call tracking", dns: "Domain / DNS", host: "Hosting / CMS",
+  crm: "CRM", reviews: "Review platform", email: "Email / sending domain",
+};
+const ACCESS_OLD_KEYS = Object.keys(ACCESS_OLD_LABELS);
+
+function migrateAccess(state) {
+  const m = state.m.access;
+  if (!m) return;
+
+  // an account that already has an answer has to stay visible
+  const extra = Array.isArray(m.extra) ? m.extra.slice() : [];
+  for (const key of ACCESS_WAS_OPTIONAL) {
+    if (m["status_" + key] && extra.indexOf(key) === -1) extra.push(key);
+  }
+  if (extra.length) m.extra = extra;
+
+  const carried = [];
+  const label = (key) => ACCESS_OLD_LABELS[key] || key;
+  for (const key of ACCESS_OLD_KEYS) {
+    const owner = m["owner_" + key];
+    const how = m["how_" + key];
+    const bits = [];
+    if (typeof owner === "string" && owner.trim()) bits.push("owner " + owner.trim());
+    if (typeof how === "string" && how.trim()) bits.push(how.trim());
+    if (bits.length) carried.push(label(key) + ": " + bits.join(" — "));
+    delete m["owner_" + key];
+    delete m["how_" + key];
+  }
+
+  // custom rows lost the same two columns
+  if (Array.isArray(m.custom)) {
+    for (const row of m.custom) {
+      if (!row || typeof row !== "object") continue;
+      const bits = [];
+      if (typeof row.owner === "string" && row.owner.trim()) bits.push("owner " + row.owner.trim());
+      if (typeof row.how === "string" && row.how.trim()) bits.push(row.how.trim());
+      if (bits.length) carried.push((row.account || "unnamed") + ": " + bits.join(" — "));
+      delete row.owner;
+      delete row.how;
+    }
+  }
+
+  if (!carried.length) return;
+  const key = "access:" + PAGE;
+  const kept = "Access ownership noted on an earlier pass:\n" + carried.join("\n");
+  state.notes[key] = state.notes[key] ? state.notes[key] + "\n\n" + kept : kept;
+}
+
+/**
  * The brand chips used to store their own labels; they store short codes
  * now. Without this a saved "Have vector" matches no chip and the answer
  * silently disappears.
@@ -1033,6 +1099,7 @@ function migrate(state) {
   migrateServiceScoping(state.m.services);
   migrateRankNotes(state);
   migrateChipValues(state);
+  migrateAccess(state);
   if (REPLACED_BY[state.step]) state.step = REPLACED_BY[state.step];
   // Runs exactly once. Without the stamp, clearing every priority on the
   // new screen leaves an order behind that the next load reads as legacy

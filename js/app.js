@@ -14,7 +14,7 @@ import * as assets from "./assets.js";
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b29";
+export const BUILD = "b30";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -567,6 +567,11 @@ document.addEventListener("click", (e) => {
   if ((el = t.closest("[data-skip]"))) {
     S.toggleSkip(R.state, el.getAttribute("data-skip"));
     render(); queueSave(); return;
+  }
+
+  if ((el = t.closest("[data-copy]"))) {
+    copy(el.getAttribute("data-copy"), "Copied");
+    return;
   }
 
   if ((el = t.closest("[data-chip]"))) {

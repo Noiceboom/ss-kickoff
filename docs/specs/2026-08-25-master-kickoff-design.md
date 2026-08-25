@@ -249,7 +249,7 @@ not cosmetic.
 | 05 | `services` | Services | Industry picker, **multi-select** (16 trades) — plenty of companies run two; the trade's full taxonomy merged with the scrape, which arrives pre-ticked; High/Med/Low per service; sub-service chips; per-item notes; **build order assembled from the priority bands on the same screen**, draggable within each band |
 | 07 | `locations` | Cities | Radius search off a base city against a bundled Census dataset; pick + High/Med/Low; **do-not-market exclusions** as a first-class state; build order on the same screen, draggable within a band |
 | 09 | `brand` | Brand | Logo status **+ file upload**, brand guide **+ upload**, colors, fonts, photo library; six **bipolar tone scales**; words to use and never use. Uploads go to IndexedDB — state carries metadata only, never bytes |
-| 11 | `access` | Access & credentials | **Status tracker only.** Fixed rows + add-your-own. Per row: owner, status, how-to-request (constrained select). |
+| 11 | `access` | Access | **Status tracker only.** Leadsie link first — one link covers most Google and Meta access, so it leads the screen and an unclicked one is an open item. Eight core accounts always shown (GA4, Search Console, Google Ads, GTM, CRM, Website, Hosting, Meta); the rest sit behind a picker until someone says they exist. Per account: status and nothing else. Owner and how-to-request were removed — they never earned their space, and a free-text "owner" box next to an account name is exactly where a password gets typed. |
 | 12 | `readout` | Readout & exports | Client recap / Internal brief / Raw. Copy, print, JSON + CSV. |
 
 Empty states are required: modules 06 and 08 must render sensibly with zero confirmed

@@ -126,8 +126,19 @@ export default {
         chipGroup(ID, "photoStatus", "Photo library", s.photoStatus, PHOTOS, {
           help: "Real trucks, real crews, real jobs. This is the single biggest driver of landing page conversion.",
         }) +
+        '<div class="fields one" style="margin-top:18px">' +
+          field(ID, "photoWhere", "Where are they?", v("photoWhere"), {
+            type: "longtext", rows: 2,
+            placeholder: "Couple hundred on the owner's phone, some on the Facebook page, a Dropbox from the last website guy.",
+            help: "Photos are almost never in one place. Write down every place they mentioned — chasing this down later is what stalls a build.",
+          }) +
+          field(ID, "photoLink", "Link to them", v("photoLink"), {
+            placeholder: "https://drive.google.com/…",
+            help: "Drive, Dropbox, a shared album. Get it on the call — “I'll send it over” usually means nobody does.",
+          }) +
+        "</div>" +
         (s.photoStatus === "stock" || s.photoStatus === "none"
-          ? '<div class="fields one" style="margin-top:18px">' +
+          ? '<div class="fields one" style="margin-top:4px">' +
               field(ID, "photoPlan", "How we fix that", v("photoPlan"), {
                 type: "longtext",
                 placeholder: "Owner shoots the next three jobs on his phone. We pick the usable ones.",
@@ -191,6 +202,8 @@ export default {
     put("Colors", s.colors);
     put("Fonts", s.fonts);
     put("Photography", label(PHOTOS, s.photoStatus));
+    put("Where the photos are", s.photoWhere);
+    put("Photo link", s.photoLink);
     put("Photo plan", s.photoPlan);
 
     // Tone reads as a table so the brief shows where each dial landed
