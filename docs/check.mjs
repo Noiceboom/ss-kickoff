@@ -281,6 +281,52 @@ for (const m of MODULES) {
   }
 }
 
+{
+  // hasWork() gates whether a share link may replace a local session.
+  // A notes-only session is the one that must never be silently destroyed.
+  if (S.hasWork(S.fresh())) fail("hasWork() called a blank session 'work'");
+  if (S.hasWork(null)) fail("hasWork(null) should be false");
+
+  const notesOnly = S.fresh();
+  notesOnly.notes["competitors:_page"] = "Roto-Rooter came up three times";
+  if (!S.hasWork(notesOnly)) fail("hasWork() missed a notes-only session — a share link would erase it");
+
+  const skipOnly = S.fresh();
+  skipOnly.skipped = ["marketing"];
+  if (!S.hasWork(skipOnly)) fail("hasWork() missed a skip-only session");
+
+  const orderOnly = S.fresh();
+  orderOnly.order.services = ["drains", "toilets"];
+  if (!S.hasWork(orderOnly)) fail("hasWork() missed a reorder-only session");
+
+  const fieldOnly = S.fresh();
+  fieldOnly.m.company = { contactName: "Mike" };
+  if (!S.hasWork(fieldOnly)) fail("hasWork() missed a field-only session");
+}
+
+{
+  // statusWithNote is the single source of the note bump — app.js and the
+  // readout both call it, and they must not disagree about a noted screen.
+  const st = S.fresh();
+  st.notes["brand:_page"] = "Calls himself the guy who shows up";
+  if (S.statusWithNote(st, "brand", "empty") !== "partial") {
+    fail("statusWithNote() did not lift a noted screen off 'empty'");
+  }
+  if (S.statusWithNote(st, "brand", "done") !== "done") {
+    fail("statusWithNote() downgraded a completed screen");
+  }
+  if (S.statusWithNote(st, "goals", "empty") !== "empty") {
+    fail("statusWithNote() promoted a screen with no note");
+  }
+
+  // and the readout must agree — a noted screen is not "Nothing captured"
+  const readout = MODULES.find((m) => m.id === "readout");
+  const json = JSON.parse(readout.exports(ctxFor(bfp, st)).json());
+  const blanked = (json.openItems || []).find(
+    (o) => o.kind === "empty" && o.what === "Brand & proof");
+  if (blanked) fail("readout reported a noted screen as blank — status rule drifted");
+}
+
 /* ── report ───────────────────────────────────────────── */
 
 for (const w of warns) console.log("WARN  " + w);

@@ -203,6 +203,34 @@ export function noteKey(id, itemId) { return id + ":" + itemId; }
 export function getPageNote(state, moduleId) { return getNote(state, moduleId, PAGE); }
 export function setPageNote(state, moduleId, value) { setNote(state, moduleId, PAGE, value); }
 export function hasPageNote(state, moduleId) { return !!getPageNote(state, moduleId).trim(); }
+
+/**
+ * A note is captured content even when no field was filled, so an
+ * otherwise-blank screen carrying one is not "empty".
+ *
+ * Lives here rather than in app.js because the readout resolves status
+ * independently — two copies of this rule drift, and the readout would
+ * start reporting a noted screen as "Nothing captured".
+ */
+export function statusWithNote(state, moduleId, status) {
+  return status === "empty" && hasPageNote(state, moduleId) ? "partial" : status;
+}
+
+/**
+ * Does this saved session hold anything worth protecting? Used before a
+ * share link replaces local state. Notes count: a session where the only
+ * thing captured was quotes from the call is exactly the one you must not
+ * silently destroy.
+ */
+export function hasWork(state) {
+  if (!state) return false;
+  return !!(
+    Object.keys(state.m || {}).length ||
+    (state.skipped || []).length ||
+    Object.keys(state.notes || {}).length ||
+    Object.keys(state.order || {}).length
+  );
+}
 export function getNote(state, id, itemId) { return state.notes[noteKey(id, itemId)] || ""; }
 export function setNote(state, id, itemId, value) {
   const k = noteKey(id, itemId);

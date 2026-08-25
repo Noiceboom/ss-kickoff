@@ -6,7 +6,7 @@
 // captured state, plus the export API app.js calls for copy/download.
 
 import { esc, ICON, sectionHead } from "../ui.js";
-import { isSkipped, getPageNote } from "../state.js";
+import { isSkipped, getPageNote, statusWithNote } from "../state.js";
 
 const ID = "readout";
 const TABS = [
@@ -27,7 +27,9 @@ function collect(ctx) {
     let status = "empty";
     try {
       sum = skipped ? null : (m.summary ? m.summary(ctx) : null);
-      status = skipped ? "skipped" : (m.status ? m.status(ctx) : "empty");
+      status = skipped
+        ? "skipped"
+        : statusWithNote(ctx.state, m.id, m.status ? m.status(ctx) : "empty");
     } catch (e) {
       if (window.console) console.error("[summary:" + m.id + "]", e);
     }

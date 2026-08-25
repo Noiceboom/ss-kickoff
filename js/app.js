@@ -11,7 +11,7 @@ import MODULES from "./modules/index.js";
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b4";
+export const BUILD = "b5";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -179,10 +179,7 @@ function statusOf(m) {
   if (m.skippable && S.isSkipped(R.state, m.id)) return "skipped";
   let st = "empty";
   try { st = m.status ? m.status(ctx()) : "empty"; } catch (e) { st = "empty"; }
-  // A note is captured content even when no field was filled — an otherwise
-  // blank screen with a note is not "empty".
-  if (st === "empty" && S.hasPageNote(R.state, m.id)) return "partial";
-  return st;
+  return S.statusWithNote(R.state, m.id, st);
 }
 
 function renderPills() {
@@ -528,12 +525,10 @@ document.addEventListener("keydown", (e) => {
     if (again) again.focus();
     return;
   }
-  if (e.key === "Enter" && a && a.getAttribute && a.getAttribute("data-newitem")) {
-    e.preventDefault();
-    addItem(a.getAttribute("data-newitem"));
-    return;
-  }
-
+  // Checked BEFORE the add-item Enter below: otherwise Cmd+Enter while
+  // focused in "add a service" adds an item instead of jumping to the note,
+  // and the modifier is silently ignored in exactly one field.
+  //
   // Cmd/Ctrl+Enter — jump to this screen's note from anywhere on the page.
   // The services and cities grids are long; hunting for the box mid-sentence
   // is exactly when a quote gets lost.
@@ -544,6 +539,12 @@ document.addEventListener("keydown", (e) => {
     box.scrollIntoView({ behavior: "smooth", block: "center" });
     box.focus();
     box.setSelectionRange(box.value.length, box.value.length);
+    return;
+  }
+
+  if (e.key === "Enter" && a && a.getAttribute && a.getAttribute("data-newitem")) {
+    e.preventDefault();
+    addItem(a.getAttribute("data-newitem"));
   }
 });
 
@@ -648,8 +649,7 @@ async function boot() {
       const raw = localStorage.getItem(S.storageKey(R.slug));
       if (raw) local = S.validate(JSON.parse(raw));
     } catch (e) { /* ignore */ }
-    const localHasWork = local && (Object.keys(local.m || {}).length || (local.skipped || []).length);
-    if (localHasWork) {
+    if (S.hasWork(local)) {
       const ok = window.confirm(
         "This link contains a saved session for " + R.slug + ", and you already have " +
         "an in-progress kickoff for this client in this browser.\n\n" +
