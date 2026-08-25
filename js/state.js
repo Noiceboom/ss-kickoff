@@ -23,7 +23,7 @@ export function fresh() {
     // A brand-new session has nothing legacy to migrate, so it starts
     // stamped. validate() clears this when loading a saved state that
     // predates the stamp, which is what keeps real migrations running.
-    mig: { rank: true },
+    mig: { rank: true, access: true },
   };
 }
 
@@ -1007,10 +1007,16 @@ const ACCESS_OLD_LABELS = {
 const ACCESS_OLD_KEYS = Object.keys(ACCESS_OLD_LABELS);
 
 function migrateAccess(state) {
+  if (state.mig.access) return;
+  state.mig.access = true;
+
   const m = state.m.access;
   if (!m) return;
 
-  // an account that already has an answer has to stay visible
+  // An account that already has an answer has to stay visible. This is a
+  // ONE-SHOT repair, not a rule — hence the stamp above. Left to run on
+  // every load it would fight the user: switch an optional account off
+  // after answering it and the next reload would switch it back on.
   const extra = Array.isArray(m.extra) ? m.extra.slice() : [];
   for (const key of ACCESS_WAS_OPTIONAL) {
     if (m["status_" + key] && extra.indexOf(key) === -1) extra.push(key);

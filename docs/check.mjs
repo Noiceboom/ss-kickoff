@@ -1272,6 +1272,20 @@ for (const m of MODULES) {
     fail("a saved account owner was deleted rather than carried into the note");
   }
 
+  // an untouched screen is the strongest evidence the link never went out
+  const untouched = acc.summary(ctxFor(bfp, S.fresh()));
+  if (!untouched || !(untouched.open || []).some((o) => /Leadsie/i.test(o.what))) {
+    fail("an untouched access screen said nothing about the Leadsie link");
+  }
+
+  // switching an optional account off must survive a reload
+  const off = S.fresh();
+  off.m.access = { status_gbp: "pending", extra: [] };
+  const after = S.validate(JSON.parse(JSON.stringify(off)));
+  if ((after.m.access.extra || []).indexOf("gbp") > -1) {
+    fail("an optional account switched off came back on reload");
+  }
+
   // leadsie not sent is the first thing the readout should be shouting about
   const sent = S.fresh();
   sent.m.access = { leadsie: "sent", leadsieWho: "Mike" };

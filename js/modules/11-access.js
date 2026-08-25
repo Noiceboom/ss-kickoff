@@ -253,7 +253,12 @@ export default {
       });
     });
 
-    if (!rows.length && !meta.length) return null;
+    // Deliberately NOT gated on rows/meta. An access screen nobody touched
+    // is the strongest possible evidence the link never went out, and that
+    // is precisely when the readout has to say so. Without this the module
+    // reads as "Nothing captured", which the client-facing brief filters
+    // out entirely — the one action they need would vanish.
+    if (!rows.length && !meta.length && !open.length) return null;
 
     const out = { rows: meta, open };
     if (rows.length) {
