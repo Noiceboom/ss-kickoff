@@ -274,7 +274,12 @@ export function serviceUniverse(state, client, trades) {
   // "Storm Damage Restoration" under different ids — to anyone reading the
   // screen that's one service twice, whatever the taxonomies call it.
   const norm = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  const seenLabel = new Set();
+  const byLabel = new Map();
+
+  /** Fold a duplicate's sub-services into the row already emitted. */
+  const mergeInto = (row, subs) => {
+    for (const sub of subs || []) if (row.subs.indexOf(sub) < 0) row.subs.push(sub);
+  };
 
   // Which trade's row does a scraped page stand in for? Decided by how well
   // the taxonomy label matches the page's own name, NOT by the order the
@@ -299,44 +304,75 @@ export function serviceUniverse(state, client, trades) {
       if (!hit) continue;
       const best = claimBy.get(hit.id);
       const mine = score(t.label, hit.name);
+      // A strictly better label match always wins, whatever order the
+      // trades were picked in. A tie means both taxonomies call it exactly
+      // the same thing, so the label on screen is identical either way and
+      // only the grouping differs — that goes to the trade they listed
+      // first, which is normally their primary one.
       if (!best || mine > best.score) claimBy.set(hit.id, { trade: trade.id, score: mine });
     }
   }
   const claimed = new Set();
 
+  // Pass one: rows a scraped page stands in for. Done first so the owning
+  // trade always gets the row, regardless of where it sits in the list —
+  // otherwise an earlier trade claims the label and locks the owner out.
   for (const trade of trades || []) {
     for (const t of trade.services || []) {
       const key = norm(t.label);
-      if (seenLabel.has(key)) continue;
-
       const hit = scraped.get(t.id) || scrapedByLabel.get(key);
-      const owner = hit ? claimBy.get(hit.id) : null;
-      if (hit && !claimed.has(hit.id) && owner && owner.trade === trade.id) {
-        claimed.add(hit.id);
-        seenLabel.add(key);
-        // Union the sub lists. Taking the taxonomy's alone would silently
-        // drop a sub-service the client actually has a page for just
-        // because the industry list doesn't happen to name it.
-        const subs = (t.subs || []).slice();
-        for (const sub of hit.subs || []) if (subs.indexOf(sub) < 0) subs.push(sub);
-        push({ ...t, id: hit.id, subs: subs, hasPage: hit.hasPage, verify: hit.verify }, "both", trade);
+      if (!hit || claimed.has(hit.id)) continue;
+      const owner = claimBy.get(hit.id);
+      if (!owner || owner.trade !== trade.id) continue;
+
+      claimed.add(hit.id);
+      // Union the sub lists. Taking the taxonomy's alone would silently
+      // drop a sub-service the client actually has a page for just because
+      // the industry list doesn't happen to name it.
+      const subs = (t.subs || []).slice();
+      for (const sub of hit.subs || []) if (subs.indexOf(sub) < 0) subs.push(sub);
+      push({ ...t, id: hit.id, subs: subs, hasPage: hit.hasPage, verify: hit.verify }, "both", trade);
+      byLabel.set(key, out[out.length - 1]);
+    }
+  }
+
+  // Pass two: everything else the selected trades offer.
+  for (const trade of trades || []) {
+    for (const t of trade.services || []) {
+      const key = norm(t.label);
+      const already = byLabel.get(key);
+      if (already) {
+        // Same service named the same way in two taxonomies. One row, but
+        // the union of what each trade lists under it.
+        mergeInto(already, t.subs);
         continue;
       }
-      seenLabel.add(key);
       push({ ...t, id: scopedId(trade.id, t.id) }, "trade", trade);
+      byLabel.set(key, out[out.length - 1]);
     }
   }
 
   // Anything the scrape found that no taxonomy row stood in for. These are
   // real pages they have, so they are never deduped away.
-  for (const c of client.services || []) if (!claimed.has(c.id)) push(c, "scrape", null);
+  for (const c of client.services || []) {
+    if (claimed.has(c.id)) continue;
+    push(c, "scrape", null);
+    if (out.length && out[out.length - 1].id === c.id) byLabel.set(norm(c.name), out[out.length - 1]);
+  }
   for (const a of v.added) push(a, "added", null);
 
   // A taxonomy service ticked under one trade would otherwise disappear
   // the moment the trade changed, taking its priority and note with it.
   // The snapshot taken at tick-time keeps it in the list.
   for (const id of v.on) {
-    if (!seen.has(id) && v.snap[id]) push({ id: id, ...v.snap[id] }, "trade");
+    if (seen.has(id) || !v.snap[id]) continue;
+    // The same dedupe applies here: a service ticked under a trade that is
+    // no longer showing must not reappear beside its namesake in one that is.
+    const key = norm(v.snap[id].name);
+    const already = byLabel.get(key);
+    if (already) { mergeInto(already, v.snap[id].subs); continue; }
+    push({ id: id, ...v.snap[id] }, "trade");
+    byLabel.set(key, out[out.length - 1]);
   }
 
   return out.map((it) => ({

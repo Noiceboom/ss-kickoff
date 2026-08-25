@@ -730,6 +730,44 @@ for (const m of MODULES) {
     fail("Storm Damage Restoration appeared once per trade despite being one service");
   }
 
+  // Deduping two identically-named services must keep both sub lists.
+  const stormRow = rrU.find((x) => /Storm Damage/i.test(x.name));
+  const roofStorm = T.getTrade("roofing").services.find((x) => /Storm Damage/i.test(x.label));
+  const restStorm = T.getTrade("restoration").services.find((x) => /Storm Damage/i.test(x.label));
+  const stormSubs = stormRow ? stormRow.subs.map((x) => x.name) : [];
+  for (const sub of (roofStorm.subs || []).concat(restStorm.subs || [])) {
+    if (stormSubs.indexOf(sub) < 0) fail(`label dedupe dropped the sub-service "${sub}"`);
+  }
+  if (new Set(stormSubs).size !== stormSubs.length) fail("the sub merge produced duplicates");
+
+  // A service ticked under a trade no longer showing must not reappear
+  // beside its namesake in one that is.
+  const ghost = S.fresh();
+  ghost.m.services = {
+    trades: ["restoration"],
+    on: ["roofing:storm-damage"],
+    snap: { "roofing:storm-damage": { name: "Storm Damage Restoration", subs: ["Hail Damage Repair"] } },
+  };
+  const ghostU = S.serviceUniverse(ghost, emptyClient, [T.getTrade("restoration")]);
+  const ghostRows = ghostU.filter((x) => /Storm Damage/i.test(x.name));
+  if (ghostRows.length !== 1) {
+    fail(`a snapshotted service duplicated its namesake (${ghostRows.length} rows)`);
+  } else if (!ghostRows[0].subs.some((x) => x.name === "Hail Damage Repair")) {
+    fail("the snapshot's subs were dropped when it merged into the visible row");
+  }
+
+  // Whichever order the trades were picked, the scrape still matches.
+  for (const order of [["plumbing", "hvac"], ["hvac", "plumbing"]]) {
+    const oc2 = S.fresh();
+    oc2.m.services = { trades: order };
+    const u2 = S.serviceUniverse(oc2, bfp, order.map(T.getTrade));
+    const dupes2 = [...new Set(u2.map((x) => x.name).filter((n, i, a) => a.indexOf(n) !== i))];
+    if (dupes2.length) fail(`picking ${order.join(" then ")} duplicated: ${dupes2.join(", ")}`);
+    if (u2.filter((x) => x.on).length !== bfp.services.length) {
+      fail(`picking ${order.join(" then ")} left a scraped page unmatched`);
+    }
+  }
+
   // the old rank screen is gone and nothing still points at it
   if (MODULES.some((m) => m.id === "servicesRank")) fail("servicesRank module is still registered");
 }
