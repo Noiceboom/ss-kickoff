@@ -12,7 +12,7 @@ import { resolveTrade } from "./trades/index.js";
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b19";
+export const BUILD = "b20";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -550,7 +550,9 @@ document.addEventListener("click", (e) => {
       render(); queueSave(); return;
     }
     if (mod === "services" && key.indexOf("prio_") === 0) {
-      S.setPriority(R.state, key.slice(5), val);
+      const pid = key.slice(5);
+      const svc = moduleAt("services");
+      S.setPriority(R.state, svc.idsFor ? svc.idsFor(ctx(), pid) : [pid], val);
       render(); queueSave(); return;
     }
     const multi = el.getAttribute("data-multi") === "1";
@@ -607,7 +609,8 @@ document.addEventListener("click", (e) => {
     const [id, tradeOnly] = el.getAttribute("data-svc").split("|");
     const mod = moduleAt("services");
     const meta = mod.serviceMeta ? mod.serviceMeta(ctx(), id) : null;
-    S.toggleService(R.state, id, tradeOnly === "1", meta);
+    const ids = mod.idsFor ? mod.idsFor(ctx(), id) : [id];
+    S.toggleService(R.state, ids, tradeOnly === "1", meta);
     render(); queueSave(); return;
   }
 

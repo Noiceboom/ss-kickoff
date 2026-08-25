@@ -260,6 +260,16 @@ export default {
   /** The trades currently in play, inferred ones included. */
   trades(ctx) { return activeTrades(ctx); },
 
+  /**
+   * Every id a row answers to. A snapshot merged in from another trade
+   * leaves the row responding to more than one, and writes must hit all
+   * of them or the change appears to do nothing.
+   */
+  idsFor(ctx, id) {
+    const hit = serviceUniverse(ctx.state, ctx.client, tradeObjects(ctx)).find((x) => x.id === id);
+    return hit ? [hit.id].concat(hit.aliases || []) : [id];
+  },
+
   /** Name and subs for one service, so app.js can snapshot it on tick. */
   serviceMeta(ctx, id) {
     const hit = serviceUniverse(ctx.state, ctx.client, tradeObjects(ctx)).find((x) => x.id === id);

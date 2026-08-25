@@ -435,33 +435,60 @@ export function serviceOrder(state, client, trades) {
  * @param meta {name, subs} — snapshotted for taxonomy-only services so a
  *   later change of trade can't make a ticked service vanish.
  */
-export function toggleService(state, id, isTradeOnly, meta) {
+/**
+ * @param idOrIds a row can answer to several ids once a snapshot from
+ *   another trade has merged into it. Reads resolve across all of them, so
+ *   writes have to as well — otherwise unticking clears one id while
+ *   another keeps the row selected and nothing appears to happen.
+ * @param meta {name, subs} — snapshotted for taxonomy-only services so a
+ *   later change of trade can't make a ticked service vanish.
+ */
+export function toggleService(state, idOrIds, isTradeOnly, meta) {
+  const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
   const s = ensure(state, "services");
   if (!Array.isArray(s.off)) s.off = [];
   if (!Array.isArray(s.on)) s.on = [];
   const list = isTradeOnly ? s.on : s.off;
-  const i = list.indexOf(id);
+  const wasOn = isTradeOnly
+    ? ids.some((id) => list.indexOf(id) > -1)
+    : !ids.some((id) => list.indexOf(id) > -1);
 
-  if (i > -1) {
-    list.splice(i, 1);
-    if (isTradeOnly && s.snap) {
-      delete s.snap[id];
-      if (!Object.keys(s.snap).length) delete s.snap;
+  // turning off means: for taxonomy rows, drop every id from `on`;
+  // for scraped rows, add the primary id to `off`
+  if (isTradeOnly) {
+    if (wasOn) {
+      for (const id of ids) {
+        const i = list.indexOf(id);
+        if (i > -1) list.splice(i, 1);
+        if (s.snap) delete s.snap[id];
+      }
+      if (s.snap && !Object.keys(s.snap).length) delete s.snap;
+    } else {
+      list.push(ids[0]);
+      if (meta && meta.name) {
+        if (!s.snap || typeof s.snap !== "object") s.snap = {};
+        s.snap[ids[0]] = { name: meta.name, subs: Array.isArray(meta.subs) ? meta.subs : [] };
+      }
     }
-  } else {
-    list.push(id);
-    if (isTradeOnly && meta && meta.name) {
-      if (!s.snap || typeof s.snap !== "object") s.snap = {};
-      s.snap[id] = { name: meta.name, subs: Array.isArray(meta.subs) ? meta.subs : [] };
-    }
+    return;
+  }
+
+  for (const id of ids) {
+    const i = list.indexOf(id);
+    if (wasOn) { if (i < 0) list.push(id); }
+    else if (i > -1) list.splice(i, 1);
   }
 }
 
-export function setPriority(state, id, value) {
+/** @param idOrIds see toggleService — every alias must move together. */
+export function setPriority(state, idOrIds, value) {
+  const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
   const s = ensure(state, "services");
   if (!s.prio || typeof s.prio !== "object") s.prio = {};
-  if (s.prio[id] === value || !value) delete s.prio[id];
-  else s.prio[id] = value;
+  const current = ids.map((id) => s.prio[id]).find(Boolean) || "";
+  const next = current === value ? "" : value;
+  for (const id of ids) delete s.prio[id];
+  if (next) s.prio[ids[0]] = next;
   if (!Object.keys(s.prio).length) delete s.prio;
 }
 

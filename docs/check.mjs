@@ -32,18 +32,19 @@ const warn = (m) => warns.push(m);
 
 /* ── load ─────────────────────────────────────────────── */
 
-const S = await import(url("js/state.js"));
-const MODULES = (await import(url("js/modules/index.js"))).default;
-
-// Fingerprint the trade taxonomies before anything renders. They are
-// module-level constants shared by every client, so if any code path in
-// this file writes to one, the comparison at the end catches it — a
-// locally-scoped check would silently snapshot an already-polluted array.
-const TRADES_BEFORE = JSON.stringify(
-  (await import(url("js/trades/index.js"))).TRADES.map((t) => ({
-    id: t.id, services: t.services.map((x) => ({ id: x.id, label: x.label, subs: x.subs })),
+// Taken before any consumer is imported, so nothing has had the chance to
+// touch a taxonomy at import time.
+const TRADE_SNAPSHOT = () => JSON.stringify(
+  TRADES_MOD.TRADES.map((t) => ({
+    id: t.id, label: t.label,
+    services: t.services.map((x) => ({ id: x.id, label: x.label, subs: x.subs })),
   }))
 );
+const TRADES_MOD = await import(url("js/trades/index.js"));
+const TRADES_BEFORE_RUN = TRADE_SNAPSHOT();
+
+const S = await import(url("js/state.js"));
+const MODULES = (await import(url("js/modules/index.js"))).default;
 
 const bfp = JSON.parse(readFileSync(path.join(ROOT, "clients/bfp-kc.json"), "utf8"));
 const tpl = JSON.parse(readFileSync(path.join(ROOT, "clients/template.json"), "utf8"));
@@ -798,17 +799,36 @@ for (const m of MODULES) {
     if (hurricane && hurricane.on) fail("merging a snapshot lost a dropped sub-service");
   }
 
+  // Reads resolve across a merged row's aliases, so writes must too —
+  // otherwise unticking clears one id while another keeps it selected.
+  const aliased = S.fresh();
+  aliased.m.services = {
+    trades: ["restoration"],
+    on: ["roofing:storm-damage"],
+    prio: { "roofing:storm-damage": "high" },
+    snap: { "roofing:storm-damage": { name: "Storm Damage Restoration", subs: [] } },
+  };
+  const rowNow = () => S.serviceUniverse(aliased, emptyClient, [T.getTrade("restoration")])
+    .find((x) => /Storm Damage/i.test(x.name));
+  const first = rowNow();
+  const allIds = [first.id].concat(first.aliases || []);
+  if (allIds.length !== 2) fail("the merged row did not record its alias");
+
+  S.setPriority(aliased, allIds, "high");
+  if (rowNow().prio !== "") fail("clicking the active priority band did not clear a merged row");
+  S.setPriority(aliased, allIds, "low");
+  if (rowNow().prio !== "low") fail("could not set a priority on a merged row");
+  S.toggleService(aliased, allIds, true, null);
+  if (rowNow().on) fail("unticking a merged row left it selected via its alias");
+  S.toggleService(aliased, [rowNow().id], true, { name: "Storm Damage Restoration", subs: [] });
+  if (!rowNow().on) fail("could not re-tick a merged row");
+
   // the old rank screen is gone and nothing still points at it
   if (MODULES.some((m) => m.id === "servicesRank")) fail("servicesRank module is still registered");
 }
 
 {
-  const after = JSON.stringify(
-    (await import(url("js/trades/index.js"))).TRADES.map((t) => ({
-      id: t.id, services: t.services.map((x) => ({ id: x.id, label: x.label, subs: x.subs })),
-    }))
-  );
-  if (after !== TRADES_BEFORE) {
+  if (TRADE_SNAPSHOT() !== TRADES_BEFORE_RUN) {
     fail("a trade taxonomy was mutated during this run — they are shared by every client");
   }
 }
