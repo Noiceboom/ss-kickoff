@@ -270,33 +270,66 @@ export function serviceUniverse(state, client, trades) {
   // HVAC list Water Heaters. That's one service, not two tiles. Where the
   // label differs it genuinely is two ("Commercial Plumbing" vs
   // "Commercial HVAC"), so the label is part of the key.
-  const seenService = new Set();
-  // A scraped page can only stand in for ONE taxonomy row. Their existing
-  // "Commercial" page is the plumbing one; if they also do HVAC, Commercial
-  // HVAC is a page they don't have yet and still needs offering.
+  // Dedupe on the LABEL, not the id. Roofing and Restoration both list
+  // "Storm Damage Restoration" under different ids — to anyone reading the
+  // screen that's one service twice, whatever the taxonomies call it.
+  const norm = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const seenLabel = new Set();
+
+  // Which trade's row does a scraped page stand in for? Decided by how well
+  // the taxonomy label matches the page's own name, NOT by the order the
+  // trades happened to be clicked — otherwise their "Commercial Plumbing
+  // Services" page shows up labelled Commercial HVAC.
+  const scrapedByLabel = new Map();
+  for (const c of client.services || []) if (!scrapedByLabel.has(norm(c.name))) scrapedByLabel.set(norm(c.name), c);
+
+  const score = (taxonomyLabel, scrapedName) => {
+    const a = norm(taxonomyLabel);
+    const b = norm(scrapedName);
+    if (a === b) return 3;
+    if (b.indexOf(a) > -1 || a.indexOf(b) > -1) return 2;
+    const bw = new Set(b.split(" "));
+    return a.split(" ").filter((w) => bw.has(w)).length / 10;
+  };
+
+  const claimBy = new Map();
+  for (const trade of trades || []) {
+    for (const t of trade.services || []) {
+      const hit = scraped.get(t.id) || scrapedByLabel.get(norm(t.label));
+      if (!hit) continue;
+      const best = claimBy.get(hit.id);
+      const mine = score(t.label, hit.name);
+      if (!best || mine > best.score) claimBy.set(hit.id, { trade: trade.id, score: mine });
+    }
+  }
   const claimed = new Set();
 
   for (const trade of trades || []) {
     for (const t of trade.services || []) {
-      const key = t.id + "|" + t.label;
-      if (seenService.has(key)) continue;
-      seenService.add(key);
+      const key = norm(t.label);
+      if (seenLabel.has(key)) continue;
 
-      const hit = scraped.get(t.id);
-      if (hit && !claimed.has(t.id)) {
-        claimed.add(t.id);
+      const hit = scraped.get(t.id) || scrapedByLabel.get(key);
+      const owner = hit ? claimBy.get(hit.id) : null;
+      if (hit && !claimed.has(hit.id) && owner && owner.trade === trade.id) {
+        claimed.add(hit.id);
+        seenLabel.add(key);
         // Union the sub lists. Taking the taxonomy's alone would silently
         // drop a sub-service the client actually has a page for just
         // because the industry list doesn't happen to name it.
         const subs = (t.subs || []).slice();
         for (const sub of hit.subs || []) if (subs.indexOf(sub) < 0) subs.push(sub);
-        push({ ...t, subs: subs, hasPage: hit.hasPage, verify: hit.verify }, "both", trade);
+        push({ ...t, id: hit.id, subs: subs, hasPage: hit.hasPage, verify: hit.verify }, "both", trade);
         continue;
       }
+      seenLabel.add(key);
       push({ ...t, id: scopedId(trade.id, t.id) }, "trade", trade);
     }
   }
-  for (const c of client.services || []) push(c, "scrape", null);
+
+  // Anything the scrape found that no taxonomy row stood in for. These are
+  // real pages they have, so they are never deduped away.
+  for (const c of client.services || []) if (!claimed.has(c.id)) push(c, "scrape", null);
   for (const a of v.added) push(a, "added", null);
 
   // A taxonomy service ticked under one trade would otherwise disappear

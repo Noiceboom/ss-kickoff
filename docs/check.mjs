@@ -702,6 +702,34 @@ for (const m of MODULES) {
     fail("clearing every trade resurrected the inferred one");
   }
 
+  // Which taxonomy row a scraped page stands in for must not depend on the
+  // order the trades were clicked.
+  for (const order of [["plumbing", "hvac"], ["hvac", "plumbing"]]) {
+    const oc = S.fresh();
+    oc.m.services = { trades: order };
+    const u = S.serviceUniverse(oc, bfp, order.map(T.getTrade));
+    const row = u.find((x) => x.id === "commercial");
+    if (!row) fail(`picking ${order.join(" then ")} lost the scraped Commercial page`);
+    else if (row.name !== "Commercial Plumbing") {
+      fail(`picking ${order.join(" then ")} labelled their Commercial Plumbing page "${row.name}"`);
+    }
+    if (u.filter((x) => x.on).length !== bfp.services.length) {
+      fail(`picking ${order.join(" then ")} changed what the scrape pre-ticked`);
+    }
+  }
+
+  // Two trades naming the same service under different ids is still one row.
+  const emptyClient = { slug: "x", client: {}, source: {}, services: [], locations: [] };
+  const rr = S.fresh();
+  rr.m.services = { trades: ["roofing", "restoration"] };
+  const rrU = S.serviceUniverse(rr, emptyClient, [T.getTrade("roofing"), T.getTrade("restoration")]);
+  const rrLabels = rrU.map((x) => x.name);
+  const rrDupes = rrLabels.filter((n, i, a) => a.indexOf(n) !== i);
+  if (rrDupes.length) fail("roofing + restoration produced duplicate labels: " + [...new Set(rrDupes)].join(", "));
+  if (rrLabels.filter((n) => n === "Storm Damage Restoration").length !== 1) {
+    fail("Storm Damage Restoration appeared once per trade despite being one service");
+  }
+
   // the old rank screen is gone and nothing still points at it
   if (MODULES.some((m) => m.id === "servicesRank")) fail("servicesRank module is still registered");
 }
