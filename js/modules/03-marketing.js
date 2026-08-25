@@ -2,55 +2,106 @@
 // 03 — Current marketing & spend
 // ============================================================
 //
-// What's already running, who's running it, and what it costs. The
-// channel rows are the useful artefact — they roll straight into the
-// readout table and the CSV, so the build order starts from what exists
-// rather than from a blank page.
+// The channel list is a pick grid rather than rows you add one at a time:
+// a home-services owner recognises what they've run far faster than they
+// recall it, and the long tail of pay-per-lead marketplaces is exactly the
+// stuff that gets forgotten and then turns up on a bank statement later.
+//
+// Everything rides the existing field-kit protocol — data-chip for the
+// selection and the rating, data-f for volume and notes — so the picker
+// needed no new event plumbing beyond the filter box.
 
-import { sectionHead, skipRow, field, rowGroup, statusFor, filled } from "../ui.js";
-import { isSkipped, slot, getRows } from "../state.js";
+import { sectionHead, skipRow, field, statusFor, filled, esc } from "../ui.js";
+import { isSkipped, slot } from "../state.js";
+import { CATEGORIES, RATINGS, ALL, BY_ID } from "../channels.js";
 
 const ID = "marketing";
 
-// Keys that count toward "done". Anything not listed is a bonus field.
-const CORE = ["channels", "worked", "burned"];
+const CORE = ["chan", "worked", "burned"];
 
-const CHANNELS = [
-  { value: "", label: "—" },
-  "Google Ads",
-  "LSA",
-  "SEO",
-  "GBP",
-  "Meta",
-  "Yelp",
-  "Angi",
-  "Direct mail",
-  "Radio/TV",
-  "Truck wraps",
-  "Referral",
-  "Other",
-];
+/** Per-channel keys, kept flat so they ride the field kit unchanged. */
+const rateKey = (id) => "rate_" + id;
+const volKey = (id) => "vol_" + id;
+const noteKey = (id) => "note_" + id;
 
-const WORKING = [
-  { value: "", label: "—" },
-  "Working",
-  "Mixed",
-  "Not working",
-  "Unknown",
-];
+function selected(s) {
+  return Array.isArray(s.chan) ? s.chan : [];
+}
 
-const COLS = [
-  { key: "channel", label: "Channel", type: "select", width: "1.1fr", options: CHANNELS },
-  { key: "spend", label: "Spend / mo", width: "0.8fr", placeholder: "$4,000" },
-  { key: "who", label: "Who runs it", width: "1.1fr", placeholder: "In-house, or the agency's name" },
-  { key: "working", label: "How it's working", type: "select", width: "1fr", options: WORKING },
-];
+/** Channels added on the call that aren't in the built-in list. */
+function customChannels(s) {
+  return String(s.otherChan || "")
+    .split(/[\n,]/).map((x) => x.trim()).filter(Boolean);
+}
+
+/* ── rendering ────────────────────────────────────────── */
+
+function tile(s, ch, on) {
+  const detail = on
+    ? '<div class="tiledetail">' +
+        '<div class="seg">' +
+          RATINGS.map((r) =>
+            '<button class="segbtn ' + r.value + (s[rateKey(ch.id)] === r.value ? " on" : "") +
+            '" data-chip="' + ID + "|" + esc(rateKey(ch.id)) + "|" + r.value +
+            '" data-multi="0">' + esc(r.label) + "</button>"
+          ).join("") +
+        "</div>" +
+        '<div class="tilerow"><label>Leads / mo</label>' +
+          '<input data-f="' + ID + "|" + esc(volKey(ch.id)) + '" inputmode="numeric" ' +
+            'value="' + esc(s[volKey(ch.id)] || "") + '" placeholder="—"></div>' +
+        '<textarea class="tilenote" data-f="' + ID + "|" + esc(noteKey(ch.id)) + '" ' +
+          'placeholder="What happened with it?">' + esc(s[noteKey(ch.id)] || "") + "</textarea>" +
+      "</div>"
+    : "";
+
+  return (
+    '<div class="tile' + (on ? " on" : "") + '" data-filter-item ' +
+      'data-filter-text="' + esc(ch.label + " " + ch.cat) + '">' +
+      '<button class="tilebtn" data-chip="' + ID + "|chan|" + esc(ch.id) + '" data-multi="1">' +
+        '<span class="box">' +
+          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="4" ' +
+          'stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' +
+        "</span>" +
+        '<span class="nm">' + esc(ch.label) + "</span>" +
+      "</button>" + detail +
+    "</div>"
+  );
+}
+
+function picker(s) {
+  const on = new Set(selected(s));
+  const count = on.size;
+
+  const body = CATEGORIES.map((cat) => {
+    const tiles = ALL.filter((c) => c.cat === cat.name).map((c) => tile(s, c, on.has(c.id))).join("");
+    return '<div class="pickcat" data-filter-cat>' + esc(cat.name) + "</div>" +
+      '<div class="pickgrid">' + tiles + "</div>";
+  }).join("");
+
+  return (
+    '<div class="pickhead">' +
+      "<div><h3>Lead channels they've tried</h3>" +
+        "<p>Tap what they've run. Then rate it &mdash; good, mixed, or a waste &mdash; " +
+        "and log what it actually brings in.</p></div>" +
+      '<div class="pickcount"><span class="v' + (count ? "" : " zero") + '">' + count + "</span>" +
+        '<span class="l">tried</span></div>' +
+    "</div>" +
+    '<div class="pickfilter">' +
+      '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" ' +
+      'stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>' +
+      '<input data-filter="chan" autocomplete="off" placeholder="Filter ' + ALL.length + ' channels&hellip;">' +
+    "</div>" +
+    body
+  );
+}
+
+/* ── module ───────────────────────────────────────────── */
 
 export default {
   id: ID,
   nav: "Marketing now",
   title: "What's running today?",
-  lede: "Everything they're already paying for, whether or not they think it works. Add a row per channel — a wrong guess on the spend is still more useful than an empty row.",
+  lede: "Everything the phone currently rings from, who runs it, and what it's actually worth. The stuff that burned them matters as much as the stuff that worked.",
   skippable: true,
   notePrompt:
     "What they said about the last agency, what they've already tried, where the money went.",
@@ -65,55 +116,52 @@ export default {
 
       '<div class="card">' +
         '<div class="mlabel">Who has it now</div>' +
-        '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
-          "If someone else holds the accounts, the handover dates set our start date. Get them on the call, not by email later." +
-        "</div>" +
         '<div class="fields two" style="margin-top:16px">' +
           field(ID, "agency", "Incumbent agency", v("agency"), {
-            placeholder: "Blue Corona — or “nobody, we do it ourselves”",
-            help: "Leave blank if it's all in-house.",
+            placeholder: "Nobody — it's all in-house",
+            help: "Including the freelancer nobody counts as an agency.",
           }) +
           field(ID, "contractEnd", "Contract ends", v("contractEnd"), {
-            placeholder: "31 March 2027",
-            help: "Month and year is enough. If they don't know, that's the first thing to go find.",
+            placeholder: "March, month-to-month, no idea",
           }) +
           field(ID, "notice", "Notice period", v("notice"), {
-            placeholder: "60 days, written",
-            help: "How much warning they owe before walking. Decides when we can switch anything on.",
+            placeholder: "30 days",
           }) +
           field(ID, "ownsAccounts", "Who owns the ad accounts?", v("ownsAccounts"), {
-            placeholder: "Agency's MCC — never been under the client",
-            help: "If the agency owns them, the history doesn't come with us. Flag it now.",
+            placeholder: "Agency does",
+            help: "If the agency owns them, the history doesn't come with us. Worth knowing on day one.",
           }) +
         "</div>" +
       "</div>" +
 
-      '<div class="card">' +
-        '<div class="mlabel">Channels &amp; spend</div>' +
-        rowGroup(ID, "channels", COLS, getRows(ctx.state, ID, "channels"), {
-          addLabel: "Add channel",
-          empty: "No channels yet. Start with wherever the phone rings from most, then work down to the things nobody's checked in a year.",
-          help: "One row per channel. “Who runs it” can be a person, the agency, or the owner's nephew — write what's true.",
-        }) +
+      '<div class="card">' + picker(s) +
+        '<div class="pickother">' +
+          '<div class="mlabel">Something we missed</div>' +
+          '<div class="fields one" style="margin-top:12px">' +
+            field(ID, "otherChan", "Other channels", v("otherChan"), {
+              type: "longtext", rows: 2,
+              placeholder: "Direct mail, truck wraps, the radio spot on 98.1…",
+              help: "One per line. Anything that isn't in the list above.",
+            }) +
+          "</div>" +
+        "</div>" +
       "</div>" +
 
       '<div class="card">' +
         '<div class="mlabel">What they&rsquo;ve learned the hard way</div>' +
         '<div class="fields one" style="margin-top:16px">' +
           field(ID, "worked", "What has actually worked?", v("worked"), {
-            type: "longtext", rows: 3, wide: true,
-            placeholder: "LSA has been the cheapest phone calls they've ever had. Truck wraps get named on half the inbound calls.",
-            help: "Ask for the specific thing, not the channel. “Google worked” tells us nothing.",
+            type: "longtext",
+            placeholder: "Word of mouth and the van. Everything else has been a coin flip.",
           }) +
           field(ID, "burned", "What burned them?", v("burned"), {
-            type: "longtext", rows: 3, wide: true,
-            placeholder: "Two agencies in three years, both locked them into 12 months and reported on impressions.",
-            help: "This is the one that shapes how we report and how often we call. Let them talk.",
+            type: "longtext",
+            placeholder: "Paid an agency $4k a month for a year and never saw a report.",
+            help: "This is the sentence that tells you how to keep them.",
           }) +
           field(ID, "wontTouch", "Anything they refuse to touch?", v("wontTouch"), {
-            type: "longtext", rows: 2, wide: true,
-            placeholder: "No Yelp, ever. No discount coupons — it drags in the wrong customer.",
-            help: "Hard nos. Cheaper to hear it now than in the second month of a campaign.",
+            type: "longtext",
+            placeholder: "Won't go near shared leads again.",
           }) +
         "</div>" +
       "</div>"
@@ -126,46 +174,61 @@ export default {
     const s = ctx.state.m[ID] || {};
     if (!Object.keys(s).length) return null;
 
-    const channels = getRows(ctx.state, ID, "channels");
-
+    const picked = selected(s);
     const rows = [];
     const put = (label, val) => { if (filled(val)) rows.push([label, val]); };
 
     put("Incumbent agency", s.agency);
     put("Contract ends", s.contractEnd);
     put("Notice period", s.notice);
-    put("Ad account ownership", s.ownsAccounts);
-    put("Channels running", channels.length ? String(channels.length) : "");
-    put("What has worked", s.worked);
+    put("Ad accounts owned by", s.ownsAccounts);
+    put("Channels tried", picked.length ? String(picked.length) : "");
+    put("What worked", s.worked);
     put("What burned them", s.burned);
     put("Won't touch", s.wontTouch);
 
+    // one CSV-ready row per channel
+    const body = picked.map((id) => {
+      const ch = BY_ID.get(id);
+      const rate = RATINGS.find((r) => r.value === s[rateKey(id)]);
+      return [
+        ch ? ch.label : id,
+        ch ? ch.cat : "Custom",
+        rate ? rate.label : "",
+        s[volKey(id)] || "",
+        s[noteKey(id)] || "",
+      ];
+    });
+    for (const name of customChannels(s)) body.push([name, "Other", "", "", ""]);
+
+    const table = body.length
+      ? { head: ["channel", "category", "how it's going", "leads / mo", "note"], body }
+      : null;
+
     const open = [];
-    if (filled(s.agency) && !filled(s.contractEnd)) {
+    const wasted = picked.filter((id) => s[rateKey(id)] === "waste");
+    if (wasted.length) {
       open.push({
-        what: "Incumbent contract end date",
-        detail: "They're still with " + s.agency + " and nobody knows when that ends — it gates our start date",
+        what: "Channels they call a waste",
+        detail: wasted.map((id) => (BY_ID.get(id) || {}).label || id).join(", ") +
+          " — confirm we're not about to rebuild one of these",
       });
     }
-
-    const out = { rows, open };
-
-    // The channel grid goes out as a table so it lands in the CSV verbatim.
-    if (channels.length) {
-      out.table = {
-        head: ["type", "channel", "spend / mo", "who runs it", "how it's working"],
-        body: channels.map(function (r) {
-          return [
-            "channel",
-            String(r.channel || "Unnamed"),
-            String(r.spend || ""),
-            String(r.who || ""),
-            String(r.working || "Unknown"),
-          ];
-        }),
-      };
+    const unrated = picked.filter((id) => !filled(s[rateKey(id)]));
+    if (unrated.length) {
+      open.push({
+        what: "Unrated channels",
+        detail: unrated.length + " channel" + (unrated.length > 1 ? "s" : "") +
+          " selected with no verdict on how they're performing",
+      });
+    }
+    if (filled(s.agency) && !filled(s.contractEnd)) {
+      open.push({ what: "Incumbent contract", detail: "An agency is named but nobody knows when the contract ends" });
+    }
+    if (filled(s.agency) && !filled(s.ownsAccounts)) {
+      open.push({ what: "Ad account ownership", detail: "Unknown — if the agency owns them, the history doesn't transfer" });
     }
 
-    return out;
+    return table ? { rows, table, open } : { rows, open };
   },
 };

@@ -244,7 +244,7 @@ not cosmetic.
 | 00 | `intro` | Intro & agenda | Nothing. Client, market, scraped counts, what's coming. |
 | 01 | `company` | Company & contact | Business name + website **prefilled from the sales handoff** (client JSON), year founded; point-of-contact and billing-contact blocks (name / email / phone, with a "same as" toggle); main business phone, tracking-number decision, lead destination, booking link; address, hours, emergency line, coverage |
 | 02 | `goals` | Goals & targets | Sliders for revenue/mo, leads/mo, avg ticket, close rate (now and target), budget and spare capacity; horizon chips; a **What matters most** section — priority and what counts as a good lead; live derived lines for implied jobs, the growth gap and leads needed |
-| 03 | `marketing` | Current marketing & spend | Incumbent agency, contract end, channel rows (channel / spend / who runs it / working), what worked, what burned them |
+| 03 | `marketing` | Current marketing & spend | Incumbent agency, contract end, notice, account ownership; a **pick grid of 34 lead channels** in four categories with a live filter — each selected channel expands to a good/mixed/waste rating, monthly lead volume and a note; free text for anything missing; what worked, what burned them |
 | 04 | `competitors` | Competitors | Rows: name, domain, why they win, threat level |
 | 05 | `services` | Services — confirm | Grid over `client.services`, sub-service chips, add-your-own, per-item notes |
 | 06 | `servicesRank` | Services — rank | Drag-rank of confirmed services, tiers at 1–5 / 6–10 / 11+ |

@@ -11,7 +11,7 @@ import MODULES from "./modules/index.js";
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b8";
+export const BUILD = "b9";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -384,6 +384,29 @@ function refreshDerived() {
   });
 }
 
+/**
+ * Live filter over a pick grid. Purely visual and never persisted, so it
+ * hides nodes directly rather than re-rendering — typing in a search box
+ * that rebuilds the DOM every keystroke loses the caret immediately.
+ */
+function applyFilter(input) {
+  const q = String(input.value || "").trim().toLowerCase();
+  const scope = input.closest(".card") || document;
+
+  scope.querySelectorAll("[data-filter-item]").forEach((el) => {
+    const hay = (el.getAttribute("data-filter-text") || "").toLowerCase();
+    el.classList.toggle("hide", q !== "" && hay.indexOf(q) < 0);
+  });
+
+  // a category heading with nothing left under it is noise
+  scope.querySelectorAll("[data-filter-cat]").forEach((cat) => {
+    const grid = cat.nextElementSibling;
+    const any = grid && grid.querySelector("[data-filter-item]:not(.hide)");
+    cat.classList.toggle("hide", !any);
+    if (grid) grid.classList.toggle("hide", !any);
+  });
+}
+
 /* ── input events — write only, NEVER re-render ───────── */
 
 /**
@@ -445,6 +468,8 @@ document.addEventListener("input", (e) => {
     queueSave();
     return;
   }
+
+  if (el.getAttribute("data-filter") !== null) { applyFilter(el); return; }
 
   const note = el.getAttribute("data-note");
   if (note) {

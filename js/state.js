@@ -7,6 +7,8 @@
 // share links short and lets a re-scrape land without invalidating an
 // in-progress kickoff.
 
+import { isKnownChannel } from "./channels.js";
+
 export const VERSION = 2;
 
 /** Fresh, empty state. Every module's slot starts as {}. */
@@ -290,6 +292,50 @@ const REMOVED = [
   ["goals", "fireUs"],       // b8
 ];
 
+/**
+ * b9 replaced the marketing "channels" rowGroup with a pick grid. Old rows
+ * carried {channel, spend, who, working}; fold each one into the new
+ * per-channel keys so nothing typed on an earlier call disappears. Rows
+ * whose name isn't in the built-in list land in the free-text "other" box
+ * rather than being dropped on the floor.
+ */
+function migrateChannels(m) {
+  if (!m || !Array.isArray(m.channels)) return;
+  const rows = m.channels;
+  delete m.channels;
+
+  const slug = (x) => String(x).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const verdict = { Working: "good", Mixed: "mixed", "Not working": "waste" };
+  const picked = Array.isArray(m.chan) ? m.chan.slice() : [];
+  const leftovers = [];
+
+  for (const row of rows) {
+    const name = String((row && row.channel) || "").trim();
+    if (!name) continue;
+    const id = slug(name);
+    const detail = [
+      row.spend ? "spend " + row.spend : "",
+      row.who ? "run by " + row.who : "",
+    ].filter(Boolean).join(", ");
+
+    if (isKnownChannel(id)) {
+      if (picked.indexOf(id) < 0) picked.push(id);
+      if (row.working && verdict[row.working] && !m["rate_" + id]) m["rate_" + id] = verdict[row.working];
+      if (detail && !m["note_" + id]) m["note_" + id] = detail;
+    } else {
+      // No tile will ever render for this one, so keep the name (and what
+      // they told us about it) in the free-text box instead of losing it.
+      leftovers.push(detail ? name + " — " + detail : name);
+    }
+  }
+
+  if (picked.length) m.chan = picked;
+  if (leftovers.length) {
+    const prior = String(m.otherChan || "").trim();
+    m.otherChan = (prior ? prior + "\n" : "") + leftovers.join("\n");
+  }
+}
+
 function migrate(state) {
   for (const [mod, from, to] of RENAMES) {
     const m = state.m[mod];
@@ -297,6 +343,7 @@ function migrate(state) {
     if (m[to] === undefined || m[to] === "") m[to] = m[from];
     delete m[from];
   }
+  migrateChannels(state.m.marketing);
   for (const [mod, key] of REMOVED) {
     const m = state.m[mod];
     if (m && m[key] !== undefined) delete m[key];

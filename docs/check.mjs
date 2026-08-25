@@ -392,6 +392,36 @@ for (const m of MODULES) {
   }
 }
 
+{
+  // Legacy marketing rows must survive the move to the pick grid: known
+  // channels become tiles, unknown ones keep their name in the free text,
+  // and nothing appears in both places.
+  const legacy = S.fresh();
+  legacy.m.marketing = {
+    agency: "Bright Local",
+    channels: [
+      { channel: "Google Ads", spend: "$4,000", who: "The agency", working: "Mixed" },
+      { channel: "The radio spot on 98.1", spend: "$600", who: "Owner", working: "Working" },
+    ],
+  };
+  const mig = S.validate(JSON.parse(JSON.stringify(legacy))).m.marketing;
+  if (mig.channels !== undefined) fail("legacy channel rows survived migration");
+  if (mig.agency !== "Bright Local") fail("migration dropped a sibling field");
+  if (!Array.isArray(mig.chan) || mig.chan.indexOf("google-ads") < 0) {
+    fail("a known legacy channel did not become a selected tile");
+  }
+  if (mig["rate_google-ads"] !== "mixed") fail("legacy verdict was not carried across");
+  if (!/98\.1/.test(mig.otherChan || "")) fail("an unknown legacy channel was dropped entirely");
+  if (/Google Ads/.test(mig.otherChan || "")) fail("a matched channel was duplicated into the free text");
+
+  // channels.js is the single source — module 03 and state.js must agree
+  const ch = await import(url("js/channels.js"));
+  if (ch.ALL.length !== 34) fail(`channel list is ${ch.ALL.length}, expected 34`);
+  if (new Set(ch.ALL.map((c) => c.id)).size !== ch.ALL.length) fail("duplicate channel id");
+  if (!ch.isKnownChannel("google-ads")) fail("isKnownChannel() missed a real channel");
+  if (ch.isKnownChannel("the-radio-spot-on-98-1")) fail("isKnownChannel() accepted an invented id");
+}
+
 /* ── report ───────────────────────────────────────────── */
 
 for (const w of warns) console.log("WARN  " + w);
