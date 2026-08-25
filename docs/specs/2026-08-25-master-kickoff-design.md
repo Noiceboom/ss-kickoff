@@ -243,7 +243,7 @@ not cosmetic.
 |---|---|---|---|
 | 00 | `intro` | Intro & agenda | Nothing. Client, market, scraped counts, what's coming. |
 | 01 | `company` | Company & contact | Business name + website **prefilled from the sales handoff** (client JSON), year founded; point-of-contact and billing-contact blocks (name / email / phone, with a "same as" toggle); main business phone, tracking-number decision, lead destination, booking link; address, hours, emergency line, coverage |
-| 02 | `goals` | Goals & targets | Current vs target revenue/mo and leads/mo, budget, avg ticket, close rate, capacity ceiling, what winning looks like in 90 days |
+| 02 | `goals` | Goals & targets | Sliders for revenue/mo, leads/mo, avg ticket, close rate (now and target), budget and spare capacity; horizon chips; a **What matters most** section — priority, what counts as a good lead, reporting cadence, the number they check first, who else is judging, what would make them fire us; live derived lines for implied jobs, the growth gap and leads needed |
 | 03 | `marketing` | Current marketing & spend | Incumbent agency, contract end, channel rows (channel / spend / who runs it / working), what worked, what burned them |
 | 04 | `competitors` | Competitors | Rows: name, domain, why they win, threat level |
 | 05 | `services` | Services — confirm | Grid over `client.services`, sub-service chips, add-your-own, per-item notes |

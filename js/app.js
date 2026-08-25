@@ -3,7 +3,7 @@
 // ============================================================
 
 import * as S from "./state.js";
-import { esc, ICON, pageNote } from "./ui.js";
+import { esc, ICON, pageNote, sliderValue, sliderPos, snapNice, formatSlider } from "./ui.js";
 import * as rank from "./rank.js";
 import MODULES from "./modules/index.js";
 
@@ -11,7 +11,7 @@ import MODULES from "./modules/index.js";
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b5";
+export const BUILD = "b6";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -259,6 +259,8 @@ function render() {
 
   renderPills();
   renderHeader();
+  document.querySelectorAll("[data-slrange]").forEach(paintTrack);
+  refreshDerived();
   restoreFocus(f);
 }
 
@@ -303,6 +305,82 @@ export function toast(msg) {
 }
 window.ssToast = toast;
 
+/* ── sliders ──────────────────────────────────────────── */
+//
+// Sliders write through the same no-re-render path as every other field.
+// The two halves (track and typed readout) are kept in step by touching
+// each other's DOM directly — replacing the markup mid-drag would drop
+// the drag, and mid-type would drop the caret.
+
+function scaleOf(range) {
+  const parts = (range.getAttribute("data-scale") || "").split("|");
+  return { min: +parts[0] || 0, max: +parts[1] || 100, curve: +parts[2] || 1, mode: parts[3] || "count" };
+}
+
+function paintTrack(range) {
+  // WebKit can't fill a range track natively; the gradient stop is driven
+  // from a custom property instead.
+  const pct = (range.value / (range.max || 1000)) * 100;
+  range.style.setProperty("--fill", pct + "%");
+}
+
+/** Mark a slider answered, so an untouched one never reads as a real number. */
+function setSliderSet(name, isSet) {
+  const wrap = document.querySelector('[data-slwrap="' + cssAttr(name) + '"]');
+  if (wrap) wrap.classList.toggle("unset", !isSet);
+}
+
+function cssAttr(v) { return String(v).replace(/["\\]/g, "\\$&"); }
+
+function onSliderDrag(range) {
+  const name = range.getAttribute("data-slrange");
+  const [mod, key] = name.split("|");
+  const sc = scaleOf(range);
+  const val = snapNice(sliderValue(+range.value, sc.min, sc.max, sc.curve), sc.mode);
+
+  S.setField(R.state, mod, key, String(val));
+  paintTrack(range);
+  setSliderSet(name, true);
+
+  const num = document.querySelector('[data-slnum="' + cssAttr(name) + '"]');
+  if (num && document.activeElement !== num) num.value = formatSlider(val, sc.mode, sc.max);
+
+  refreshDerived();
+  queueSave();
+}
+
+/** Someone typed an exact figure — move the track to match. */
+function onSliderType(num) {
+  const name = num.getAttribute("data-slnum");
+  const range = document.querySelector('[data-slrange="' + cssAttr(name) + '"]');
+  if (!range) return;
+  const sc = scaleOf(range);
+  const raw = String(num.value).replace(/[^0-9.\-]/g, "");
+  const has = raw !== "";
+  if (has) {
+    const clamped = Math.min(sc.max, Math.max(sc.min, Number(raw) || 0));
+    range.value = sliderPos(clamped, sc.min, sc.max, sc.curve);
+  }
+  paintTrack(range);
+  setSliderSet(name, has);
+  refreshDerived();
+}
+
+/**
+ * Recompute any live comparison lines the current screen declares.
+ * Optional per module — most don't have one.
+ */
+function refreshDerived() {
+  const m = moduleAt(R.state.step);
+  if (!m || typeof m.derive !== "function") return;
+  let out;
+  try { out = m.derive(ctx()) || {}; } catch (e) { return; }
+  for (const k of Object.keys(out)) {
+    const el = document.querySelector('[data-derived="' + cssAttr(k) + '"]');
+    if (el) el.innerHTML = out[k];
+  }
+}
+
 /* ── input events — write only, NEVER re-render ───────── */
 
 /**
@@ -324,11 +402,14 @@ document.addEventListener("input", (e) => {
   const el = e.target;
   if (!el || !el.getAttribute) return;
 
+  if (el.getAttribute("data-slrange")) { onSliderDrag(el); return; }
+
   const f = el.getAttribute("data-f");
   if (f) {
     const [mod, key] = f.split("|");
     if (guardSecret(el.value)) { el.value = ""; S.setField(R.state, mod, key, ""); return; }
     S.setField(R.state, mod, key, el.value);
+    if (el.getAttribute("data-slnum")) onSliderType(el);
     queueSave();
     return;
   }

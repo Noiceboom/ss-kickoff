@@ -231,6 +231,98 @@ export function pageNote(moduleId, label, value, prompt) {
   );
 }
 
+/* ── sliders ──────────────────────────────────────────── */
+//
+// Position runs 0–1000 and maps to a value through a power curve, so the
+// low end (where most home-services numbers actually live) gets real
+// resolution instead of one pixel per $50k.
+//
+// The committed value is stored in state, never the slider position —
+// exports must read a number, not a UI coordinate.
+
+const SLIDER_POS_MAX = 1000;
+
+export function sliderValue(pos, min, max, curve) {
+  const t = Math.min(1, Math.max(0, pos / SLIDER_POS_MAX));
+  return min + (max - min) * Math.pow(t, curve);
+}
+
+export function sliderPos(value, min, max, curve) {
+  const span = max - min;
+  if (span <= 0) return 0;
+  const t = Math.min(1, Math.max(0, (Number(value) - min) / span));
+  return Math.round(SLIDER_POS_MAX * Math.pow(t, 1 / curve));
+}
+
+/**
+ * Round to a figure someone would actually say out loud. Nobody answers
+ * "what's your average ticket" with $1,437.
+ */
+export function snapNice(v, mode) {
+  const a = Math.abs(v);
+  let step;
+  if (mode === "pct") step = 1;
+  else if (mode === "count") step = a < 50 ? 1 : a < 200 ? 5 : a < 1000 ? 10 : 25;
+  else step = a < 100 ? 5 : a < 1000 ? 25 : a < 10000 ? 100 : a < 100000 ? 1000 : a < 1000000 ? 5000 : 25000;
+  return Math.round(v / step) * step;
+}
+
+export function formatSlider(v, mode, max) {
+  const n = Number(v);
+  if (!isFinite(n)) return "";
+  const capped = max != null && n >= max;
+  if (mode === "pct") return n + "%";
+  const s = n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  return (mode === "money" ? "$" + s : s) + (capped ? "+" : "");
+}
+
+/**
+ * Slider with a typeable readout.
+ *
+ * Unset is a first-class state: a slider that always shows a number makes
+ * an unanswered question look answered, which is the one thing this doc
+ * must never do. Until it is touched the readout shows a dash and the
+ * track stays grey, and state holds nothing.
+ *
+ * opts: { min, max, curve, mode: "money"|"count"|"pct", unit, help, start }
+ */
+export function slider(mod, key, label, value, opts) {
+  const o = opts || {};
+  const min = o.min == null ? 0 : o.min;
+  const max = o.max == null ? 100 : o.max;
+  const curve = o.curve || 1;
+  const mode = o.mode || "count";
+  const name = esc(mod) + "|" + esc(key);
+  const set = filled(value);
+  const num = set ? Number(String(value).replace(/[^0-9.\-]/g, "")) : null;
+  const pos = set ? sliderPos(num, min, max, curve) : sliderPos(o.start == null ? (max - min) * 0.12 + min : o.start, min, max, curve);
+
+  return (
+    '<div class="f sl' + (o.wide ? " wide" : "") + (set ? "" : " unset") + '" data-slwrap="' + name + '">' +
+      '<div class="slhead">' +
+        "<label>" + esc(label) + "</label>" +
+        '<div class="slval">' +
+          '<input class="slnum" data-f="' + name + '" data-slnum="' + name + '" inputmode="numeric" ' +
+            'autocomplete="off" size="9" value="' + (set ? esc(formatSlider(num, mode, max)) : "") + '" placeholder="—">' +
+          (o.unit ? '<span class="slunit">' + esc(o.unit) + "</span>" : "") +
+        "</div>" +
+      "</div>" +
+      '<input type="range" class="slrange" data-slrange="' + name + '" ' +
+        'min="0" max="' + SLIDER_POS_MAX + '" value="' + pos + '" ' +
+        'data-scale="' + min + "|" + max + "|" + curve + "|" + mode + '" ' +
+        'aria-label="' + esc(label) + '">' +
+      '<div class="slscale"><span>' + esc(formatSlider(min, mode)) + "</span>" +
+        "<span>" + esc(formatSlider(max, mode, max)) + "</span></div>" +
+      (o.help ? '<div class="help">' + esc(o.help) + "</div>" : "") +
+    "</div>"
+  );
+}
+
+/** A live-computed line the module can refresh without a re-render. */
+export function derived(key, initial) {
+  return '<div class="derived" data-derived="' + esc(key) + '">' + esc(initial || "") + "</div>";
+}
+
 /* ── formatting ───────────────────────────────────────── */
 
 export function money(v) {
