@@ -131,13 +131,23 @@ function notesBlock(parts) {
   );
 }
 
+/**
+ * Modules that carry their own ranked list. Services builds its order from
+ * priority buckets on its own screen; locations still has a rank screen.
+ */
+const RANKED = { services: "services", locations: "locationsRank" };
+
 function ranksFor(parts) {
-  const svc = parts.find((p) => p.mod.id === "servicesRank");
-  const loc = parts.find((p) => p.mod.id === "locationsRank");
-  return {
-    services: svc && svc.sum ? svc.sum.list : null,
-    locations: loc && loc.sum ? loc.sum.list : null,
+  const pick = (id) => {
+    const p = parts.find((x) => x.mod.id === id);
+    return p && p.sum && p.sum.list ? p.sum.list : null;
   };
+  return { services: pick(RANKED.services), locations: pick(RANKED.locations) };
+}
+
+/** True when this module's list is already printed in the build-order block. */
+function isRanked(id) {
+  return id === RANKED.services || id === RANKED.locations;
 }
 
 /* ── tab: client recap ────────────────────────────────── */
@@ -182,10 +192,10 @@ function briefView(ctx, parts) {
 
   const detail = parts
     .filter((p) => p.sum && (p.sum.rows || p.sum.table))
-    .filter((p) => p.mod.id !== "servicesRank" && p.mod.id !== "locationsRank")
+    .filter((p) => p.mod.id !== RANKED.locations)
     .map((p) =>
       '<div class="card"><div class="mlabel">' + esc(p.mod.nav) + "</div>" +
-      dl(p.sum.rows) + table(p.sum.table) + "</div>"
+      dl(p.sum.rows) + (isRanked(p.mod.id) ? "" : table(p.sum.table)) + "</div>"
     ).join("");
 
   const priorities =
@@ -306,10 +316,11 @@ function buildText(ctx, parts, mode) {
     }
     for (const p of parts) {
       if (p.skipped || !p.sum || (!p.sum.rows && !p.sum.table)) continue;
-      if (p.mod.id === "servicesRank" || p.mod.id === "locationsRank") continue;
+      if (p.mod.id === RANKED.locations) continue;
       L.push(p.mod.nav.toUpperCase());
       if (p.sum.rows) for (const [k, v] of p.sum.rows) L.push("  " + k + ": " + v);
-      if (p.sum.table) {
+      // its table is the ranked list, already printed above
+      if (p.sum.table && !isRanked(p.mod.id)) {
         for (const row of p.sum.table.body) L.push("  - " + row.filter(Boolean).join(" | "));
       }
       L.push("");

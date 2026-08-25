@@ -501,6 +501,72 @@ for (const m of MODULES) {
   if (ch.isKnownChannel("the-radio-spot-on-98-1")) fail("isKnownChannel() accepted an invented id");
 }
 
+{
+  // Trade taxonomies: every file must be usable as a service list.
+  const T = await import(url("js/trades/index.js"));
+  if (T.TRADES.length < 10) fail(`only ${T.TRADES.length} trades registered`);
+  const tradeIds = new Set();
+  for (const t of T.TRADES) {
+    if (!t.id || !t.label) { fail("a trade is missing id or label"); continue; }
+    if (tradeIds.has(t.id)) fail(`duplicate trade id "${t.id}"`);
+    tradeIds.add(t.id);
+    if (!Array.isArray(t.services) || t.services.length < 15) {
+      fail(`${t.id} has ${t.services ? t.services.length : 0} services, expected 15+`);
+    }
+    const ids = (t.services || []).map((x) => x.id);
+    if (new Set(ids).size !== ids.length) fail(`${t.id} has duplicate service ids`);
+    for (const svc of t.services || []) {
+      if (!svc.id || !svc.label) fail(`${t.id} has a service missing id or label`);
+      if (!Array.isArray(svc.subs)) fail(`${t.id}/${svc.id} subs is not an array`);
+      if (!/^[a-z0-9-]+$/.test(svc.id)) fail(`${t.id}/${svc.id} is not a clean slug`);
+    }
+  }
+  if (T.resolveTrade("Plumbing") !== "plumbing") fail("resolveTrade missed an exact label");
+  if (T.resolveTrade("heating & air") !== "hvac") fail("resolveTrade missed an alias");
+  if (T.resolveTrade("not a trade")) fail("resolveTrade invented a match");
+
+  // The scrape must pre-tick, and the taxonomy must not duplicate it.
+  const st = S.fresh();
+  st.m.services = { trade: "plumbing" };
+  const plumbing = T.getTrade("plumbing").services;
+  const universe = S.serviceUniverse(st, bfp, plumbing);
+  const uIds = universe.map((x) => x.id);
+  if (new Set(uIds).size !== uIds.length) fail("serviceUniverse produced duplicate ids");
+  const ticked = universe.filter((x) => x.on);
+  if (ticked.length !== bfp.services.length) {
+    fail(`pre-ticked ${ticked.length}, expected the ${bfp.services.length} scraped services`);
+  }
+  if (universe.filter((x) => x.source === "trade").some((x) => x.on)) {
+    fail("a taxonomy-only service was ticked by default");
+  }
+
+  // priority buckets and build order
+  S.setPriority(st, "drains", "high");
+  S.setPriority(st, "toilets", "low");
+  S.setPriority(st, "sewers", "high");
+  const buckets = S.servicesByPriority(st, bfp, plumbing);
+  if (buckets.high.length !== 2 || buckets.low.length !== 1) fail("priority buckets did not fill correctly");
+  const order = S.serviceOrder(st, bfp, plumbing).map((x) => x.id);
+  if (order.indexOf("drains") > order.indexOf("toilets")) fail("build order put a Low above a High");
+
+  // reordering inside a bucket must not disturb the others
+  S.reorderBucket(st, ["sewers", "drains"]);
+  const after = S.servicesByPriority(st, bfp, plumbing);
+  if (after.high[0].id !== "sewers") fail("reorderBucket did not reorder within the band");
+  if (after.low[0].id !== "toilets") fail("reorderBucket disturbed another band");
+
+  // toggling: scraped services deny-list, taxonomy-only allow-list
+  S.toggleService(st, "drains", false);
+  if (S.onServices(st, bfp, plumbing).some((x) => x.id === "drains")) fail("could not untick a scraped service");
+  S.toggleService(st, "backflow-testing", true);
+  if (!S.onServices(st, bfp, plumbing).some((x) => x.id === "backflow-testing")) {
+    fail("could not tick a taxonomy-only service");
+  }
+
+  // the old rank screen is gone and nothing still points at it
+  if (MODULES.some((m) => m.id === "servicesRank")) fail("servicesRank module is still registered");
+}
+
 /* ── report ───────────────────────────────────────────── */
 
 for (const w of warns) console.log("WARN  " + w);

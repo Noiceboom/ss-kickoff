@@ -1,0 +1,40 @@
+// ============================================================
+// Trade taxonomy — Cleaning
+// ============================================================
+
+export default {
+  id: "cleaning",
+  label: "Cleaning",
+  services: [
+    { id: "house-cleaning", label: "House Cleaning", subs: ["Standard Cleaning", "One-Time Cleaning", "Maid Service"] },
+    { id: "recurring-cleaning", label: "Recurring Cleaning Plans", subs: ["Weekly Cleaning", "Bi-Weekly Cleaning", "Monthly Cleaning"] },
+    { id: "deep-cleaning", label: "Deep Cleaning", subs: ["Spring Cleaning", "Kitchen Deep Clean", "Bathroom Deep Clean"] },
+    { id: "move-in-move-out", label: "Move-In & Move-Out Cleaning", subs: ["Move-Out Cleaning", "Move-In Cleaning", "Apartment Turnover Cleaning"] },
+    { id: "commercial-cleaning", label: "Commercial Cleaning", subs: ["Office Cleaning", "Retail Cleaning", "Restaurant Cleaning", "Medical Office Cleaning"] },
+    { id: "janitorial", label: "Janitorial Services", subs: ["Nightly Janitorial", "Day Porter Services", "Restroom Sanitation"] },
+    { id: "carpet-cleaning", label: "Carpet Cleaning", subs: ["Steam Cleaning", "Pet Stain & Odor Removal", "Area Rug Cleaning"] },
+    { id: "upholstery-cleaning", label: "Upholstery Cleaning", subs: ["Sofa Cleaning", "Mattress Cleaning"] },
+    { id: "tile-grout-cleaning", label: "Tile & Grout Cleaning", subs: ["Grout Sealing", "Shower Tile Cleaning"] },
+    { id: "hardwood-floor-cleaning", label: "Hardwood Floor Cleaning", subs: ["Floor Polishing"] },
+    { id: "floor-care", label: "Commercial Floor Care", subs: ["Strip & Wax", "Floor Buffing", "VCT Floor Care"] },
+    { id: "window-cleaning", label: "Window Cleaning", subs: ["Interior Window Cleaning", "Exterior Window Cleaning", "Screen & Track Cleaning"] },
+    { id: "pressure-washing", label: "Pressure Washing", subs: ["House Washing", "Driveway & Sidewalk Cleaning", "Deck & Patio Cleaning", "Roof Soft Washing"] },
+    { id: "post-construction", label: "Post-Construction Cleaning", subs: ["Rough Clean", "Final Clean", "Renovation Cleanup"] },
+    { id: "vacation-rental", label: "Vacation Rental & Airbnb Cleaning", subs: ["Turnover Cleaning", "Linen Service"] },
+    { id: "gutter-cleaning", label: "Gutter Cleaning", subs: [] },
+    { id: "air-duct-cleaning", label: "Air Duct Cleaning", subs: ["Vent Cleaning"] },
+    { id: "dryer-vent-cleaning", label: "Dryer Vent Cleaning", subs: [] },
+    { id: "disinfection", label: "Disinfection & Sanitizing", subs: ["Electrostatic Disinfection", "Antimicrobial Treatment"] },
+    { id: "appliance-cleaning", label: "Appliance Cleaning", subs: ["Oven Cleaning", "Refrigerator Cleaning"] },
+    { id: "organizing", label: "Cleaning & Organizing", subs: ["Closet Organizing", "Laundry Service"] },
+    { id: "senior-cleaning", label: "Senior & Assisted Living Cleaning", subs: [] },
+    { id: "hoarding-cleanup", label: "Hoarding Cleanup", subs: ["Estate Cleanout", "Junk Removal"] },
+    { id: "biohazard", label: "Biohazard & Trauma Cleanup", subs: [] },
+    { id: "green-cleaning", label: "Green & Eco-Friendly Cleaning", subs: ["Pet-Safe Cleaning"] },
+    { id: "school-cleaning", label: "School & Daycare Cleaning", subs: [] },
+    { id: "gym-cleaning", label: "Gym & Fitness Center Cleaning", subs: [] },
+    { id: "warehouse-cleaning", label: "Warehouse & Industrial Cleaning", subs: [] },
+    { id: "chimney-cleaning", label: "Chimney Sweeping", subs: [] },
+    { id: "solar-panel-cleaning", label: "Solar Panel Cleaning", subs: [] },
+  ],
+};

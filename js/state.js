@@ -194,6 +194,124 @@ export function resetOrder(state, id, clientItems) {
   state.order[id] = (clientItems || []).map((x) => x.id).concat(s.added.map((x) => x.id));
 }
 
+/* ── services: taxonomy + scrape, priority buckets ────── */
+//
+// The universe is the selected trade's taxonomy merged with whatever the
+// scrape found and anything added on the call. Selection is deliberately
+// two-sided rather than a single list, so render() stays pure and no
+// initialisation step is needed:
+//
+//   scraped service   → ON unless it appears in `off`
+//   taxonomy-only     → OFF unless it appears in `on`
+//
+// That means opening a kickoff pre-ticks exactly what's on their site,
+// with the rest of the industry list sitting unticked below it.
+
+export const PRIORITIES = ["high", "med", "low"];
+
+export function svcState(state) {
+  const s = state.m.services || EMPTY;
+  return {
+    trade: typeof s.trade === "string" ? s.trade : "",
+    off: Array.isArray(s.off) ? s.off : [],
+    on: Array.isArray(s.on) ? s.on : [],
+    prio: s.prio && typeof s.prio === "object" ? s.prio : EMPTY,
+    subsOff: s.subsOff && typeof s.subsOff === "object" ? s.subsOff : EMPTY,
+    added: Array.isArray(s.added) ? s.added : [],
+  };
+}
+
+/**
+ * Every service available for this kickoff, in a stable order:
+ * taxonomy first, then scraped services the taxonomy doesn't know about,
+ * then anything typed in on the call.
+ */
+export function serviceUniverse(state, client, tradeServices) {
+  const v = svcState(state);
+  const seen = new Set();
+  const out = [];
+
+  const push = (it, source) => {
+    if (!it || !it.id || seen.has(it.id)) return;
+    seen.add(it.id);
+    out.push({
+      id: it.id,
+      name: it.label || it.name || it.id,
+      subs: Array.isArray(it.subs) ? it.subs : [],
+      source: source,
+      hasPage: !!it.hasPage,
+      verify: it.verify || null,
+    });
+  };
+
+  const scraped = new Map((client.services || []).map((x) => [x.id, x]));
+  for (const t of tradeServices || []) {
+    const hit = scraped.get(t.id);
+    // A scraped match keeps the taxonomy's sub list but inherits the
+    // page/verify flags the scrape found.
+    push(hit ? { ...t, hasPage: hit.hasPage, verify: hit.verify } : t, hit ? "both" : "trade");
+  }
+  for (const c of client.services || []) push(c, "scrape");
+  for (const a of v.added) push(a, "added");
+
+  return out.map((it) => ({
+    ...it,
+    on: it.source === "trade" ? v.on.indexOf(it.id) > -1 : v.off.indexOf(it.id) < 0,
+    prio: v.prio[it.id] || "",
+    subs: it.subs.map((name) => ({
+      name,
+      on: (v.subsOff[it.id] || []).indexOf(name) < 0,
+    })),
+  }));
+}
+
+export function onServices(state, client, tradeServices) {
+  return serviceUniverse(state, client, tradeServices).filter((x) => x.on);
+}
+
+/** Selected services grouped H → M → L, ordered within each bucket. */
+export function servicesByPriority(state, client, tradeServices) {
+  const list = onServices(state, client, tradeServices);
+  const order = state.order.services || [];
+  const rank = (id) => { const i = order.indexOf(id); return i < 0 ? Infinity : i; };
+  const buckets = { high: [], med: [], low: [], "": [] };
+  for (const it of list) (buckets[it.prio] || buckets[""]).push(it);
+  for (const k of Object.keys(buckets)) {
+    buckets[k].sort((a, b) => rank(a.id) - rank(b.id));
+  }
+  return buckets;
+}
+
+/** Flat build order: every High, then every Medium, then every Low. */
+export function serviceOrder(state, client, tradeServices) {
+  const b = servicesByPriority(state, client, tradeServices);
+  return b.high.concat(b.med, b.low, b[""]);
+}
+
+export function toggleService(state, id, isTradeOnly) {
+  const s = ensure(state, "services");
+  if (!Array.isArray(s.off)) s.off = [];
+  if (!Array.isArray(s.on)) s.on = [];
+  const list = isTradeOnly ? s.on : s.off;
+  const i = list.indexOf(id);
+  if (i > -1) list.splice(i, 1);
+  else list.push(id);
+}
+
+export function setPriority(state, id, value) {
+  const s = ensure(state, "services");
+  if (!s.prio || typeof s.prio !== "object") s.prio = {};
+  if (s.prio[id] === value || !value) delete s.prio[id];
+  else s.prio[id] = value;
+  if (!Object.keys(s.prio).length) delete s.prio;
+}
+
+/** Reorder within one priority bucket, leaving the other buckets alone. */
+export function reorderBucket(state, bucketIds) {
+  const order = (state.order.services || []).filter((id) => bucketIds.indexOf(id) < 0);
+  state.order.services = order.concat(bucketIds);
+}
+
 /* ── notes ────────────────────────────────────────────── */
 
 // Reserved item id for a screen's own note, so page notes ride the same

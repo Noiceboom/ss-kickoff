@@ -1,0 +1,40 @@
+// ============================================================
+// Trade taxonomy — HVAC
+// ============================================================
+
+export default {
+  id: "hvac",
+  label: "HVAC",
+  services: [
+    { id: "emergency", label: "Emergency HVAC Service", subs: ["24 Hour HVAC Repair"] },
+    { id: "ac-repair", label: "AC Repair", subs: ["Emergency AC Repair", "AC Not Cooling", "AC Compressor Repair", "Refrigerant Leak Repair"] },
+    { id: "ac-installation", label: "AC Installation & Replacement", subs: ["AC Replacement", "Central Air Installation", "New AC Installation"] },
+    { id: "ac-maintenance", label: "AC Maintenance & Tune-Ups", subs: [] },
+    { id: "heating-repair", label: "Heating Repair", subs: ["Emergency Heating Repair", "No Heat Repair"] },
+    { id: "furnace-repair", label: "Furnace Repair", subs: ["Gas Furnace Repair", "Electric Furnace Repair"] },
+    { id: "furnace-installation", label: "Furnace Installation & Replacement", subs: ["Furnace Replacement", "New Furnace Installation"] },
+    { id: "heating-maintenance", label: "Heating Maintenance & Tune-Ups", subs: [] },
+    { id: "heat-pumps", label: "Heat Pumps", subs: ["Heat Pump Repair", "Heat Pump Installation", "Heat Pump Replacement"] },
+    { id: "ductless-mini-splits", label: "Ductless Mini Splits", subs: ["Mini Split Installation", "Mini Split Repair"] },
+    { id: "thermostats", label: "Thermostats", subs: ["Smart Thermostat Installation", "Thermostat Repair", "Thermostat Replacement"] },
+    { id: "ductwork", label: "Ductwork", subs: ["Duct Repair", "Duct Installation", "Duct Sealing", "Duct Replacement"] },
+    { id: "air-duct-cleaning", label: "Air Duct Cleaning", subs: ["Dryer Vent Cleaning"] },
+    { id: "indoor-air-quality", label: "Indoor Air Quality", subs: ["Air Purifiers", "Air Filtration Systems", "UV Air Sanitizers"] },
+    { id: "humidifiers", label: "Humidifiers & Dehumidifiers", subs: ["Whole-home Humidifiers", "Whole-home Dehumidifiers"] },
+    { id: "boilers", label: "Boilers", subs: ["Boiler Repair", "Boiler Installation", "Boiler Replacement"] },
+    { id: "water-heaters", label: "Water Heaters", subs: ["Tankless Water Heaters", "Water Heater Repair", "Water Heater Installation"] },
+    { id: "air-handlers", label: "Air Handlers", subs: [] },
+    { id: "coils", label: "Evaporator & Condenser Coils", subs: ["Coil Cleaning", "Coil Replacement"] },
+    { id: "refrigerant-recharge", label: "Refrigerant Recharge", subs: [] },
+    { id: "hvac-inspection", label: "HVAC Inspections", subs: ["Pre-Season HVAC Inspection", "Home Sale HVAC Inspection"] },
+    { id: "zoning-systems", label: "Zoning Systems", subs: [] },
+    { id: "evaporative-coolers", label: "Evaporative Coolers", subs: [] },
+    { id: "radiant-heating", label: "Radiant Floor Heating", subs: [] },
+    { id: "geothermal", label: "Geothermal Heating & Cooling", subs: [] },
+    { id: "gas-lines", label: "Gas Lines", subs: ["Gas Line Repair", "Gas Line Installation"] },
+    { id: "residential", label: "Residential HVAC", subs: [] },
+    { id: "commercial", label: "Commercial HVAC", subs: ["Rooftop Units", "Commercial Refrigeration", "Walk-In Coolers"] },
+    { id: "new-construction", label: "New Construction HVAC", subs: [] },
+    { id: "maintenance-plan", label: "Maintenance Plans", subs: [] },
+  ],
+};

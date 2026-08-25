@@ -11,7 +11,7 @@ import MODULES from "./modules/index.js";
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b12";
+export const BUILD = "b13";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -535,6 +535,10 @@ document.addEventListener("click", (e) => {
 
   if ((el = t.closest("[data-chip]"))) {
     const [mod, key, val] = el.getAttribute("data-chip").split("|");
+    if (mod === "services" && key.indexOf("prio_") === 0) {
+      S.setPriority(R.state, key.slice(5), val);
+      render(); queueSave(); return;
+    }
     const multi = el.getAttribute("data-multi") === "1";
     if (multi) {
       const cur = S.getField(R.state, mod, key, []);
@@ -585,6 +589,12 @@ document.addEventListener("click", (e) => {
   }
 
   // ── list grids ──
+  if ((el = t.closest("[data-svc]"))) {
+    const [id, tradeOnly] = el.getAttribute("data-svc").split("|");
+    S.toggleService(R.state, id, tradeOnly === "1");
+    render(); queueSave(); return;
+  }
+
   if ((el = t.closest("[data-item]"))) {
     const [key, id] = el.getAttribute("data-item").split("|");
     S.toggleItem(R.state, key, id);
@@ -650,6 +660,25 @@ document.addEventListener("click", (e) => {
   if ((el = t.closest("[data-action]"))) { doAction(el.getAttribute("data-action")); return; }
 });
 
+/**
+ * Move `fromId` to `toId`'s slot. Priority buckets keep their own order
+ * inside state.order.services; the locations list uses the shared rank
+ * helpers. Returns false when the move isn't possible.
+ */
+function reorderFor(key, fromId, toId) {
+  if (key.indexOf("prio-") === 0) {
+    const mod = moduleAt("services");
+    const items = mod.bucketIds ? mod.bucketIds(ctx(), key.slice(5)) : [];
+    const from = items.indexOf(fromId);
+    const to = items.indexOf(toId);
+    if (from < 0 || to < 0 || from === to) return false;
+    items.splice(to, 0, items.splice(from, 1)[0]);
+    S.reorderBucket(R.state, items);
+    return true;
+  }
+  return rank.moveTo(R.state, key, itemsFor(key), fromId, toId);
+}
+
 /* ── drag + keyboard reordering ───────────────────────── */
 
 document.addEventListener("pointerdown", (e) => {
@@ -658,6 +687,7 @@ document.addEventListener("pointerdown", (e) => {
   rank.startDrag(e, g, {
     state: R.state,
     itemsFor: itemsFor,
+    reorder: reorderFor,
     rerender: render,
     commit: () => { render(); queueSave(); },
   });
@@ -669,7 +699,18 @@ document.addEventListener("keydown", (e) => {
   if (g && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
     e.preventDefault();
     const [key, id] = g.getAttribute("data-grip").split("|");
-    rank.move(R.state, key, itemsFor(key), id, e.key === "ArrowUp" ? -1 : 1);
+    if (key.indexOf("prio-") === 0) {
+      const mod = moduleAt("services");
+      const ids = mod.bucketIds ? mod.bucketIds(ctx(), key.slice(5)) : [];
+      const i = ids.indexOf(id);
+      const j = i + (e.key === "ArrowUp" ? -1 : 1);
+      if (i >= 0 && j >= 0 && j < ids.length) {
+        ids.splice(j, 0, ids.splice(i, 1)[0]);
+        S.reorderBucket(R.state, ids);
+      }
+    } else {
+      rank.move(R.state, key, itemsFor(key), id, e.key === "ArrowUp" ? -1 : 1);
+    }
     render(); queueSave();
     const again = document.querySelector('[data-grip="' + key + "|" + id + '"]');
     if (again) again.focus();

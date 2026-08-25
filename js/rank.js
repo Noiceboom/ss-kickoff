@@ -1,15 +1,19 @@
 // ============================================================
-// rank.js — drag-to-rank engine, shared by modules 06 and 08
+// rank.js — drag-to-rank engine
 // ============================================================
+//
+// Used by the locations rank screen and by the services priority buckets,
+// which store their order differently — so the caller owns the reorder
+// through ctx.reorder() and this file only handles the gesture.
 //
 // Three input paths, because dragging on a screen-share is unreliable:
 //   1. pointer drag on the handle
 //   2. ↑ / ↓ buttons
 //   3. arrow keys on a focused handle
 //
-// Order mutation lives in state.applyOrder, which preserves the slots of
-// OFF items. Toggling an item off and back on must not teleport it to the
-// end of the ranking.
+// Order mutation for the locations list lives in state.applyOrder, which
+// preserves the slots of OFF items: toggling an item off and back on must
+// not teleport it to the end of the ranking.
 
 import { esc, ICON } from "./ui.js";
 import { onList, applyOrder } from "./state.js";
@@ -150,8 +154,9 @@ function onMove(ev) {
   const targetId = raw.slice(bar + 1);
   if (targetId === drag.id) return;
 
-  const items = drag.ctx.itemsFor(drag.key);
-  if (!moveTo(drag.ctx.state, drag.key, items, drag.id, targetId)) return;
+  // The ctx owns the reorder so this engine works for both the locations
+  // list and the services priority buckets, which store order differently.
+  if (!drag.ctx.reorder(drag.key, drag.id, targetId)) return;
 
   drag.ctx.rerender();
   const again = document.querySelector('[data-row-id="' + cssEscape(drag.key + "|" + drag.id) + '"]');
