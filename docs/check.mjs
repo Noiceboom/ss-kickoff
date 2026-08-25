@@ -475,6 +475,16 @@ for (const m of MODULES) {
     fail(`free-text channels split wrongly: ${JSON.stringify(names)}`);
   }
 
+  // The placeholder has to demonstrate the format the box parses —
+  // a comma-separated example teaches input that no longer splits.
+  const mHtml = mk0.render(ctxFor(bfp, S.fresh()));
+  const ph = /data-f="marketing\|otherChan"[^>]*placeholder="([^"]*)"/.exec(mHtml);
+  if (!ph) fail("could not find the other-channels placeholder");
+  else {
+    if (ph[1].indexOf("\n") < 0) fail("other-channels placeholder does not show one per line");
+    if (/,/.test(ph[1])) fail("other-channels placeholder still demonstrates comma separation");
+  }
+
   // channels typed in the free-text box count as answering the question
   const mk = MODULES.find((m) => m.id === "marketing");
   const customOnly = S.fresh();

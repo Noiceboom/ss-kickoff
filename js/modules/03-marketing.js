@@ -146,8 +146,11 @@ export default {
           '<div class="mlabel">Something we missed</div>' +
           '<div class="fields one" style="margin-top:12px">' +
             field(ID, "otherChan", "Other channels", v("otherChan"), {
-              type: "longtext", rows: 2,
-              placeholder: "Direct mail, truck wraps, the radio spot on 98.1…",
+              type: "longtext", rows: 3,
+              // Shows the shape it actually parses. A comma-separated
+              // example here would teach the one format this box no
+              // longer splits on.
+              placeholder: "Direct mail\nTruck wraps\nRadio spot on 98.1",
               help: "One per line — commas stay part of the name. Anything not in the list above.",
             }) +
           "</div>" +
