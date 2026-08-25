@@ -201,6 +201,9 @@ The durable artefact — what the OS emits once it creates a client and scrapes 
 }
 ```
 
+`client.name` and `client.website` are consumed by module 01 as the sales handoff —
+shown prefilled and editable, not asked for.
+
 `verify`: any non-null string renders a gold VERIFY badge with that string as the
 explanation, and becomes an open item in the readout.
 `hasPage: true`: an existing page — a rewrite, not a build.
@@ -222,7 +225,7 @@ not cosmetic.
 | # | id | Screen | Captures |
 |---|---|---|---|
 | 00 | `intro` | Intro & agenda | Nothing. Client, market, scraped counts, what's coming. |
-| 01 | `company` | Company & contact | Legal name, DBA, tagline, description, website, phone, email, address, hours, emergency line, license #, year founded, service radius |
+| 01 | `company` | Company & contact | Business name + website **prefilled from the sales handoff** (client JSON), year founded; point-of-contact and billing-contact blocks (name / email / phone, with a "same as" toggle); main business phone, tracking-number decision, lead destination, booking link; address, hours, emergency line, coverage |
 | 02 | `goals` | Goals & targets | Current vs target revenue/mo and leads/mo, budget, avg ticket, close rate, capacity ceiling, what winning looks like in 90 days |
 | 03 | `marketing` | Current marketing & spend | Incumbent agency, contract end, channel rows (channel / spend / who runs it / working), what worked, what burned them |
 | 04 | `competitors` | Competitors | Rows: name, domain, why they win, threat level |
