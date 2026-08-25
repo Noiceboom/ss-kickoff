@@ -921,7 +921,85 @@ for (const m of MODULES) {
   }
 }
 
+{
+  // Sessions ranked on the deleted drag screens must survive. The build
+  // order only shows what carries a priority, so without a migration all
+  // that ranking reads as empty.
+  const legacy = {
+    v: 2, step: "locations",
+    m: { locations: { off: [] }, services: {} },
+    order: {
+      locations: ["overland-park", "olathe", "lenexa", "leawood", "shawnee",
+                  "independence", "raytown", "belton", "gladstone", "grandview", "raymore"],
+      services: ["drains", "water-heaters", "sewers", "toilets", "faucets", "bathtubs"],
+    },
+    skipped: [],
+    notes: { "locationsRank:_page": "Best tech lives there.", "servicesRank:_page": "Drains pay the bills." },
+  };
+  const mig = S.validate(JSON.parse(JSON.stringify(legacy)));
+
+  // Assertions here must REPORT, never throw: a crash kills the run before
+  // the report prints, which reads exactly like a pass.
+  const lOrder = S.locationOrder(mig, bfp, []);
+  if (lOrder.length !== 11) {
+    fail(`legacy city ranking produced ${lOrder.length} ranked cities, expected 11`);
+  } else {
+    if (lOrder[0].id !== "overland-park") fail("legacy city ranking lost its order");
+    if (lOrder.filter((x) => x.prio === "high").length !== 5) fail("legacy migration did not use the old 1-5 high band");
+    if (lOrder.filter((x) => x.prio === "med").length !== 5) fail("legacy migration did not use the old 6-10 medium band");
+    if (!lOrder.slice(10).every((x) => x.prio === "low")) fail("legacy migration did not put 11+ in low");
+  }
+
+  const sOrder = S.serviceOrder(mig, bfp, [TRADES_MOD.getTrade("plumbing")]);
+  if (!sOrder.length) fail("legacy service ranking was lost entirely");
+
+  // notes from the deleted screens land on their survivors
+  if (mig.notes["locationsRank:_page"] || mig.notes["servicesRank:_page"]) {
+    fail("a note from a deleted rank screen was left orphaned");
+  }
+  if (!/Best tech/.test(mig.notes["locations:_page"] || "")) fail("the rank-cities note was dropped");
+  if (!/Drains pay/.test(mig.notes["services:_page"] || "")) fail("the rank-services note was dropped");
+
+  // a session already using priorities must never be rewritten
+  const modern = S.validate({
+    v: 2, step: "locations", m: { locations: { prio: { olathe: "low" } } },
+    order: { locations: ["overland-park", "olathe"] }, skipped: [], notes: {},
+  });
+  if (JSON.stringify(modern.m.locations.prio) !== '{"olathe":"low"}') {
+    fail("the legacy rank migration overwrote priorities set on the new screen");
+  }
+
+  // a client file whose cities carry no state must still match the Census
+  const noState = JSON.parse(JSON.stringify(bfp));
+  noState.locations = [{ id: "raytown", name: "Raytown", state: "", hasPage: false, verify: null }];
+  const twin = [{ id: "raytown-mo", name: "Raytown", state: "MO", lat: 39, lng: -94, pop: 30012, miles: 9.4 }];
+  // The twin has to be SELECTED, or locationUniverse never emits it and
+  // the assertion passes without exercising anything.
+  const nsState = S.fresh();
+  S.addLocations(nsState, [{ id: "raytown-mo", name: "Raytown", state: "MO", pop: 30012, miles: 9.4 }]);
+  const nsU = S.locationUniverse(nsState, noState, twin);
+  const rayRows = nsU.filter((x) => /Raytown/.test(x.name));
+  if (rayRows.length !== 1) {
+    fail(`a stateless scraped city duplicated its Census twin (${rayRows.length} rows)`);
+  } else if (!rayRows[0].state) {
+    fail("the scraped row did not pick up the state from its Census twin");
+  } else if (rayRows[0].miles == null) {
+    fail("the scraped row did not pick up the distance from its Census twin");
+  }
+  if (S.radiusCandidates(S.fresh(), noState, twin).length) {
+    fail("a stateless scraped city was still offered as a radius candidate");
+  }
+}
+
 /* ── report ───────────────────────────────────────────── */
+
+// A thrown assertion used to kill the run before this ran, which looked
+// identical to a clean pass. Anything uncaught now surfaces as a failure.
+process.on("uncaughtException", (e) => {
+  console.log("FAIL  a check threw and stopped the run — " + e.message);
+  console.log("\n1 failure(s) (run aborted early)");
+  process.exit(1);
+});
 
 for (const w of warns) console.log("WARN  " + w);
 for (const f of fails) console.log("FAIL  " + f);

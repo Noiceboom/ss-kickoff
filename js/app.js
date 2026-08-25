@@ -13,7 +13,7 @@ import * as places from "./places.js";
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b21";
+export const BUILD = "b22";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -797,11 +797,17 @@ async function ensurePlaces() {
 }
 
 /** Offer matches for what's been typed into the base-city box. */
+let baseSeq = 0;
+
 async function suggestBase() {
   const q = S.getField(R.state, "locations", "base", "");
   const t = locT();
+  const mine = ++baseSeq;
   if (String(q).trim().length < 3) { t.matches = []; render(); return; }
   const all = await ensurePlaces();
+  // A slower earlier lookup must not land on top of a newer one and show
+  // matches for a city that has already been typed over.
+  if (mine !== baseSeq) return;
   t.matches = places.search(all, q, 6).map((p) => ({ ...p, id: places.placeId(p) }));
   render();
 }
@@ -975,6 +981,8 @@ function doAction(name) {
     if (!window.confirm("Clear this kickoff from this browser? The share link still works if you saved it.")) return;
     S.clear(R.slug);
     R.state = S.fresh();
+    // radius results are derived from the base city, which has just gone
+    R.transient = {};
     R.state.step = MODULES[0].id;
     try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { /* ignore */ }
     render();

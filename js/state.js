@@ -552,9 +552,12 @@ function placeKey(name, st) {
  */
 export function radiusCandidates(state, client, nearby) {
   const known = new Set();
-  for (const c of client.locations || []) known.add(placeKey(c.name, c.state));
-  for (const a of locState(state).added) known.add(placeKey(a.name, a.state));
-  return (nearby || []).filter((p) => !known.has(placeKey(p.name, p.state)));
+  const note = (n, st) => { known.add(placeKey(n, st)); if (!st) known.add(placeKey(n, "")); };
+  for (const c of client.locations || []) { note(c.name, c.state); if (!c.state) known.add(placeKey(c.name, "")); }
+  for (const a of locState(state).added) note(a.name, a.state);
+  return (nearby || []).filter(
+    (p) => !known.has(placeKey(p.name, p.state)) && !known.has(placeKey(p.name, ""))
+  );
 }
 
 export function locationUniverse(state, client, nearby) {
@@ -566,13 +569,21 @@ export function locationUniverse(state, client, nearby) {
   const push = (it, source) => {
     if (!it || !it.id) return;
     const key = placeKey(it.name, it.state);
-    const twin = byPlace.get(key);
+    // A client file without a state on its cities would otherwise never
+    // match its Census twin and every city would appear twice.
+    const twin = byPlace.get(key) || (it.state ? byPlace.get(placeKey(it.name, "")) : null);
     if (twin) {
       // Same city reached by a different route. Keep the row we already
       // have — usually the scraped one, which carries hasPage and verify —
       // and take the distance and population the radius search knows.
       if (twin.miles == null && it.miles != null) twin.miles = it.miles;
       if (!twin.pop && it.pop) twin.pop = it.pop;
+      if (!twin.state && it.state) {
+        twin.state = it.state;
+        byPlace.set(placeKey(twin.name, it.state), twin);
+      }
+      if (!twin.hasPage && it.hasPage) twin.hasPage = true;
+      if (!twin.verify && it.verify) twin.verify = it.verify;
       return;
     }
     if (seen.has(it.id)) return;
@@ -916,6 +927,35 @@ export function reconcileServiceScoping(state, fallbackTrade) {
   m.on = m.on.map((id) => (id.indexOf(":") < 0 ? trade + ":" + id : id));
 }
 
+/**
+ * Sessions ranked on the old drag screens carry an order but no priorities,
+ * and the build order now only shows what has one — so all that ranking
+ * would read as empty. Derive priorities from the position, using the same
+ * bands the old screen displayed: 1–5 high, 6–10 medium, the rest low.
+ *
+ * Only runs when nothing has been prioritised, so it can never overwrite a
+ * decision made on the new screen.
+ */
+function migrateRankToPriority(m, order) {
+  if (!m || !Array.isArray(order) || !order.length) return;
+  if (m.prio && Object.keys(m.prio).length) return;
+  const prio = {};
+  order.forEach((id, i) => { prio[id] = i < 5 ? "high" : i < 10 ? "med" : "low"; });
+  if (Object.keys(prio).length) m.prio = prio;
+}
+
+/** Notes from the two deleted rank screens, folded into their survivors. */
+function migrateRankNotes(state) {
+  for (const [from, to] of [["servicesRank", "services"], ["locationsRank", "locations"]]) {
+    const key = from + ":" + PAGE;
+    const note = state.notes[key];
+    if (!note) continue;
+    delete state.notes[key];
+    const dest = to + ":" + PAGE;
+    state.notes[dest] = state.notes[dest] ? state.notes[dest] + "\n" + note : note;
+  }
+}
+
 function migrate(state) {
   for (const [mod, from, to] of RENAMES) {
     const m = state.m[mod];
@@ -924,6 +964,9 @@ function migrate(state) {
     delete m[from];
   }
   migrateServiceScoping(state.m.services);
+  migrateRankNotes(state);
+  migrateRankToPriority(state.m.services, state.order.services);
+  migrateRankToPriority(state.m.locations, state.order.locations);
   migrateChannels(state.m.marketing);
   pruneChannelDetail(state.m.marketing);
   for (const [mod, key] of REMOVED) {
