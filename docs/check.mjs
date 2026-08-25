@@ -14,6 +14,18 @@ import { readFileSync, readdirSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 
+// Registered FIRST. A thrown assertion kills the run before the report
+// prints, which reads exactly like a clean pass — that is how three
+// mutation checks came back green against code that was genuinely broken.
+// Installing this at the end of the file was the same mistake again.
+for (const ev of ["uncaughtException", "unhandledRejection"]) {
+  process.on(ev, (e) => {
+    console.log("FAIL  a check threw and stopped the run — " + ((e && e.message) || e));
+    console.log("\n1 failure(s) (run aborted early)");
+    process.exit(1);
+  });
+}
+
 const ROOT = path.resolve(import.meta.dirname, "..");
 const url = (p) => pathToFileURL(path.join(ROOT, p)).href;
 
@@ -197,9 +209,17 @@ for (const m of MODULES) {
   st.m.goals = { targetRevenue: "250000" };
   st.skipped = ["competitors"];
   st.notes["services:drains"] = "Biggest ticket — José runs it";
+  // Compare against a validated baseline, not the raw object: loading also
+  // runs migrations, so the assertion is that a roundtrip is IDEMPOTENT —
+  // encode/decode changes nothing that loading wouldn't change anyway.
+  const baseline = S.validate(JSON.parse(JSON.stringify(st)));
   const back = S.validate(S.decode(S.encode(st)));
   if (!back) fail("fragment roundtrip returned null");
-  else if (JSON.stringify(back) !== JSON.stringify(st)) fail("fragment roundtrip lost or altered data");
+  else if (JSON.stringify(back) !== JSON.stringify(baseline)) fail("fragment roundtrip lost or altered data");
+  // and the free text specifically survived
+  if (back && (back.m.company || {}).legalName !== "Acme & Sons <LLC>") fail("roundtrip lost free text");
+  if (back && back.notes["services:drains"] !== "Biggest ticket — José runs it") fail("roundtrip lost a note");
+  if (back && back.skipped.indexOf("competitors") < 0) fail("roundtrip lost a skip");
 
   // a version mismatch must be refused, not half-applied
   const bad = JSON.parse(JSON.stringify(st));
@@ -969,6 +989,42 @@ for (const m of MODULES) {
     fail("the legacy rank migration overwrote priorities set on the new screen");
   }
 
+  // A session that only ever dragged has no module slot at all — which is
+  // exactly the session that most needs the rank migration.
+  const orderOnly = S.validate({
+    v: 2, step: "locations", m: {},
+    order: { locations: ["olathe", "lenexa", "leawood"] }, skipped: [], notes: {},
+  });
+  if (S.locationOrder(orderOnly, bfp, []).length !== 3) {
+    fail("a session that only ranked, never toggled, lost its ranking entirely");
+  }
+
+  // Clearing every priority on the new screen must survive a reload. The
+  // order stays behind, and without a one-shot stamp the next load reads it
+  // as legacy and rebuilds the priorities that were just cleared.
+  const cleared = S.validate({
+    v: 2, step: "locations", m: { locations: { prio: { olathe: "high" } } },
+    order: { locations: ["olathe", "lenexa"] }, skipped: [], notes: {},
+  });
+  S.setLocationPriority(cleared, "olathe", "high");   // clicking the active band clears it
+  const afterReload = S.validate(JSON.parse(JSON.stringify(cleared)));
+  const stillSet = (afterReload.m.locations || {}).prio;
+  if (stillSet && Object.keys(stillSet).length) {
+    fail("priorities cleared on the new screen came back after a reload");
+  }
+
+  // Two same-named places in range are two cities. A stateless scraped
+  // entry can only stand in for one, so filtering both would hide a real one.
+  const ambiguousClient = JSON.parse(JSON.stringify(bfp));
+  ambiguousClient.locations = [{ id: "springfield", name: "Springfield", state: "", hasPage: false, verify: null }];
+  const twoSprings = [
+    { id: "springfield-mo", name: "Springfield", state: "MO", pop: 169176, miles: 5 },
+    { id: "springfield-il", name: "Springfield", state: "IL", pop: 114394, miles: 9 },
+  ];
+  if (S.radiusCandidates(S.fresh(), ambiguousClient, twoSprings).length !== 2) {
+    fail("an ambiguous stateless city swallowed every same-named place in range");
+  }
+
   // a client file whose cities carry no state must still match the Census
   const noState = JSON.parse(JSON.stringify(bfp));
   noState.locations = [{ id: "raytown", name: "Raytown", state: "", hasPage: false, verify: null }];
@@ -992,14 +1048,6 @@ for (const m of MODULES) {
 }
 
 /* ── report ───────────────────────────────────────────── */
-
-// A thrown assertion used to kill the run before this ran, which looked
-// identical to a clean pass. Anything uncaught now surfaces as a failure.
-process.on("uncaughtException", (e) => {
-  console.log("FAIL  a check threw and stopped the run — " + e.message);
-  console.log("\n1 failure(s) (run aborted early)");
-  process.exit(1);
-});
 
 for (const w of warns) console.log("WARN  " + w);
 for (const f of fails) console.log("FAIL  " + f);

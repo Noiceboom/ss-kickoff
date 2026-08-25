@@ -20,6 +20,7 @@ export function fresh() {
     order: {},        // { services: [id…], locations: [id…] }
     skipped: [],      // module ids marked "didn't cover"
     notes: {},        // "services:drains" -> "…"
+    mig: {},          // one-shot migration stamps, never re-run
   };
 }
 
@@ -552,12 +553,24 @@ function placeKey(name, st) {
  */
 export function radiusCandidates(state, client, nearby) {
   const known = new Set();
-  const note = (n, st) => { known.add(placeKey(n, st)); if (!st) known.add(placeKey(n, "")); };
-  for (const c of client.locations || []) { note(c.name, c.state); if (!c.state) known.add(placeKey(c.name, "")); }
+  const loose = new Set();
+  const note = (n, st) => { known.add(placeKey(n, st)); if (!st) loose.add(placeKey(n, "")); };
+  for (const c of client.locations || []) note(c.name, c.state);
   for (const a of locState(state).added) note(a.name, a.state);
-  return (nearby || []).filter(
-    (p) => !known.has(placeKey(p.name, p.state)) && !known.has(placeKey(p.name, ""))
-  );
+
+  // A stateless entry only stands in for a nearby place when there is
+  // exactly one candidate by that name. Two Springfields in range are two
+  // different cities, and filtering both would hide a real one.
+  const byName = new Map();
+  for (const p of nearby || []) {
+    const k = placeKey(p.name, "");
+    byName.set(k, (byName.get(k) || 0) + 1);
+  }
+  return (nearby || []).filter((p) => {
+    if (known.has(placeKey(p.name, p.state))) return false;
+    const k = placeKey(p.name, "");
+    return !(loose.has(k) && byName.get(k) === 1);
+  });
 }
 
 export function locationUniverse(state, client, nearby) {
@@ -936,8 +949,11 @@ export function reconcileServiceScoping(state, fallbackTrade) {
  * Only runs when nothing has been prioritised, so it can never overwrite a
  * decision made on the new screen.
  */
-function migrateRankToPriority(m, order) {
-  if (!m || !Array.isArray(order) || !order.length) return;
+function migrateRankToPriority(state, key, order) {
+  if (!Array.isArray(order) || !order.length) return;
+  // A session that only ever dragged has no module slot at all, which is
+  // exactly the session that most needs this — create it.
+  const m = ensure(state, key);
   if (m.prio && Object.keys(m.prio).length) return;
   const prio = {};
   order.forEach((id, i) => { prio[id] = i < 5 ? "high" : i < 10 ? "med" : "low"; });
@@ -965,8 +981,15 @@ function migrate(state) {
   }
   migrateServiceScoping(state.m.services);
   migrateRankNotes(state);
-  migrateRankToPriority(state.m.services, state.order.services);
-  migrateRankToPriority(state.m.locations, state.order.locations);
+  // Runs exactly once. Without the stamp, clearing every priority on the
+  // new screen leaves an order behind that the next load reads as legacy
+  // and rebuilds from — so the priorities someone deliberately cleared
+  // come straight back.
+  if (!state.mig.rank) {
+    migrateRankToPriority(state, "services", state.order.services);
+    migrateRankToPriority(state, "locations", state.order.locations);
+    state.mig.rank = true;
+  }
   migrateChannels(state.m.marketing);
   pruneChannelDetail(state.m.marketing);
   for (const [mod, key] of REMOVED) {
@@ -993,6 +1016,7 @@ export function validate(obj) {
   if (obj.order && typeof obj.order === "object") s.order = obj.order;
   if (Array.isArray(obj.skipped)) s.skipped = obj.skipped;
   if (obj.notes && typeof obj.notes === "object") s.notes = obj.notes;
+  if (obj.mig && typeof obj.mig === "object") s.mig = obj.mig;
   return migrate(s);
 }
 
