@@ -40,7 +40,7 @@ export default {
     const v = (k, fallback) => (s[k] !== undefined ? s[k] : (fallback || ""));
 
     return (
-      sectionHead("10", this.title, this.lede) +
+      sectionHead(ctx.num, this.title, this.lede) +
       skipRow(ID, isSkipped(ctx.state, ID)) +
 
       '<div class="card">' +

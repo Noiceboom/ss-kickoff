@@ -34,7 +34,7 @@ export default {
     const billingSame = !!s.billingSame;
 
     return (
-      sectionHead("01", this.title, this.lede) +
+      sectionHead(ctx.num, this.title, this.lede) +
       skipRow(ID, isSkipped(ctx.state, ID)) +
 
       '<div class="card">' +

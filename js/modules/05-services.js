@@ -244,7 +244,7 @@ export default {
 
   render(ctx) {
     return (
-      sectionHead("05", this.title, this.lede) +
+      sectionHead(ctx.num, this.title, this.lede) +
       skipRow(ID, isSkipped(ctx.state, ID)) +
       industryCard(ctx) +
       servicesCard(ctx) +

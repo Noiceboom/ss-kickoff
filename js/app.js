@@ -13,7 +13,7 @@ import * as places from "./places.js";
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b26";
+export const BUILD = "b27";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -39,10 +39,13 @@ const R = {
 const byId = new Map(MODULES.map((m) => [m.id, m]));
 
 function moduleAt(id) { return byId.get(id) || MODULES[0]; }
+/** Two-digit screen number, derived from position in the registry. */
+function pad(i) { return (i < 10 ? "0" : "") + i; }
 function indexOf(id) { const i = MODULES.findIndex((m) => m.id === id); return i < 0 ? 0 : i; }
 
-function ctx() {
+function ctx(num) {
   return {
+    num: num == null ? pad(indexOf(R.state.step)) : num,
     state: R.state,
     client: R.client,
     transient: R.transient,

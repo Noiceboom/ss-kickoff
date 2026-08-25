@@ -112,7 +112,7 @@ export default {
     }).join("");
 
     return (
-      sectionHead("11", this.title, this.lede) +
+      sectionHead(ctx.num, this.title, this.lede) +
 
       warnBox(
         "<strong>No credentials in this document.</strong> Never type a password, API key, " +

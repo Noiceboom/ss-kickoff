@@ -137,39 +137,80 @@ export function parseLocation(raw) {
   }
 
   // The city is the last remaining segment; anything before it is street.
-  const city = parts.length ? stripStreet(parts[parts.length - 1]) : "";
-  return { city: city, state: state };
+  const seg = parts.length ? parts[parts.length - 1] : "";
+  return { city: stripStreet(seg), state: state, candidates: cityCandidates(seg) };
 }
 
-const STREET_WORDS = new Set([
+const UNIT_MARKERS = new Set([
+  "ste", "suite", "unit", "apt", "apartment", "bldg", "building", "fl", "floor",
+  "rm", "room", "#", "no", "lot", "trlr",
+]);
+
+const STREET_TYPES = new Set([
   "st", "street", "ave", "avenue", "rd", "road", "blvd", "boulevard", "dr", "drive",
   "ln", "lane", "way", "ct", "court", "pkwy", "parkway", "hwy", "highway", "pl",
   "place", "ter", "terrace", "cir", "circle", "trl", "trail", "loop", "sq", "square",
-  "ste", "suite", "unit", "apt", "apartment", "bldg", "building", "fl", "floor", "rm",
+  "run", "path", "row", "xing", "crossing", "pike", "expy", "expressway",
 ]);
 
+const clean = (t) => String(t).toLowerCase().replace(/[.,]/g, "");
+
 /**
- * "3090 W Market St Ste 124-2 Akron" -> "Akron".
- *
- * Only touches segments that begin with a house number, and only when a
- * street or unit word is actually present — so a real place whose name
- * starts with a digit is left alone.
+ * Best single guess at the city when nothing can be checked against the
+ * place list — splits after the first street type and drops any unit that
+ * follows. search() prefers cityCandidates(), which resolves the genuinely
+ * ambiguous cases against real data instead.
  */
 function stripStreet(seg) {
   const raw = String(seg || "").trim();
   if (!/^\d/.test(raw)) return raw;
-
   const tokens = raw.split(/\s+/);
-  let last = -1;
-  tokens.forEach((t, i) => {
-    if (STREET_WORDS.has(t.toLowerCase().replace(/[.,#]/g, ""))) last = i;
-  });
-  if (last < 0) return raw;
+  let cut = tokens.findIndex((t) => STREET_TYPES.has(clean(t)));
+  if (cut < 0) {
+    const u = tokens.findIndex((t) => UNIT_MARKERS.has(clean(t)));
+    cut = u < 0 ? -1 : u - 1;
+  }
+  if (cut < 0) return raw;
 
-  // Anything after the final street or unit word that isn't itself a unit
-  // number is the city.
-  const rest = tokens.slice(last + 1).filter((t) => !/\d/.test(t));
+  let rest = tokens.slice(cut + 1);
+  while (rest.length) {
+    const head = clean(rest[0]);
+    if (UNIT_MARKERS.has(head) || head.charAt(0) === "#") {
+      rest = rest.slice(rest.length > 1 ? 2 : 1);
+      continue;
+    }
+    if (/\d/.test(rest[0])) { rest = rest.slice(1); continue; }
+    break;
+  }
   return rest.length ? rest.join(" ") : raw;
+}
+
+/**
+ * Every trailing run of words that could be the city, longest first.
+ *
+ * No token rule separates a street from a city reliably: the street name
+ * can itself be a street word ("500 Court St"), and the city can contain
+ * one ("Circle Pines", "Grand Terrace"). Splitting at the first street
+ * type breaks the former, splitting at the last breaks the latter.
+ *
+ * So don't guess — hand the caller every plausible ending and let it check
+ * them against the actual place list. The gazetteer already knows which of
+ * "Placid" and "Lake Placid" is a real city.
+ */
+export function cityCandidates(seg) {
+  const raw = String(seg || "").trim();
+  if (!raw) return [];
+  const tokens = raw.split(/\s+/);
+  const out = [];
+  const max = Math.min(4, tokens.length);
+  for (let n = max; n >= 1; n--) {
+    const win = tokens.slice(tokens.length - n);
+    // A window carrying a house number, a unit or a suite value is not a city
+    if (win.some((t) => /\d/.test(t) || UNIT_MARKERS.has(clean(t)) || clean(t).charAt(0) === "#")) continue;
+    out.push(win.join(" "));
+  }
+  if (!out.length) out.push(raw);
+  return out;
 }
 
 /**
@@ -178,10 +219,21 @@ function stripStreet(seg) {
  * one, not Kansas City, Kansas's smaller namesake showing up first.
  */
 export function search(places, query, limit) {
-  const { city, state } = parseLocation(query);
-  const bare = norm(city);
-  if (bare.length < 2) return [];
+  const { city, state, candidates } = parseLocation(query);
 
+  // Longest plausible ending first: if "Lake Placid" is a real place, it
+  // beats "Placid", and the street/city ambiguity resolves itself against
+  // the data instead of against a guess.
+  for (const cand of candidates || []) {
+    if (norm(cand).length < 2) continue;
+    const hits = rank(places, norm(cand), state, limit);
+    if (hits.length && hits[0].exact) return hits.map((h) => h.place);
+  }
+  return rank(places, norm(city), state, limit).map((h) => h.place);
+}
+
+function rank(places, bare, state, limit) {
+  if (bare.length < 2) return [];
   const out = [];
   const seen = new Set();
   for (const p of places) {
@@ -197,12 +249,12 @@ export function search(places, query, limit) {
     const key = n + "|" + p.state;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ place: p, score });
+    out.push({ place: p, score, exact: score === 4 });
   }
   // Population breaks ties, so an exact match on a big city always beats an
   // exact match on a hamlet, and "Dallas" lands on Texas.
   out.sort((a, b) => b.score - a.score || b.place.pop - a.place.pop);
-  return out.slice(0, limit || 8).map((x) => x.place);
+  return out.slice(0, limit || 8);
 }
 
 /* ── radius ───────────────────────────────────────────── */

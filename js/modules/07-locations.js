@@ -282,7 +282,7 @@ export default {
 
   render(ctx) {
     return (
-      sectionHead("07", this.title, this.lede) +
+      sectionHead(ctx.num, this.title, this.lede) +
       skipRow(ID, isSkipped(ctx.state, ID)) +
       coverageCard(ctx) +
       citiesCard(ctx) +

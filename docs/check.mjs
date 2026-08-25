@@ -935,6 +935,23 @@ for (const m of MODULES) {
     }
   }
 
+  // A street name can itself be a street word ("500 Court St"), and a city
+  // can contain one ("Circle Pines"). No token rule separates those, so the
+  // candidates are checked against the real place list.
+  for (const [addr, want] of [
+    ["500 Court St Unit 4 Lake Placid, NY", "Lake Placid"],
+    ["1420 Elm St Circle Pines, MN", "Circle Pines"],
+    ["3090 W Market St Grand Terrace, CA", "Grand Terrace"],
+    ["500 Oak Ave Terrace Park, OH", "Terrace Park"],
+    ["3090 W Market St Suite B Akron, OH", "Akron"],
+    ["100 N Main Street Suite 200 Dallas, TX", "Dallas"],
+  ]) {
+    const hit = P.search(idxRows, addr, 1)[0];
+    if (!hit || hit.name !== want) {
+      fail(`searching "${addr}" found ${hit ? hit.name : "nothing"}, expected ${want}`);
+    }
+  }
+
   // A place name that begins with a digit must survive street-stripping.
   const numeric = P.parseLocation("29 Palms, CA");
   if (numeric.city !== "29 Palms" || numeric.state !== "CA") {

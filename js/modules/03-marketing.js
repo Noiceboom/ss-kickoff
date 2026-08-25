@@ -118,7 +118,7 @@ export default {
     const v = (k) => (s[k] !== undefined ? s[k] : "");
 
     return (
-      sectionHead("03", this.title, this.lede) +
+      sectionHead(ctx.num, this.title, this.lede) +
       skipRow(ID, isSkipped(ctx.state, ID)) +
 
       '<div class="card">' +

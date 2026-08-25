@@ -65,7 +65,7 @@ export default {
     const locOff = droppedNames(ctx, "locations", ctx.client.locations);
 
     return (
-      sectionHead("09", this.title, this.lede) +
+      sectionHead(ctx.num, this.title, this.lede) +
       skipRow(ID, isSkipped(ctx.state, ID)) +
 
       '<div class="card">' +

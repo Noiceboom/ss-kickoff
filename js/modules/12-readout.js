@@ -375,7 +375,7 @@ export default {
         '<button class="btn ghost" data-action="clear" style="margin-left:auto;color:var(--risk)">Clear this kickoff</button>' +
       "</div>";
 
-    return sectionHead("12", this.title, this.lede) + tabs + view + actions;
+    return sectionHead(ctx.num, this.title, this.lede) + tabs + view + actions;
   },
 
   status() { return "done"; },
