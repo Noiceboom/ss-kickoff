@@ -52,6 +52,8 @@ export default {
   title: "What's running today?",
   lede: "Everything they're already paying for, whether or not they think it works. Add a row per channel — a wrong guess on the spend is still more useful than an empty row.",
   skippable: true,
+  notePrompt:
+    "What they said about the last agency, what they've already tried, where the money went.",
 
   render(ctx) {
     const s = slot(ctx.state, ID);

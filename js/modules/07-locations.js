@@ -35,6 +35,8 @@ export default {
   title: "Do they really run trucks there?",
   lede: "A city page only pays off if they'll actually take the call. Uncheck anywhere they're listed but won't drive. Gold flags are entries we need settled before anything gets written.",
   skippable: true,
+  notePrompt:
+    "What they said about specific areas — drive times, neighbourhoods, where the good work is.",
 
   render(ctx) {
     return (

@@ -57,6 +57,7 @@ export default {
   title:   "Where are you trying to get to?",
   lede:    "…",
   skippable: true,
+  notePrompt: "…",                     // placeholder for this screen's note box
   render(ctx)  → HTML string,
   summary(ctx) → { rows?, list?, table?, open? } | null,
   status(ctx)  → "empty" | "partial" | "done"
@@ -118,6 +119,22 @@ restores `document.activeElement` by its `data-*` key and its selection range.
 
 Rationale: replacing `innerHTML` under a focused textarea drops the caret mid-sentence
 while the client is mid-answer. This is the single most likely live-call failure.
+
+### Page notes
+
+Every screen except the readout carries a note box at its foot, prompted for that
+screen's subject via `notePrompt`. Rules:
+
+- stored as `notes["<moduleId>:_page"]`, riding the same map, autosave and fragment
+  plumbing as per-item notes
+- rendered by `app.js` **outside `.body`**, so it still works on a screen marked
+  "didn't cover this" — "we skipped it, but he mentioned…" is exactly the note worth keeping
+- always open, never collapsed; on a live call there is no time to hunt for it
+- `Cmd/Ctrl+Enter` jumps to it from anywhere on the page
+- a note alone lifts an otherwise-`empty` screen to `partial`
+- typing a note never re-renders; the "captured" styling toggles as a class and the
+  pill strip refreshes on the debounced save, neither of which touches the caret
+- notes reach the **internal brief, JSON and CSV — never the client recap**
 
 ### Transient UI state
 

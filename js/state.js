@@ -194,7 +194,15 @@ export function resetOrder(state, id, clientItems) {
 
 /* ── notes ────────────────────────────────────────────── */
 
+// Reserved item id for a screen's own note, so page notes ride the same
+// map (and the same autosave / fragment plumbing) as per-item notes.
+export const PAGE = "_page";
+
 export function noteKey(id, itemId) { return id + ":" + itemId; }
+
+export function getPageNote(state, moduleId) { return getNote(state, moduleId, PAGE); }
+export function setPageNote(state, moduleId, value) { setNote(state, moduleId, PAGE, value); }
+export function hasPageNote(state, moduleId) { return !!getPageNote(state, moduleId).trim(); }
 export function getNote(state, id, itemId) { return state.notes[noteKey(id, itemId)] || ""; }
 export function setNote(state, id, itemId, value) {
   const k = noteKey(id, itemId);

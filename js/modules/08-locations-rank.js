@@ -23,6 +23,8 @@ export default {
   title: "Which city gets a page first?",
   lede: "Rank by where the good work is — ticket size, drive time, techs already covering it. Not by population. Top five get built first.",
   skippable: false,
+  notePrompt:
+    "Why this order. Anything about a city that wouldn't fit in its own note.",
 
   render(ctx) {
     const list = onList(ctx.state, KEY, ctx.client.locations);

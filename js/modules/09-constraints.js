@@ -54,6 +54,8 @@ export default {
   title: "What sinks this if we get it wrong?",
   lede: "The things nobody mentions until they're already a problem. When more leads is the last thing they want, what they physically can't absorb, and the words that get a claim thrown out.",
   skippable: true,
+  notePrompt:
+    "Anything they'd be genuinely upset about if we got it wrong.",
 
   render(ctx) {
     const s = slot(ctx.state, ID);

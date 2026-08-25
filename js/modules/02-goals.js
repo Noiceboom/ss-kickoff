@@ -53,6 +53,8 @@ export default {
   title: "Where are you trying to get to?",
   lede: "Numbers on the table before anyone talks tactics. What they do today, what they want, and — the one everybody skips — how much more work they can actually take without falling over.",
   skippable: true,
+  notePrompt:
+    "Numbers they hedged on, targets they walked back, what growth actually means to them.",
 
   render(ctx) {
     const s = slot(ctx.state, ID);

@@ -226,6 +226,61 @@ for (const m of MODULES) {
   if (st.m.goals) fail("clearing the last field left an empty module branch");
 }
 
+{
+  // The readout's export builders — the JSON one broke on a screen that
+  // carried a page note but no summary(), a shape nothing else produces.
+  const readout = MODULES.find((m) => m.id === "readout");
+  if (!readout || typeof readout.exports !== "function") {
+    fail("readout module is missing its exports() API");
+  } else {
+    const st = S.fresh();
+    st.m.company = { businessName: "Acme Plumbing", contactName: "Mike" };
+    st.skipped = ["marketing"];
+    // note-only screens, both live and skipped
+    st.notes["brand:_page"] = 'Calls himself "the guy who shows up"';
+    st.notes["marketing:_page"] = "Didn't cover — old agency still owns the ad account";
+    st.notes["intro:_page"] = "Found us through a podcast";
+    st.notes["services:drains"] = "Highest ticket work";
+
+    const api = readout.exports(ctxFor(bfp, st));
+    for (const name of ["recap", "brief", "json", "csv"]) {
+      if (typeof api[name] !== "function") { fail(`exports().${name} missing`); continue; }
+      let out;
+      try { out = api[name](); }
+      catch (e) { fail(`exports().${name}() threw — ${e.message}`); continue; }
+      if (typeof out !== "string" || !out.trim()) fail(`exports().${name}() returned nothing`);
+    }
+
+    // Everything below re-invokes the builders, so it must not be able to
+    // crash the run — a thrown export has to surface as a FAIL line, not
+    // kill the process before the report prints.
+    try {
+      // page notes belong in the internal brief and the exports, never the
+      // client-facing recap
+      const recap = api.recap();
+      const brief = api.brief();
+      for (const secret of ["the guy who shows up", "old agency still owns"]) {
+        if (recap.includes(secret)) fail(`client recap leaked an internal note: "${secret}"`);
+        if (!brief.includes(secret)) fail(`internal brief is missing a note: "${secret}"`);
+      }
+
+      const j = JSON.parse(api.json());
+      if (!j.sections.brand || j.sections.brand.note !== st.notes["brand:_page"]) {
+        fail("JSON export dropped a note-only section");
+      }
+      if (!j.sections.marketing || !j.sections.marketing.skipped || !j.sections.marketing.note) {
+        fail("JSON export dropped the note on a skipped section");
+      }
+
+      const csv = api.csv();
+      if (!csv.includes("the guy who shows up")) fail("CSV export dropped a page note");
+      if (csv.split('"').length % 2 !== 1) fail("CSV export has unbalanced quoting");
+    } catch (e) {
+      fail(`export assertions threw — ${e.message}`);
+    }
+  }
+}
+
 /* ── report ───────────────────────────────────────────── */
 
 for (const w of warns) console.log("WARN  " + w);

@@ -24,6 +24,8 @@ export default {
   title: "Who are they, on paper?",
   lede: "The factual layer — the stuff that has to be identical everywhere it appears. Who we call, the number that rings, the address Google sees.",
   skippable: true,
+  notePrompt:
+    "How the business actually runs — who answers the phone, who's really in charge, anything odd about the setup.",
 
   render(ctx) {
     const s = slot(ctx.state, ID);

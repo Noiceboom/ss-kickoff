@@ -41,6 +41,8 @@ export default {
   title: "Who keeps taking the jobs you wanted?",
   lede: "Names and domains, not a feeling. Every one of these gets looked up after the call — what they rank for, what they're bidding on, where the hole is.",
   skippable: true,
+  notePrompt:
+    "Who they named, what they said about them, anything they got heated about.",
 
   render(ctx) {
     const s = slot(ctx.state, ID);

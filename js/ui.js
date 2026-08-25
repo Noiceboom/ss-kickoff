@@ -204,6 +204,33 @@ export function statusPicker(mod, key, value) {
   }).join("") + "</div>";
 }
 
+export const PAGE_KEY = "_page";
+
+/**
+ * The scratchpad at the foot of every screen. Deliberately always open
+ * and always in the same place — on a live call there is no time to hunt
+ * for it, and a collapsed box may as well not exist.
+ *
+ * Rendered OUTSIDE `.body` so it still works on a screen marked
+ * "didn't cover this" — "we skipped it, but he mentioned…" is exactly
+ * the note worth keeping.
+ */
+export function pageNote(moduleId, label, value, prompt) {
+  const has = !!String(value || "").trim();
+  return (
+    '<div class="pagenote' + (has ? " has" : "") + '">' +
+      '<div class="pnhead">' +
+        '<span class="mlabel">Notes &mdash; ' + esc(label || moduleId) + "</span>" +
+        (has ? '<span class="badge b-page">Captured</span>' : "") +
+        '<span class="pnhint">&#8984;&#9166; jumps here</span>' +
+      "</div>" +
+      '<textarea data-note="' + esc(moduleId) + ':' + PAGE_KEY + '" placeholder="' + esc(prompt) + '">' +
+        esc(value) +
+      "</textarea>" +
+    "</div>"
+  );
+}
+
 /* ── formatting ───────────────────────────────────────── */
 
 export function money(v) {

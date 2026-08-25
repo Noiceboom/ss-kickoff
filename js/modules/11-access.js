@@ -86,6 +86,8 @@ export default {
   title: "Who owns what, and can we get in?",
   lede: "Ownership and status only. We are not collecting logins here — we're finding out whose name is on each account and what it takes to be added.",
   skippable: true,
+  notePrompt:
+    "Who actually holds the logins, and what it'll take to get in. No credentials.",
 
   render(ctx) {
     const s = slot(ctx.state, ID);

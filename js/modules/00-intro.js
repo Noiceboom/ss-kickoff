@@ -12,6 +12,8 @@ export default {
   title: "Before we build anything, we agree on the order.",
   lede: "",
   skippable: false,
+  notePrompt:
+    "How they found us, what they're worried about, anything they led with before we started.",
 
   render(ctx) {
     const { client, modules } = ctx;

@@ -32,6 +32,8 @@ export default {
   title: "What do we have to work with?",
   lede: "Assets, proof and language. A claim we can't prove is dead weight in ad copy, so the USP table has a proof column and we fill both halves on the call.",
   skippable: true,
+  notePrompt:
+    "How they talk about themselves. Phrases worth stealing for the copy.",
 
   render(ctx) {
     const s = slot(ctx.state, ID);

@@ -3,7 +3,7 @@
 // ============================================================
 
 import * as S from "./state.js";
-import { esc, ICON } from "./ui.js";
+import { esc, ICON, pageNote } from "./ui.js";
 import * as rank from "./rank.js";
 import MODULES from "./modules/index.js";
 
@@ -11,7 +11,7 @@ import MODULES from "./modules/index.js";
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b3";
+export const BUILD = "b4";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -155,6 +155,10 @@ function flushSave() {
   clearTimeout(R.saveTimer);
   R.saveTimer = null;
   if (S.save(R.state, R.slug)) markSaved();
+  // Typing never re-renders the screen, which would otherwise leave the
+  // progress dots stale until you navigated. The pill strip is its own
+  // container, so refreshing it here can't disturb a focused field.
+  if (document.getElementById("pills")) renderPills();
 }
 
 window.addEventListener("beforeunload", flushSave);
@@ -162,9 +166,23 @@ document.addEventListener("visibilitychange", () => { if (document.hidden) flush
 
 /* ── render ───────────────────────────────────────────── */
 
+const DEFAULT_PROMPT = "Anything they said on this screen worth keeping.";
+
+/** The readout is a view over everything else — it gets no note box. */
+function takesNote(m) { return m.id !== "readout"; }
+
+function noteFor(m) {
+  return pageNote(m.id, m.nav, S.getPageNote(R.state, m.id), m.notePrompt || DEFAULT_PROMPT);
+}
+
 function statusOf(m) {
   if (m.skippable && S.isSkipped(R.state, m.id)) return "skipped";
-  try { return m.status ? m.status(ctx()) : "empty"; } catch (e) { return "empty"; }
+  let st = "empty";
+  try { st = m.status ? m.status(ctx()) : "empty"; } catch (e) { st = "empty"; }
+  // A note is captured content even when no field was filled — an otherwise
+  // blank screen with a note is not "empty".
+  if (st === "empty" && S.hasPageNote(R.state, m.id)) return "partial";
+  return st;
 }
 
 function renderPills() {
@@ -239,6 +257,7 @@ function render() {
   mount.innerHTML =
     banner() +
     '<div class="body">' + body + "</div>" +
+    (takesNote(m) ? noteFor(m) : "") +
     navFor(i);
 
   renderPills();
@@ -336,6 +355,10 @@ document.addEventListener("input", (e) => {
     if (guardSecret(el.value)) { el.value = ""; return; }
     const bar = note.indexOf(":");
     S.setNote(R.state, note.slice(0, bar), note.slice(bar + 1), el.value);
+    // Toggle the "captured" styling in place. A class change on an
+    // ancestor is safe mid-typing; re-rendering the screen would not be.
+    const box = el.closest(".pagenote");
+    if (box) box.classList.toggle("has", !!el.value.trim());
     queueSave();
   }
 });
@@ -508,6 +531,19 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && a && a.getAttribute && a.getAttribute("data-newitem")) {
     e.preventDefault();
     addItem(a.getAttribute("data-newitem"));
+    return;
+  }
+
+  // Cmd/Ctrl+Enter — jump to this screen's note from anywhere on the page.
+  // The services and cities grids are long; hunting for the box mid-sentence
+  // is exactly when a quote gets lost.
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    const box = document.querySelector('[data-note$=":_page"]');
+    if (!box) return;
+    e.preventDefault();
+    box.scrollIntoView({ behavior: "smooth", block: "center" });
+    box.focus();
+    box.setSelectionRange(box.value.length, box.value.length);
   }
 });
 

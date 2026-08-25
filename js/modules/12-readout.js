@@ -6,7 +6,7 @@
 // captured state, plus the export API app.js calls for copy/download.
 
 import { esc, ICON, sectionHead } from "../ui.js";
-import { isSkipped } from "../state.js";
+import { isSkipped, getPageNote } from "../state.js";
 
 const ID = "readout";
 const TABS = [
@@ -31,7 +31,7 @@ function collect(ctx) {
     } catch (e) {
       if (window.console) console.error("[summary:" + m.id + "]", e);
     }
-    out.push({ mod: m, sum, status, skipped });
+    out.push({ mod: m, sum, status, skipped, note: getPageNote(ctx.state, m.id).trim() });
   }
   return out;
 }
@@ -101,6 +101,34 @@ function openBlock(items, heading) {
     ).join("") + "</div></div>";
 }
 
+/**
+ * Notes are Sam's own shorthand from the call — they belong in the
+ * internal brief and the exports, never in the client-facing recap.
+ */
+function notesFrom(parts) {
+  return parts.filter(function (p) { return p.note; });
+}
+
+function notesBlock(parts) {
+  const noted = notesFrom(parts);
+  if (!noted.length) return "";
+  return (
+    '<div class="card"><div class="mlabel">Notes from the call (' + noted.length + ")</div>" +
+      '<div style="font-size:14px;color:var(--muted);margin-top:5px">' +
+        "Your own shorthand, kept out of the client recap." +
+      "</div>" +
+      noted.map(function (p) {
+        return '<div style="margin-top:20px;padding-left:14px;border-left:3px solid var(--gold)">' +
+          '<div class="mlabel" style="color:var(--muted)">' + esc(p.mod.nav) +
+            (p.skipped ? " &middot; didn&rsquo;t cover" : "") + "</div>" +
+          '<div style="margin-top:6px;font-size:15px;line-height:1.6;white-space:pre-wrap">' +
+            esc(p.note) + "</div>" +
+        "</div>";
+      }).join("") +
+    "</div>"
+  );
+}
+
 function ranksFor(parts) {
   const svc = parts.find((p) => p.mod.id === "servicesRank");
   const loc = parts.find((p) => p.mod.id === "locationsRank");
@@ -166,7 +194,7 @@ function briefView(ctx, parts) {
         "</div></div>"
       : "";
 
-  return openBlock(open, "Open items") + priorities + detail;
+  return openBlock(open, "Open items") + notesBlock(parts) + priorities + detail;
 }
 
 /* ── tab: raw ─────────────────────────────────────────── */
@@ -198,12 +226,17 @@ function buildJson(ctx, parts) {
     openItems: openItems(ctx, parts).map((o) => ({ what: o.what, detail: o.detail, kind: o.kind })),
   };
   for (const p of parts) {
-    if (p.skipped) { out.sections[p.mod.id] = { skipped: true }; continue; }
-    if (!p.sum) continue;
+    if (p.skipped) {
+      out.sections[p.mod.id] = p.note ? { skipped: true, note: p.note } : { skipped: true };
+      continue;
+    }
+    if (!p.sum && !p.note) continue;
     const s = {};
-    if (p.sum.rows) s.fields = Object.fromEntries(p.sum.rows);
-    if (p.sum.list) s.ranked = p.sum.list.items.map((i) => ({ rank: i.n, name: i.name, detail: i.meta }));
-    if (p.sum.table) s.table = { columns: p.sum.table.head, rows: p.sum.table.body };
+    if (p.note) s.note = p.note;
+    // p.sum is null on a screen that carries only a note — guard every read.
+    if (p.sum && p.sum.rows) s.fields = Object.fromEntries(p.sum.rows);
+    if (p.sum && p.sum.list) s.ranked = p.sum.list.items.map((i) => ({ rank: i.n, name: i.name, detail: i.meta }));
+    if (p.sum && p.sum.table) s.table = { columns: p.sum.table.head, rows: p.sum.table.body };
     out.sections[p.mod.id] = s;
   }
   return out;
@@ -219,7 +252,12 @@ function buildCsv(ctx, parts) {
 
   for (const p of parts) {
     const sec = p.mod.nav;
-    if (p.skipped) { push(sec, "_status", "skipped", ""); continue; }
+    if (p.skipped) {
+      push(sec, "_status", "skipped", "");
+      if (p.note) push(sec, "note", p.note, "");
+      continue;
+    }
+    if (p.note) push(sec, "note", p.note, "");
     if (!p.sum) continue;
     if (p.sum.rows) for (const [k, v] of p.sum.rows) push(sec, k, v, "");
     if (p.sum.list) for (const it of p.sum.list.items) push(sec, "rank " + it.n, it.name, it.meta || "");
@@ -255,6 +293,15 @@ function buildText(ctx, parts, mode) {
   }
 
   if (mode === "brief") {
+    const noted = notesFrom(parts);
+    if (noted.length) {
+      L.push("NOTES FROM THE CALL");
+      noted.forEach(function (p) {
+        L.push("  " + p.mod.nav.toUpperCase() + (p.skipped ? " (didn't cover)" : ""));
+        p.note.split("\n").forEach(function (line) { L.push("    " + line); });
+      });
+      L.push("");
+    }
     for (const p of parts) {
       if (p.skipped || !p.sum || (!p.sum.rows && !p.sum.table)) continue;
       if (p.mod.id === "servicesRank" || p.mod.id === "locationsRank") continue;

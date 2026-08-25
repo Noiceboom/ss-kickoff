@@ -25,6 +25,8 @@ export default {
   title: "Is this everything you sell?",
   lede: "Uncheck anything they don't actually do, or don't want leads for. Toggle the sub-services underneath if only part of a category applies. Add whatever the scrape missed.",
   skippable: true,
+  notePrompt:
+    "What they said about specific jobs — margins, which crew does what, work they'd rather not take.",
 
   render(ctx) {
     return (

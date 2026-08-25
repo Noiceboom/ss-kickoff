@@ -21,6 +21,8 @@ export default {
   title: "Put the money-makers on top",
   lede: "Drag the handle to move a service. Ask which job they'd take if the phone only rang once today — that one goes to #1. Ties are fine; get the top five roughly right and we're good.",
   skippable: false,
+  notePrompt:
+    "Why they ranked it this way. The reasoning is worth more than the order.",
 
   render(ctx) {
     const list = onList(ctx.state, KEY, ctx.client.services);
