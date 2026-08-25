@@ -237,7 +237,17 @@ export default {
     if (!filled(s.contactEmail) && !filled(s.contactPhone)) {
       open.push({ what: "Contact details", detail: "No email or phone for the point of contact" });
     }
-    if (!s.billingSame && !filled(s.billingEmail)) {
+    // When billing falls back to the point of contact, that contact's email
+    // IS the billing email — so a blank one still means invoices have nowhere
+    // to go. The old check skipped this case entirely.
+    if (s.billingSame) {
+      if (!filled(s.contactEmail)) {
+        open.push({
+          what: "Billing contact",
+          detail: "Billing is set to the point of contact, but no email for them — invoices have nowhere to go",
+        });
+      }
+    } else if (!filled(s.billingEmail)) {
       open.push({ what: "Billing contact", detail: "No billing email — the first invoice will bounce around" });
     }
     if (!filled(s.phone)) {

@@ -235,6 +235,25 @@ export function decode(str) {
 }
 
 /**
+ * Field-key renames orphan saved values: the old key stays in state,
+ * invisible, and the new field renders blank. Every rename gets an entry
+ * here, applied on load so localStorage and share links both heal.
+ */
+const RENAMES = [
+  ["company", "email", "leadEmail"],   // b3: "where leads land" split from contact email
+];
+
+function migrate(state) {
+  for (const [mod, from, to] of RENAMES) {
+    const m = state.m[mod];
+    if (!m || m[from] === undefined) continue;
+    if (m[to] === undefined || m[to] === "") m[to] = m[from];
+    delete m[from];
+  }
+  return state;
+}
+
+/**
  * Accept a decoded object only if it is shaped like our state and
  * carries a version we understand. Anything else is discarded rather
  * than half-applied.
@@ -248,7 +267,7 @@ export function validate(obj) {
   if (obj.order && typeof obj.order === "object") s.order = obj.order;
   if (Array.isArray(obj.skipped)) s.skipped = obj.skipped;
   if (obj.notes && typeof obj.notes === "object") s.notes = obj.notes;
-  return s;
+  return migrate(s);
 }
 
 /**

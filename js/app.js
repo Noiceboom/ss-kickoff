@@ -9,6 +9,10 @@ import MODULES from "./modules/index.js";
 
 /* ── constants ────────────────────────────────────────── */
 
+// Bump on every deploy. Shown in the header so a stale browser cache is
+// visible at a glance instead of looking like the change never shipped.
+export const BUILD = "b3";
+
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
 const SAVE_DEBOUNCE = 400;
@@ -187,7 +191,8 @@ function renderPills() {
 function renderHeader() {
   const c = R.client.client;
   const name = c.name || "New kickoff";
-  const sub = [c.market, R.client.slug].filter(Boolean).join(" · ") || "no client loaded";
+  const sub = ([c.market, R.client.slug].filter(Boolean).join(" · ") || "no client loaded") +
+    " · " + BUILD;
   document.getElementById("clientName").textContent = name;
   document.getElementById("clientSub").textContent = sub;
 }
