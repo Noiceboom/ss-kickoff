@@ -279,12 +279,30 @@ const RENAMES = [
   ["company", "email", "leadEmail"],   // b3: "where leads land" split from contact email
 ];
 
+/**
+ * Fields cut from a screen. Their values would otherwise sit invisibly in
+ * state forever, riding every share link and every export.
+ */
+const REMOVED = [
+  ["goals", "cadence"],      // b8: reporting cadence dropped
+  ["goals", "scoreboard"],   // b8
+  ["goals", "whoElse"],      // b8
+  ["goals", "fireUs"],       // b8
+];
+
 function migrate(state) {
   for (const [mod, from, to] of RENAMES) {
     const m = state.m[mod];
     if (!m || m[from] === undefined) continue;
     if (m[to] === undefined || m[to] === "") m[to] = m[from];
     delete m[from];
+  }
+  for (const [mod, key] of REMOVED) {
+    const m = state.m[mod];
+    if (m && m[key] !== undefined) delete m[key];
+  }
+  for (const mod of Object.keys(state.m)) {
+    if (!Object.keys(state.m[mod]).length) delete state.m[mod];
   }
   return state;
 }

@@ -372,6 +372,26 @@ for (const m of MODULES) {
   }
 }
 
+{
+  // Cut fields must not linger in saved sessions or share links.
+  const stale = S.fresh();
+  stale.m.goals = { revNow: "180000", cadence: "weekly", fireUs: "Three months of nothing", whoElse: "His wife" };
+  const cleaned = S.validate(JSON.parse(JSON.stringify(stale)));
+  for (const gone of ["cadence", "fireUs", "whoElse", "scoreboard"]) {
+    if (cleaned.m.goals && cleaned.m.goals[gone] !== undefined) {
+      fail(`removed field "${gone}" survived migration — it would ride every share link`);
+    }
+  }
+  if (!cleaned.m.goals || cleaned.m.goals.revNow !== "180000") fail("migration dropped a live field");
+
+  // a module left with nothing after pruning should not keep an empty branch
+  const onlyStale = S.fresh();
+  onlyStale.m.goals = { fireUs: "x" };
+  if (S.validate(JSON.parse(JSON.stringify(onlyStale))).m.goals) {
+    fail("pruning left an empty module branch behind");
+  }
+}
+
 /* ── report ───────────────────────────────────────────── */
 
 for (const w of warns) console.log("WARN  " + w);

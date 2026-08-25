@@ -38,14 +38,6 @@ const GOOD_LEAD = [
   { value: "form", label: "A form fill counts too" },
 ];
 
-const CADENCE = [
-  { value: "weekly", label: "Weekly call" },
-  { value: "biweekly", label: "Every other week" },
-  { value: "monthly", label: "Monthly report" },
-  { value: "async", label: "Message me, don't meet me" },
-  { value: "exception", label: "Only when something's wrong" },
-];
-
 const BUDGET_FLEX = [
   { value: "", label: "—" },
   { value: "fixed", label: "Fixed — that's the ceiling" },
@@ -167,24 +159,6 @@ export default {
         chipGroup(ID, "goodLead", "What counts as a good lead", s.goodLead, GOOD_LEAD, {
           help: "The single most argued-about definition in this business. Settle it now and the reporting never becomes a fight.",
         }) +
-        chipGroup(ID, "cadence", "How they want to hear from us", s.cadence, CADENCE, {
-          help: "Match this and half the relationship problems never happen.",
-        }) +
-        '<div class="fields two" style="margin-top:22px">' +
-          field(ID, "scoreboard", "What number do they check first?", v("scoreboard"), {
-            placeholder: "Calls booked this week",
-            help: "Whatever they open the dashboard for is the real KPI, whatever they said above.",
-          }) +
-          field(ID, "whoElse", "Who else is judging this?", v("whoElse"), {
-            placeholder: "His wife does the books",
-            help: "There's usually one more person with an opinion. Find them now.",
-          }) +
-          field(ID, "fireUs", "What would make them fire us?", v("fireUs"), {
-            type: "longtext", wide: true,
-            placeholder: "Three months of no calls. Or surprises on the invoice.",
-            help: "Ask it plainly. The answer is worth more than anything else on this screen.",
-          }) +
-        "</div>" +
       "</div>" +
 
       '<div class="card">' +
@@ -298,10 +272,6 @@ export default {
     put("Horizon", s.horizon);
     put("Matters most", label(PRIORITIES, s.priority));
     put("A good lead is", label(GOOD_LEAD, s.goodLead));
-    put("Reporting cadence", label(CADENCE, s.cadence));
-    put("Checks first", s.scoreboard);
-    put("Also judging this", s.whoElse);
-    put("Would fire us over", s.fireUs);
     put("Spare capacity", filled(s.capacity) ? s.capacity + " more jobs / week" : "");
     put("Breaks first", label(CONSTRAINTS, s.capacityBlock));
     put("Winning in 90 days", s.win90);
@@ -318,9 +288,6 @@ export default {
     }
     if (!filled(s.goodLead)) {
       open.push({ what: "Definition of a good lead", detail: "Unsettled — this is what reporting arguments are made of" });
-    }
-    if (!filled(s.fireUs)) {
-      open.push({ what: "What would make them fire us", detail: "Never asked — worth a follow-up call" });
     }
     if (s.budgetFlex === "unsure") {
       open.push({ what: "Budget flexibility", detail: "They weren't sure whether the number can move" });
