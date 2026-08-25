@@ -967,9 +967,13 @@ function migrateRankToPriority(state, key, order) {
   if (Object.keys(prio).length) m.prio = prio;
 }
 
-/** Notes from the two deleted rank screens, folded into their survivors. */
+/** Notes from deleted screens, folded into whatever survives them. */
 function migrateRankNotes(state) {
-  for (const [from, to] of [["servicesRank", "services"], ["locationsRank", "locations"]]) {
+  for (const [from, to] of [
+    ["servicesRank", "services"],
+    ["locationsRank", "locations"],
+    ["constraints", "brand"],
+  ]) {
     const key = from + ":" + PAGE;
     const note = state.notes[key];
     if (!note) continue;

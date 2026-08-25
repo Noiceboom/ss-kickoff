@@ -1145,6 +1145,55 @@ for (const m of MODULES) {
   }
 }
 
+{
+  // ── brand ──
+  if (MODULES.some((m) => m.id === "constraints")) fail("the constraints screen is still registered");
+  const brandMod = MODULES.find((m) => m.id === "brand");
+  if (!brandMod) fail("the brand module is missing");
+  else {
+    if (brandMod.nav !== "Brand") fail(`brand nav is "${brandMod.nav}", expected "Brand"`);
+    const html = brandMod.render(ctxFor(bfp, S.fresh()));
+    for (const gone of ["Google reviews", "Guarantees", "Warranty terms", "Offers financing", "USP"]) {
+      if (html.indexOf(gone) > -1) fail(`the proof half is still on the brand screen: "${gone}"`);
+    }
+    if ((html.match(/data-scale-field=/g) || []).length < 5) fail("the tone scales are missing");
+    if (html.indexOf('data-putfile="brand|logoFile"') < 0) fail("the logo upload is missing");
+    // the guide upload only appears once they say they have one
+    const withGuide = S.fresh();
+    withGuide.m.brand = { guideStatus: "yes" };
+    if (brandMod.render(ctxFor(bfp, withGuide)).indexOf('data-putfile="brand|guideFile"') < 0) {
+      fail("the brand-guide upload did not appear when they said they have one");
+    }
+
+    // scales must start unset — a scale sitting at centre reads as an answer
+    if ((html.match(/class="f sc unset"/g) || []).length < 5) fail("tone scales did not start unset");
+
+    // state holds metadata, never bytes
+    const withFile = S.fresh();
+    withFile.m.brand = { logoFile: { name: "acme-logo.svg", type: "image/svg+xml", size: 114, at: 1 } };
+    const sum = brandMod.summary(ctxFor(bfp, withFile));
+    const fileRow = (sum.rows || []).find((r) => r[0] === "Logo file");
+    if (!fileRow || fileRow[1].indexOf("acme-logo.svg") < 0) fail("the readout lost the uploaded file's name");
+
+    // tone lands in the brief as a table
+    const withTone = S.fresh();
+    withTone.m.brand = { tone_formal: "100", tone_premium: "90" };
+    const toneSum = brandMod.summary(ctxFor(bfp, withTone));
+    if (!toneSum.table || toneSum.table.body.length !== 2) fail("tone did not reach the readout as a table");
+    else if (toneSum.table.body[0][2] !== "Conversational") {
+      fail(`a scale at 100 read as "${toneSum.table.body[0][2]}"`);
+    }
+  }
+
+  // notes from the deleted constraints screen must not orphan
+  const cn = S.validate({
+    v: 2, step: "brand", m: {}, order: {}, skipped: [],
+    notes: { "constraints:_page": "Won't touch shared leads." },
+  });
+  if (cn.notes["constraints:_page"]) fail("the constraints note was left orphaned");
+  if (!/shared leads/.test(cn.notes["brand:_page"] || "")) fail("the constraints note was dropped entirely");
+}
+
 /* ── report ───────────────────────────────────────────── */
 
 for (const w of warns) console.log("WARN  " + w);

@@ -202,11 +202,20 @@ export function cityCandidates(seg) {
   if (!raw) return [];
   const tokens = raw.split(/\s+/);
   const out = [];
-  const max = Math.min(4, tokens.length);
+  // Seven, not four: "The University of Virginia's College at Wise" is a
+  // real place, and "The Village of Indian Hill" has six thousand people.
+  const max = Math.min(7, tokens.length);
   for (let n = max; n >= 1; n--) {
     const win = tokens.slice(tokens.length - n);
-    // A window carrying a house number, a unit or a suite value is not a city
-    if (win.some((t) => /\d/.test(t) || UNIT_MARKERS.has(clean(t)) || clean(t).charAt(0) === "#")) continue;
+    if (win.some((t, i) => {
+      if (/\d/.test(t)) return true;                      // house or suite number
+      const c = clean(t);
+      if (c.charAt(0) === "#") return true;
+      // A unit word only disqualifies the window when a unit VALUE follows
+      // it. Otherwise "Ste." is Sainte, not Suite — Sault Ste. Marie and
+      // Ste. Genevieve are cities, not suite numbers.
+      return UNIT_MARKERS.has(c) && i + 1 < win.length && /\d/.test(win[i + 1]);
+    })) continue;
     out.push(win.join(" "));
   }
   if (!out.length) out.push(raw);

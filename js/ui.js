@@ -318,6 +318,74 @@ export function slider(mod, key, label, value, opts) {
   );
 }
 
+/**
+ * A bipolar scale — two words, a track between them, no number.
+ *
+ * "How formal?" has no units, so a numeric readout would be false
+ * precision. What matters is which end they lean towards and how hard, so
+ * the readout is the nearer word.
+ *
+ * Starts UNSET like every slider here: an untouched scale sitting at dead
+ * centre would read as a considered "balanced" answer.
+ */
+export function scale(mod, key, label, value, left, right, opts) {
+  const o = opts || {};
+  const name = esc(mod) + "|" + esc(key);
+  const set = filled(value);
+  const v = set ? Math.max(0, Math.min(100, Number(value))) : 50;
+  const word = !set ? "&mdash;"
+    : v <= 15 ? esc(left)
+    : v <= 40 ? "Leans " + esc(left).toLowerCase()
+    : v < 60 ? "Right down the middle"
+    : v < 85 ? "Leans " + esc(right).toLowerCase()
+    : esc(right);
+
+  return (
+    '<div class="f sc' + (set ? "" : " unset") + '" data-scwrap="' + name + '">' +
+      '<div class="schead"><label>' + esc(label) + "</label>" +
+        '<span class="scval">' + word + "</span></div>" +
+      '<input type="range" class="slrange scrange" data-scale-field="' + name + '" ' +
+        'min="0" max="100" step="5" value="' + v + '" aria-label="' + esc(label) + '">' +
+      '<div class="slscale"><span>' + esc(left) + "</span><span>" + esc(right) + "</span></div>" +
+      (o.help ? '<div class="help">' + esc(o.help) + "</div>" : "") +
+    "</div>"
+  );
+}
+
+/**
+ * File upload with a preview. The bytes go to IndexedDB, never to state —
+ * see assets.js for why that separation is load-bearing.
+ */
+export function upload(mod, key, label, meta, opts) {
+  const o = opts || {};
+  const name = esc(mod) + "|" + esc(key);
+  const has = meta && meta.name;
+
+  const body = has
+    ? '<div class="upfile">' +
+        (o.previewUrl
+          ? '<img class="upthumb" src="' + esc(o.previewUrl) + '" alt="">'
+          : '<div class="upicon">' + (o.icon || ICON.check) + "</div>") +
+        '<div class="upmeta"><div class="upname">' + esc(meta.name) + "</div>" +
+          '<div class="upsize">' + esc(o.sizeLabel || "") + "</div></div>" +
+        '<button class="btn ghost xs" data-getfile="' + name + '">Download</button>' +
+        '<button class="btn ghost xs" data-delfile="' + name + '">Remove</button>' +
+      "</div>"
+    : '<label class="updrop">' +
+        '<input type="file" data-putfile="' + name + '"' +
+          (o.accept ? ' accept="' + esc(o.accept) + '"' : "") + ">" +
+        '<span class="upcta">' + esc(o.cta || "Choose a file") + "</span>" +
+        (o.hint ? '<span class="uphint">' + esc(o.hint) + "</span>" : "") +
+      "</label>";
+
+  return (
+    '<div class="f wide up">' +
+      "<label>" + esc(label) + "</label>" + body +
+      (o.help ? '<div class="help">' + esc(o.help) + "</div>" : "") +
+    "</div>"
+  );
+}
+
 /** A live-computed line the module can refresh without a re-render. */
 export function derived(key, initial) {
   return '<div class="derived" data-derived="' + esc(key) + '">' + esc(initial || "") + "</div>";

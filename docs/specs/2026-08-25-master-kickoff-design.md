@@ -248,8 +248,7 @@ not cosmetic.
 | 04 | `competitors` | Competitors | Rows: name, domain, why they win, threat level |
 | 05 | `services` | Services | Industry picker, **multi-select** (16 trades) — plenty of companies run two; the trade's full taxonomy merged with the scrape, which arrives pre-ticked; High/Med/Low per service; sub-service chips; per-item notes; **build order assembled from the priority bands on the same screen**, draggable within each band |
 | 07 | `locations` | Cities | Radius search off a base city against a bundled Census dataset; pick + High/Med/Low; **do-not-market exclusions** as a first-class state; build order on the same screen, draggable within a band |
-| 09 | `constraints` | Constraints & non-negotiables | Seasonal blackouts, capacity limits, compliance/franchise rules, never-say phrases. **Cross-references** what was unchecked in 05 and 07. |
-| 10 | `brand` | Brand, voice & proof | Logo status, colors, photo status, review count/rating, awards, guarantees, financing, warranty, USP rows, say-this / never-say |
+| 09 | `brand` | Brand | Logo status **+ file upload**, brand guide **+ upload**, colors, fonts, photo library; six **bipolar tone scales**; words to use and never use. Uploads go to IndexedDB — state carries metadata only, never bytes |
 | 11 | `access` | Access & credentials | **Status tracker only.** Fixed rows + add-your-own. Per row: owner, status, how-to-request (constrained select). |
 | 12 | `readout` | Readout & exports | Client recap / Internal brief / Raw. Copy, print, JSON + CSV. |
 

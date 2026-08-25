@@ -8,12 +8,13 @@ import * as rank from "./rank.js";
 import MODULES from "./modules/index.js";
 import { resolveTrade } from "./trades/index.js";
 import * as places from "./places.js";
+import * as assets from "./assets.js";
 
 /* ── constants ────────────────────────────────────────── */
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b27";
+export const BUILD = "b28";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -266,6 +267,7 @@ function render() {
   renderHeader();
   document.querySelectorAll("[data-slrange]").forEach(paintTrack);
   document.querySelectorAll("[data-filter]").forEach((el) => { if (el.value) applyFilter(el); });
+  refreshPreviews();
   refreshDerived();
   restoreFocus(f);
 }
@@ -445,7 +447,21 @@ document.addEventListener("input", (e) => {
   const el = e.target;
   if (!el || !el.getAttribute) return;
 
-  if (el.getAttribute("data-slrange")) { onSliderDrag(el); return; }
+  if (el.getAttribute("data-slrange") && !el.getAttribute("data-scale-field")) { onSliderDrag(el); return; }
+
+  const sc = el.getAttribute("data-scale-field");
+  if (sc) {
+    const [mod, key] = sc.split("|");
+    S.setField(R.state, mod, key, el.value);
+    const wrap = el.closest(".sc");
+    if (wrap) {
+      wrap.classList.remove("unset");
+      const out = wrap.querySelector(".scval");
+      if (out) out.textContent = scaleWord(el, wrap);
+    }
+    queueSave();
+    return;
+  }
 
   const f = el.getAttribute("data-f");
   if (f) {
@@ -524,6 +540,7 @@ document.addEventListener("blur", (e) => {
 // selects fire change, not input
 document.addEventListener("change", (e) => {
   const el = e.target;
+  if (el && el.getAttribute && el.getAttribute("data-putfile")) { putFile(el); return; }
   if (!el || el.tagName !== "SELECT") return;
   if (el.getAttribute("data-f") || el.getAttribute("data-row")) {
     el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -538,6 +555,14 @@ document.addEventListener("click", (e) => {
   let el;
 
   if ((el = t.closest("[data-go]"))) { goto(el.getAttribute("data-go")); return; }
+
+  if ((el = t.closest("[data-getfile]"))) {
+    const [, key] = el.getAttribute("data-getfile").split("|");
+    assets.download(R.slug, key).then((ok) => { if (!ok) toast("That file isn't on this machine"); });
+    return;
+  }
+
+  if ((el = t.closest("[data-delfile]"))) { dropFile(el.getAttribute("data-delfile")); return; }
 
   if ((el = t.closest("[data-skip]"))) {
     S.toggleSkip(R.state, el.getAttribute("data-skip"));
@@ -767,6 +792,73 @@ function reorderFor(key, fromId, toId) {
     return true;
   }
   return rank.moveTo(R.state, key, itemsFor(key), fromId, toId);
+}
+
+/**
+ * The word under a bipolar scale, updated in place. Re-rendering mid-drag
+ * would drop the drag.
+ */
+function scaleWord(range, wrap) {
+  const ends = wrap.querySelectorAll(".slscale span");
+  const left = ends[0] ? ends[0].textContent : "";
+  const right = ends[1] ? ends[1].textContent : "";
+  const v = Number(range.value);
+  if (v <= 15) return left;
+  if (v <= 40) return "Leans " + left.toLowerCase();
+  if (v < 60) return "Right down the middle";
+  if (v < 85) return "Leans " + right.toLowerCase();
+  return right;
+}
+
+/* ── file uploads ─────────────────────────────────────── */
+//
+// Bytes go to IndexedDB; state keeps only the metadata. Preview URLs live
+// in transient and are revoked on replacement, so a long call doesn't leak
+// object URLs.
+
+async function refreshPreviews() {
+  const mod = moduleAt(R.state.step);
+  if (mod.id !== "brand") return;
+  const t = R.transient.brand || (R.transient.brand = {});
+  let changed = false;
+  for (const [field, urlKey] of [["logoFile", "logoUrl"], ["guideFile", "guideUrl"]]) {
+    const meta = S.getField(R.state, "brand", field, null);
+    if (!meta || !assets.isImage(meta.type)) {
+      if (t[urlKey]) { URL.revokeObjectURL(t[urlKey]); delete t[urlKey]; changed = true; }
+      continue;
+    }
+    if (t[urlKey + "For"] === meta.name) continue;
+    if (t[urlKey]) URL.revokeObjectURL(t[urlKey]);
+    const hit = await assets.objectUrl(R.slug, field);
+    if (hit) { t[urlKey] = hit.url; t[urlKey + "For"] = meta.name; changed = true; }
+  }
+  if (changed) render();
+}
+
+async function putFile(input) {
+  const [mod, key] = input.getAttribute("data-putfile").split("|");
+  const file = input.files && input.files[0];
+  if (!file) return;
+  try {
+    const meta = await assets.put(R.slug, key, file);
+    S.setField(R.state, mod, key, meta);
+    render(); queueSave();
+    toast("Added " + file.name);
+    refreshPreviews();
+  } catch (e) {
+    toast(e.message || "Could not read that file");
+  }
+}
+
+async function dropFile(name) {
+  const [mod, key] = name.split("|");
+  await assets.remove(R.slug, key);
+  S.setField(R.state, mod, key, "");
+  const t = R.transient.brand;
+  if (t) {
+    for (const k of Object.keys(t)) if (k.indexOf(key.replace("File", "")) === 0) delete t[k];
+  }
+  render(); queueSave();
 }
 
 /* ── radius search ────────────────────────────────────── */
