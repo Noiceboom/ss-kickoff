@@ -983,6 +983,46 @@ function migrateRankNotes(state) {
   }
 }
 
+/**
+ * The brand chips used to store their own labels; they store short codes
+ * now. Without this a saved "Have vector" matches no chip and the answer
+ * silently disappears.
+ */
+const CHIP_VALUES = {
+  brand: {
+    logoStatus: {
+      "Have vector": "vector", "Have raster only": "raster",
+      "Need one": "none", "Needs a redesign": "redesign",
+    },
+    photoStatus: {
+      "Professional shoot": "pro", "Phone pics": "phone",
+      "Stock only": "stock", "Nothing": "none",
+    },
+  },
+};
+
+function migrateChipValues(state) {
+  for (const mod of Object.keys(CHIP_VALUES)) {
+    const m = state.m[mod];
+    if (!m) continue;
+    for (const key of Object.keys(CHIP_VALUES[mod])) {
+      const map = CHIP_VALUES[mod][key];
+      if (typeof m[key] === "string" && map[m[key]]) m[key] = map[m[key]];
+    }
+  }
+}
+
+/**
+ * Screens that have been deleted, and where their step should land. Falling
+ * back to the first screen would silently throw someone back to the intro
+ * when they reopen a saved session.
+ */
+export const REPLACED_BY = {
+  constraints: "brand",
+  servicesRank: "services",
+  locationsRank: "locations",
+};
+
 function migrate(state) {
   for (const [mod, from, to] of RENAMES) {
     const m = state.m[mod];
@@ -992,6 +1032,8 @@ function migrate(state) {
   }
   migrateServiceScoping(state.m.services);
   migrateRankNotes(state);
+  migrateChipValues(state);
+  if (REPLACED_BY[state.step]) state.step = REPLACED_BY[state.step];
   // Runs exactly once. Without the stamp, clearing every priority on the
   // new screen leaves an order behind that the next load reads as legacy
   // and rebuilds from — so the priorities someone deliberately cleared

@@ -1194,6 +1194,45 @@ for (const m of MODULES) {
   if (!/shared leads/.test(cn.notes["brand:_page"] || "")) fail("the constraints note was dropped entirely");
 }
 
+/* ── saved sessions survive the screens changing ───────── */
+{
+  const brandMod = MODULES.find((m) => m.id === "brand");
+
+  // chips used to store their own labels; a saved answer must survive the swap
+  const legacy = S.validate({
+    v: 2, step: "constraints", order: {}, skipped: [], notes: {},
+    m: { brand: { logoStatus: "Have raster only", photoStatus: "Stock only" } },
+  });
+  if (legacy.m.brand.logoStatus !== "raster") {
+    fail(`a saved logo chip read back as "${legacy.m.brand.logoStatus}", not "raster"`);
+  }
+  if (legacy.m.brand.photoStatus !== "stock") {
+    fail(`a saved photo chip read back as "${legacy.m.brand.photoStatus}", not "stock"`);
+  }
+
+  // reopening on a deleted screen must land on its successor, not the intro
+  if (legacy.step !== "brand") {
+    fail(`a session saved on constraints reopened on "${legacy.step}", not brand`);
+  }
+
+  // the logo warning must not depend on an unrelated answer
+  const planned = S.fresh();
+  planned.m.brand = { logoStatus: "none", photoPlan: "owner shoots the next three jobs" };
+  const opens = (brandMod.summary(ctxFor(bfp, planned)).open || []).map((o) => o.what);
+  if (!opens.includes("Logo")) {
+    fail("filling in the photo plan silently suppressed the they-need-a-logo warning");
+  }
+}
+
+/* ── the CSP has to permit what the app actually renders ── */
+{
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const csp = (html.match(/Content-Security-Policy"[^>]*content="([^"]+)"/) || [])[1] || "";
+  const img = (csp.match(/img-src ([^;]+)/) || [])[1] || "";
+  // logo and brand-guide previews are object URLs off IndexedDB
+  if (!/\bblob:/.test(img)) fail(`img-src is "${img.trim()}" — blob: previews will be blocked`);
+}
+
 /* ── report ───────────────────────────────────────────── */
 
 for (const w of warns) console.log("WARN  " + w);

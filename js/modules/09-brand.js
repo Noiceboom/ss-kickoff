@@ -211,7 +211,7 @@ export default {
     if (s.logoStatus === "raster" && !s.logoFile) {
       open.push({ what: "Logo", detail: "Raster only and nothing uploaded — we'll need the original before anything goes to print" });
     }
-    if ((s.logoStatus === "none" || s.logoStatus === "redesign") && !filled(s.photoPlan)) {
+    if (s.logoStatus === "none" || s.logoStatus === "redesign") {
       open.push({ what: "Logo", detail: "They need one made — scope it before the site build starts" });
     }
     if (s.photoStatus === "stock" || s.photoStatus === "none") {

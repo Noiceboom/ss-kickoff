@@ -14,7 +14,7 @@ import * as assets from "./assets.js";
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b28";
+export const BUILD = "b29";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -825,12 +825,18 @@ async function refreshPreviews() {
     const meta = S.getField(R.state, "brand", field, null);
     if (!meta || !assets.isImage(meta.type)) {
       if (t[urlKey]) { URL.revokeObjectURL(t[urlKey]); delete t[urlKey]; changed = true; }
+      // the cache marker has to go too, or re-uploading a file with the same
+      // name after a removal is treated as already-shown and renders nothing
+      delete t[urlKey + "For"];
       continue;
     }
-    if (t[urlKey + "For"] === meta.name) continue;
+    // Keyed on more than the name: replacing a logo with a different file
+    // that happens to share its filename must still refresh the preview.
+    const stamp = meta.name + "|" + meta.size + "|" + meta.at;
+    if (t[urlKey + "For"] === stamp) continue;
     if (t[urlKey]) URL.revokeObjectURL(t[urlKey]);
     const hit = await assets.objectUrl(R.slug, field);
-    if (hit) { t[urlKey] = hit.url; t[urlKey + "For"] = meta.name; changed = true; }
+    if (hit) { t[urlKey] = hit.url; t[urlKey + "For"] = stamp; changed = true; }
   }
   if (changed) render();
 }

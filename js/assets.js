@@ -71,10 +71,11 @@ export async function put(slug, name, file) {
     throw new Error(`That file is ${humanSize(file.size)}. The limit is ${MAX_MB}MB.`);
   }
   const buf = await file.arrayBuffer();
-  await tx("readwrite", (store) =>
-    store.put({ name: file.name, type: file.type, size: file.size, at: Date.now(), buf }, key(slug, name))
-  );
-  return { name: file.name, type: file.type, size: file.size, at: Date.now() };
+  // Stamped once: the preview cache keys on `at`, so the copy in state and
+  // the copy in the store have to be the same number.
+  const meta = { name: file.name, type: file.type, size: file.size, at: Date.now() };
+  await tx("readwrite", (store) => store.put({ ...meta, buf }, key(slug, name)));
+  return meta;
 }
 
 export async function get(slug, name) {
