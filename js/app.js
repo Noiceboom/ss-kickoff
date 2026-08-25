@@ -11,7 +11,7 @@ import MODULES from "./modules/index.js";
 
 // Bump on every deploy. Shown in the header so a stale browser cache is
 // visible at a glance instead of looking like the change never shipped.
-export const BUILD = "b13";
+export const BUILD = "b14";
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -591,7 +591,9 @@ document.addEventListener("click", (e) => {
   // ── list grids ──
   if ((el = t.closest("[data-svc]"))) {
     const [id, tradeOnly] = el.getAttribute("data-svc").split("|");
-    S.toggleService(R.state, id, tradeOnly === "1");
+    const mod = moduleAt("services");
+    const meta = mod.serviceMeta ? mod.serviceMeta(ctx(), id) : null;
+    S.toggleService(R.state, id, tradeOnly === "1", meta);
     render(); queueSave(); return;
   }
 

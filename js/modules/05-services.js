@@ -228,6 +228,12 @@ export default {
    * uses this to reorder within a band without needing to know how the
    * buckets are assembled.
    */
+  /** Name and subs for one service, so app.js can snapshot it on tick. */
+  serviceMeta(ctx, id) {
+    const hit = serviceUniverse(ctx.state, ctx.client, tradeServices(ctx)).find((x) => x.id === id);
+    return hit ? { name: hit.name, subs: hit.subs.map((s) => s.name) } : null;
+  },
+
   bucketIds(ctx, bucketKey) {
     const b = servicesByPriority(ctx.state, ctx.client, tradeServices(ctx));
     const key = bucketKey === "none" ? "" : bucketKey;
@@ -253,7 +259,8 @@ export default {
 
     const rows = [];
     if (trade) rows.push(["Industry", trade.label]);
-    rows.push(["Services selected", ordered.length + " of " + all.length]);
+    const selected = all.filter((x) => x.on);
+    rows.push(["Services selected", selected.length + " of " + all.length]);
     if (b.high.length) rows.push(["High priority", b.high.map((x) => x.name).join(", ")]);
     if (b.med.length) rows.push(["Medium priority", b.med.map((x) => x.name).join(", ")]);
     if (b.low.length) rows.push(["Low priority", b.low.map((x) => x.name).join(", ")]);

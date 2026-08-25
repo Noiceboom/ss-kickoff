@@ -563,6 +563,49 @@ for (const m of MODULES) {
     fail("could not tick a taxonomy-only service");
   }
 
+  // A ticked taxonomy service must survive a change of trade — it carries
+  // a priority and a note that would vanish with it.
+  const svcMod = MODULES.find((m) => m.id === "services");
+  const sw = S.fresh();
+  sw.m.services = { trade: "plumbing" };
+  const meta = svcMod.serviceMeta(ctxFor(bfp, sw), "backflow-testing");
+  if (!meta || !meta.name) fail("serviceMeta() returned nothing for a taxonomy service");
+  S.toggleService(sw, "backflow-testing", true, meta);
+  S.setPriority(sw, "backflow-testing", "high");
+  sw.m.services.trade = "hvac";
+  const survivor = S.onServices(sw, bfp, T.getTrade("hvac").services)
+    .find((x) => x.id === "backflow-testing");
+  if (!survivor) fail("a ticked taxonomy service vanished when the trade changed");
+  else {
+    if (survivor.name !== meta.name) fail("the surviving service lost its name");
+    if (survivor.prio !== "high") fail("the surviving service lost its priority");
+  }
+  S.toggleService(sw, "backflow-testing", true, null);
+  if (sw.m.services.snap) fail("unticking left the snapshot behind");
+
+  // A sub-service the scrape found but the taxonomy doesn't name must not
+  // be replaced by the taxonomy's list.
+  const oddClient = JSON.parse(JSON.stringify(bfp));
+  oddClient.services = [{ id: "drains", name: "Drains", subs: ["Drain Cleaning", "Grease Traps"], hasPage: true, verify: null }];
+  const merged = S.serviceUniverse(S.fresh(), oddClient, plumbing).find((x) => x.id === "drains");
+  const subNames = merged.subs.map((x) => x.name);
+  if (subNames.indexOf("Grease Traps") < 0) fail("a scraped sub-service was dropped by the taxonomy merge");
+  if (subNames.indexOf("Hydrojetting") < 0) fail("the taxonomy subs were lost in the merge");
+  if (new Set(subNames).size !== subNames.length) fail("the sub merge produced duplicates");
+
+  // Unprioritized services must not appear in the build order with a rank.
+  const bo = S.fresh();
+  bo.m.services = { trade: "plumbing" };
+  S.setPriority(bo, "drains", "high");
+  const built = S.serviceOrder(bo, bfp, plumbing);
+  if (built.some((x) => !x.prio)) fail("an unranked service appeared in the build order");
+  if (built.length !== 1) fail(`build order has ${built.length} entries, expected only the 1 prioritized`);
+  const boSum = svcMod.summary(ctxFor(bfp, bo));
+  const countRow = (boSum.rows || []).find((r) => r[0] === "Services selected");
+  if (!countRow || countRow[1].indexOf("20 of") !== 0) {
+    fail(`selected count reads "${countRow && countRow[1]}" — it must count selections, not priorities`);
+  }
+
   // the old rank screen is gone and nothing still points at it
   if (MODULES.some((m) => m.id === "servicesRank")) fail("servicesRank module is still registered");
 }

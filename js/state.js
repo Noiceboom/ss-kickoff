@@ -216,6 +216,7 @@ export function svcState(state) {
     off: Array.isArray(s.off) ? s.off : [],
     on: Array.isArray(s.on) ? s.on : [],
     prio: s.prio && typeof s.prio === "object" ? s.prio : EMPTY,
+    snap: s.snap && typeof s.snap === "object" ? s.snap : EMPTY,
     subsOff: s.subsOff && typeof s.subsOff === "object" ? s.subsOff : EMPTY,
     added: Array.isArray(s.added) ? s.added : [],
   };
@@ -247,12 +248,23 @@ export function serviceUniverse(state, client, tradeServices) {
   const scraped = new Map((client.services || []).map((x) => [x.id, x]));
   for (const t of tradeServices || []) {
     const hit = scraped.get(t.id);
-    // A scraped match keeps the taxonomy's sub list but inherits the
-    // page/verify flags the scrape found.
-    push(hit ? { ...t, hasPage: hit.hasPage, verify: hit.verify } : t, hit ? "both" : "trade");
+    if (!hit) { push(t, "trade"); continue; }
+    // Union the sub lists. Taking the taxonomy's alone would silently drop
+    // a sub-service the client actually has a page for just because the
+    // industry list doesn't happen to name it.
+    const subs = (t.subs || []).slice();
+    for (const sub of hit.subs || []) if (subs.indexOf(sub) < 0) subs.push(sub);
+    push({ ...t, subs: subs, hasPage: hit.hasPage, verify: hit.verify }, "both");
   }
   for (const c of client.services || []) push(c, "scrape");
   for (const a of v.added) push(a, "added");
+
+  // A taxonomy service ticked under one trade would otherwise disappear
+  // the moment the trade changed, taking its priority and note with it.
+  // The snapshot taken at tick-time keeps it in the list.
+  for (const id of v.on) {
+    if (!seen.has(id) && v.snap[id]) push({ id: id, ...v.snap[id] }, "trade");
+  }
 
   return out.map((it) => ({
     ...it,
@@ -282,20 +294,42 @@ export function servicesByPriority(state, client, tradeServices) {
   return buckets;
 }
 
-/** Flat build order: every High, then every Medium, then every Low. */
+/**
+ * Flat build order: every High, then Medium, then Low.
+ *
+ * Unprioritized services are NOT included. Appending them would print a
+ * rank next to a decision nobody made — "#7" reads as agreed, not as
+ * "we never got to it". They surface as an open item instead.
+ */
 export function serviceOrder(state, client, tradeServices) {
   const b = servicesByPriority(state, client, tradeServices);
-  return b.high.concat(b.med, b.low, b[""]);
+  return b.high.concat(b.med, b.low);
 }
 
-export function toggleService(state, id, isTradeOnly) {
+/**
+ * @param meta {name, subs} — snapshotted for taxonomy-only services so a
+ *   later change of trade can't make a ticked service vanish.
+ */
+export function toggleService(state, id, isTradeOnly, meta) {
   const s = ensure(state, "services");
   if (!Array.isArray(s.off)) s.off = [];
   if (!Array.isArray(s.on)) s.on = [];
   const list = isTradeOnly ? s.on : s.off;
   const i = list.indexOf(id);
-  if (i > -1) list.splice(i, 1);
-  else list.push(id);
+
+  if (i > -1) {
+    list.splice(i, 1);
+    if (isTradeOnly && s.snap) {
+      delete s.snap[id];
+      if (!Object.keys(s.snap).length) delete s.snap;
+    }
+  } else {
+    list.push(id);
+    if (isTradeOnly && meta && meta.name) {
+      if (!s.snap || typeof s.snap !== "object") s.snap = {};
+      s.snap[id] = { name: meta.name, subs: Array.isArray(meta.subs) ? meta.subs : [] };
+    }
+  }
 }
 
 export function setPriority(state, id, value) {
