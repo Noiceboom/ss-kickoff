@@ -35,6 +35,16 @@ const warn = (m) => warns.push(m);
 const S = await import(url("js/state.js"));
 const MODULES = (await import(url("js/modules/index.js"))).default;
 
+// Fingerprint the trade taxonomies before anything renders. They are
+// module-level constants shared by every client, so if any code path in
+// this file writes to one, the comparison at the end catches it — a
+// locally-scoped check would silently snapshot an already-polluted array.
+const TRADES_BEFORE = JSON.stringify(
+  (await import(url("js/trades/index.js"))).TRADES.map((t) => ({
+    id: t.id, services: t.services.map((x) => ({ id: x.id, label: x.label, subs: x.subs })),
+  }))
+);
+
 const bfp = JSON.parse(readFileSync(path.join(ROOT, "clients/bfp-kc.json"), "utf8"));
 const tpl = JSON.parse(readFileSync(path.join(ROOT, "clients/template.json"), "utf8"));
 
@@ -768,18 +778,6 @@ for (const m of MODULES) {
     }
   }
 
-  // The taxonomies are module constants. Rendering must never write to them.
-  const roofStorm2 = T.getTrade("roofing").services.find((x) => /Storm Damage/i.test(x.label));
-  const beforeSubs = JSON.stringify(roofStorm2.subs);
-  const purity = S.fresh();
-  purity.m.services = { trades: ["roofing", "restoration"] };
-  for (let i = 0; i < 3; i++) {
-    S.serviceUniverse(purity, emptyClient, [T.getTrade("roofing"), T.getTrade("restoration")]);
-  }
-  if (JSON.stringify(roofStorm2.subs) !== beforeSubs) {
-    fail("building the service list mutated a trade taxonomy — it is shared by every client");
-  }
-
   // Merging a snapshot into a visible row must carry the tick and priority,
   // or the user's own selection silently disappears.
   const carried = S.fresh();
@@ -802,6 +800,17 @@ for (const m of MODULES) {
 
   // the old rank screen is gone and nothing still points at it
   if (MODULES.some((m) => m.id === "servicesRank")) fail("servicesRank module is still registered");
+}
+
+{
+  const after = JSON.stringify(
+    (await import(url("js/trades/index.js"))).TRADES.map((t) => ({
+      id: t.id, services: t.services.map((x) => ({ id: x.id, label: x.label, subs: x.subs })),
+    }))
+  );
+  if (after !== TRADES_BEFORE) {
+    fail("a trade taxonomy was mutated during this run — they are shared by every client");
+  }
 }
 
 /* ── report ───────────────────────────────────────────── */
