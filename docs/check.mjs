@@ -296,16 +296,58 @@ for (const m of MODULES) {
       }
 
       const j = JSON.parse(api.json());
-      if (!j.sections.brand || j.sections.brand.note !== st.notes["brand:_page"]) {
-        fail("JSON export dropped a note-only section");
-      }
-      if (!j.sections.marketing || !j.sections.marketing.skipped || !j.sections.marketing.note) {
+
+      // the payload is a contract — it has to say which one
+      if (j.schema !== "ss-kickoff/1") fail(`JSON export has schema "${j.schema}"`);
+      if (!j.build) fail("JSON export carries no build stamp");
+
+      if (j.notes.brand !== st.notes["brand:_page"]) fail("JSON export dropped a note-only section");
+      if (j.notes.marketing !== st.notes["marketing:_page"]) {
         fail("JSON export dropped the note on a skipped section");
+      }
+      if (!j.skipped.includes("marketing")) fail("JSON export lost which sections were skipped");
+
+      // THE point of the rewrite: keys are state keys, never display labels
+      if (!j.fields.company || j.fields.company.businessName !== "Acme Plumbing") {
+        fail("JSON export is not keyed on state keys — " + JSON.stringify(Object.keys(j.fields.company || {})));
+      }
+      for (const [mod, f] of Object.entries(j.fields)) {
+        for (const k of Object.keys(f)) {
+          // a display label has spaces or a slash in it; a state key never does
+          if (/[ \/]/.test(k)) fail(`JSON field "${mod}.${k}" is a display label, not a state key`);
+        }
+      }
+
+      // entities have to carry the ids the scraper generated
+      const svc = j.services.items;
+      if (!Array.isArray(svc) || !svc.length) fail("JSON export carried no services");
+      else {
+        const scraped = svc.filter((x) => x.foundOnSite);
+        if (!scraped.length) fail("JSON export lost which services came from the scrape");
+        if (svc.some((x) => x.foundOnSite !== (x.source === "both" || x.source === "scrape"))) {
+          fail("foundOnSite disagrees with the source it was derived from");
+        }
+        for (const it of svc.slice(0, 5)) {
+          if (!it.id) fail("a service reached the export with no id");
+          if (!("priority" in it) || !("rank" in it) || !("selected" in it)) {
+            fail(`service "${it.id}" is missing priority/rank/selected`);
+          }
+        }
+        // selected-but-unprioritized used to vanish entirely
+        const on = svc.filter((x) => x.selected);
+        if (!on.length) fail("no selected services reached the export");
+        if (on.every((x) => x.priority)) {
+          // fine — but the shape below is what used to be dropped
+        }
       }
 
       const csv = api.csv();
       if (!csv.includes("the guy who shows up")) fail("CSV export dropped a page note");
       if (csv.split('"').length % 2 !== 1) fail("CSV export has unbalanced quoting");
+      if (!/^"entity","section","id","field","value"/.test(csv)) {
+        fail("CSV export lost its addressable header");
+      }
+      if (!csv.includes('"service","services"')) fail("CSV export carried no service rows");
     } catch (e) {
       fail(`export assertions threw — ${e.message}`);
     }
@@ -1221,6 +1263,92 @@ for (const m of MODULES) {
   const opens = (brandMod.summary(ctxFor(bfp, planned)).open || []).map((o) => o.what);
   if (!opens.includes("Logo")) {
     fail("filling in the photo plan silently suppressed the they-need-a-logo warning");
+  }
+}
+
+/* ── the printed document is the client artifact ───────── */
+{
+  const readout = MODULES.find((m) => m.id === "readout");
+  const st = S.fresh();
+  st.notes["brand:_page"] = 'Calls himself "the guy who shows up"';
+  st.notes["marketing:_page"] = "Old agency still owns the ad account";
+  st.m.company = { businessName: "Acme Plumbing" };
+
+  const slice = (html) => {
+    const at = html.indexOf('<div class="printdoc">');
+    return at < 0 ? "" : html.slice(at);
+  };
+
+  // it prints the same thing from every tab — the whole point of the change
+  for (const tab of ["recap", "brief", "raw"]) {
+    const html = readout.render({ ...ctxFor(bfp, st), num: "09", transient: { readout: { tab } } });
+    const doc = slice(html);
+    if (!doc) { fail(`no printable document rendered on the "${tab}" tab`); continue; }
+
+    for (const secret of ["the guy who shows up", "Old agency still owns"]) {
+      if (doc.includes(secret)) fail(`the printed document leaked a call note from the "${tab}" tab`);
+    }
+    if (doc.indexOf("Acme Plumbing") === -1) {
+      fail(`the printed document lost the client's own answers on the "${tab}" tab`);
+    }
+  }
+
+  // and only client-worded asks reach it, never the internal detail
+  const bare = S.fresh();
+  // a state that actually triggers the asks below: a raster logo with no
+  // file, no photography, and a company with no named contact
+  bare.m.brand = { logoStatus: "raster", photoStatus: "none" };
+  bare.m.company = { businessName: "Acme Plumbing" };
+  const doc = slice(readout.render({ ...ctxFor(bfp, bare), num: "09", transient: {} }));
+  if (doc.indexOf("the copywriter is guessing") > -1) {
+    fail("the printed document used the internal wording of an open item");
+  }
+  // EVERY ask has to reach the document — checking that "some ask" made it
+  // passes even when a specific one has been dropped.
+  const asks = [];
+  for (const m of MODULES) {
+    if (!m.summary) continue;
+    let sum = null;
+    try { sum = m.summary(ctxFor(bfp, bare)); } catch (e) { continue; }
+    for (const o of (sum && sum.open) || []) if (o.ask) asks.push([m.id, o.ask]);
+  }
+  if (asks.length < 3) fail(`only ${asks.length} open items carry client-facing wording`);
+
+  // Pinned. Deriving the expectation from the same summaries that produce it
+  // cannot catch a DELETED ask — both sides vanish together. These name the
+  // asks the client document exists to make.
+  const MUST_ASK = [
+    { mod: "brand", match: /logo file/i, why: "raster logo with nothing uploaded" },
+    { mod: "brand", match: /photos of your trucks/i, why: "no real photography" },
+    { mod: "access", match: /access link/i, why: "Leadsie link not sent" },
+    { mod: "company", match: /who we should be speaking to/i, why: "no point of contact" },
+  ];
+  for (const want of MUST_ASK) {
+    const hit = asks.some(([mod, ask]) => mod === want.mod && want.match.test(ask));
+    if (!hit) fail(`"${want.mod}" no longer asks the client about ${want.why}`);
+  }
+  for (const [mod, ask] of asks) {
+    // the document escapes what it prints, so compare on escaped text
+    const escaped = ask.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    if (doc.indexOf(escaped) === -1 && doc.indexOf(ask) === -1) {
+      fail(`the ask from "${mod}" never reached the printed document: ${ask.slice(0, 50)}…`);
+    }
+  }
+}
+
+/* ── nothing may render the literal string "undefined" ── */
+{
+  // A typo'd ICON key or a missing helper does not throw — it interpolates
+  // as "undefined" and ships. Cheap to catch, invisible otherwise.
+  for (const m of MODULES) {
+    for (const [label, st] of [["empty", S.fresh()]]) {
+      let html = "";
+      try { html = m.render({ ...ctxFor(bfp, st), num: "01" }); } catch (e) { continue; }
+      if (/>undefined<|\bundefined\b/.test(html.replace(/data-[a-z]+="[^"]*"/g, ""))) {
+        fail(`module "${m.id}" rendered the literal string "undefined" (${label} state)`);
+      }
+    }
   }
 }
 

@@ -249,6 +249,33 @@ not cosmetic.
 | 05 | `services` | Services | Industry picker, **multi-select** (16 trades) — plenty of companies run two; the trade's full taxonomy merged with the scrape, which arrives pre-ticked; High/Med/Low per service; sub-service chips; per-item notes; **build order assembled from the priority bands on the same screen**, draggable within each band |
 | 07 | `locations` | Cities | Radius search off a base city against a bundled Census dataset; pick + High/Med/Low; **do-not-market exclusions** as a first-class state; build order on the same screen, draggable within a band |
 | 09 | `brand` | Brand | Logo status **+ file upload**, brand guide **+ upload**, colors, fonts, photo library; six **bipolar tone scales**; words to use and never use. Uploads go to IndexedDB — state carries metadata only, never bytes |
+### Exports
+
+Two deliverables, and they are not the same document.
+
+**The OS payload** (`js/export.js`, `schema: "ss-kickoff/1"`) is a contract.
+Keys are STATE keys, never on-screen labels — a field labelled "Phrases we
+must never use" one week and "Never says" the next has been `neverSay`
+throughout. Every service, city, channel and account carries the stable id
+the scraper generated; matching on display name breaks the first time a
+taxonomy label is reworded. Values are raw, not formatted: `revNow` and
+`revTarget` are two numbers, not `"$120k → $400k"`. Selected-but-unranked
+services are included with `rank: null` — omitting them lost the selection
+entirely. `display` carries the human-readable summary for showing a person
+what was said; act on `fields` and the entity arrays, never on `display`.
+The CSV is the same payload in long format (`entity,section,id,field,value`)
+because one file has to carry services, cities, channels and accounts at
+once, and those share no columns.
+
+**The client document** (`clientDoc()` in module 12) is what gets sent after
+the call. It renders on every tab and is hidden on screen, so Print emits it
+whichever tab is open — printing used to emit whatever was showing, which
+meant printing from the internal brief sent the client their own close rate
+and the notes from the call. Two rules hold: page notes never appear in it,
+and an open item only appears if it carries an `ask` — the client-facing
+wording. The bare `detail` is written for whoever picks up the work ("the
+copywriter is guessing") and reads as an insult in a deliverable.
+
 | 11 | `access` | Access | **Status tracker only.** Leadsie link first — one link covers most Google and Meta access, so it leads the screen and an unclicked one is an open item. Eight core accounts always shown (GA4, Search Console, Google Ads, GTM, CRM, Website, Hosting, Meta); the rest sit behind a picker until someone says they exist. Per account: status and nothing else. Owner and how-to-request were removed — they never earned their space, and a free-text "owner" box next to an account name is exactly where a password gets typed. |
 | 12 | `readout` | Readout & exports | Client recap / Internal brief / Raw. Copy, print, JSON + CSV. |
 

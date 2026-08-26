@@ -325,7 +325,9 @@ export default {
 
     const open = [];
     const unresolved = selected.filter((x) => x.verify);
-    for (const x of unresolved) open.push({ what: x.name, detail: x.verify });
+    for (const x of unresolved) {
+      open.push({ what: x.name, detail: x.verify, ask: "Confirm whether you actually cover " + x.name + "." });
+    }
     if (b[""].length) {
       open.push({
         what: "Cities with no priority",

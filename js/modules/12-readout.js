@@ -7,10 +7,12 @@
 
 import { esc, ICON, sectionHead } from "../ui.js";
 import { isSkipped, getPageNote, statusWithNote } from "../state.js";
+import { buildPayload, buildCsv as machineCsv } from "../export.js";
+import { BUILD } from "../build.js";
 
 const ID = "readout";
 const TABS = [
-  { key: "recap", label: "Client recap" },
+  { key: "recap", label: "Client document" },
   { key: "brief", label: "Internal brief" },
   { key: "raw", label: "Raw data" },
 ];
@@ -150,12 +152,76 @@ function isRanked(id) {
   return id === RANKED.services || id === RANKED.locations;
 }
 
-/* ── tab: client recap ────────────────────────────────── */
+/* ── the client document ──────────────────────────────── */
+//
+// Everything the client told us, laid out as something worth keeping.
+// This is the artifact that gets sent after the call, so two rules:
+//
+//   1. Page notes never appear here. They are Sam's own shorthand from
+//      the call — "last agency burned them" is true, useful, and not
+//      something to mail to the client.
+//
+//   2. Open items only appear if they carry an `ask` — the client-facing
+//      wording. The bare `detail` is written for whoever picks up the
+//      work ("the copywriter is guessing", "this is what reporting
+//      arguments are made of") and reads as an insult in a deliverable.
 
-function recapView(ctx, parts) {
+function cover(ctx) {
+  const c = ctx.client.client || {};
+  const when = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  return (
+    '<div class="dark cover">' +
+      '<div class="covertop">' +
+        '<span class="mlabel">Service Scalers</span>' +
+        '<span class="mlabel">' + esc(when) + "</span>" +
+      "</div>" +
+      "<h1>" + esc(c.name || "Kickoff") + "</h1>" +
+      (c.market ? '<div class="covermkt">' + esc(c.market) + "</div>" : "") +
+      '<div class="coverline"></div>' +
+      '<p class="coverlede">Everything we agreed on the kickoff call &mdash; the services and ' +
+        "areas we&rsquo;re building around, in the order you told us they matter, and the " +
+        "handful of things we need back from you before the first page goes up.</p>" +
+      (c.website ? '<div class="coverweb">' + esc(c.website) + "</div>" : "") +
+    "</div>"
+  );
+}
+
+/** Only the items written for the client to read. */
+function asksFrom(ctx, parts) {
+  return openItems(ctx, parts).filter((o) => o.ask);
+}
+
+function askBlock(items) {
+  if (!items.length) {
+    return '<div class="card"><div class="mlabel">What we need from you</div>' +
+      '<div style="margin-top:10px;font-size:16px;color:var(--ok)">Nothing &mdash; you gave us ' +
+      "everything on the call. We&rsquo;ll take it from here.</div></div>";
+  }
+  return (
+    '<div class="card asks"><div class="mlabel">What we need from you</div>' +
+      '<div style="font-size:14px;color:var(--muted);margin-top:5px">' +
+        "Short list. Each one unblocks something we can&rsquo;t start without." +
+      "</div>" +
+      '<ol class="asklist">' + items.map((o) =>
+        "<li><span class=\"w\">" + esc(o.what) + "</span>" +
+        '<span class="a">' + esc(o.ask) + "</span></li>"
+      ).join("") + "</ol>" +
+    "</div>"
+  );
+}
+
+/** Every section the client actually answered, in the order we asked. */
+function sectionsBlock(parts) {
+  return parts
+    .filter((p) => !p.skipped && p.sum && ((p.sum.rows && p.sum.rows.length) || (p.sum.table && p.sum.table.body.length)))
+    .map((p) =>
+      '<div class="card docsec"><div class="mlabel">' + esc(p.mod.nav) + "</div>" +
+      dl(p.sum.rows) + (isRanked(p.mod.id) ? "" : table(p.sum.table)) + "</div>"
+    ).join("");
+}
+
+function clientDoc(ctx, parts) {
   const r = ranksFor(parts);
-  const open = openItems(ctx, parts).filter((o) => o.kind !== "empty");
-  const name = ctx.client.client.name || "this kickoff";
 
   const five =
     '<div class="dark">' +
@@ -163,24 +229,39 @@ function recapView(ctx, parts) {
       '<h2 style="margin-top:8px">First <span class="volt" style="font-size:44px;line-height:.7;display:inline-block">five and five</span></h2>' +
       '<div class="sumcols" style="margin-top:26px">' +
         '<div><div class="mlabel">Lead services</div>' +
-          (rankedList(r.services, 5) || '<div style="margin-top:12px;color:#8d9490">Not ranked</div>') + "</div>" +
+          (rankedList(r.services, 5) || '<div style="margin-top:12px;color:#8d9490">Not ranked yet</div>') + "</div>" +
         '<div><div class="mlabel">Lead cities</div>' +
-          (rankedList(r.locations, 5) || '<div style="margin-top:12px;color:#8d9490">Not ranked</div>') + "</div>" +
+          (rankedList(r.locations, 5) || '<div style="margin-top:12px;color:#8d9490">Not ranked yet</div>') + "</div>" +
       "</div>" +
     "</div>";
 
   const orders =
-    '<div class="sumcols">' +
-      (r.services ? '<div class="card"><div class="mlabel">Full service order</div>' + rankedList(r.services) + "</div>" : "") +
-      (r.locations ? '<div class="card"><div class="mlabel">Full city order</div>' + rankedList(r.locations) + "</div>" : "") +
-    "</div>";
+    (r.services || r.locations)
+      ? '<div class="sumcols">' +
+          (r.services ? '<div class="card"><div class="mlabel">Full service order</div>' + rankedList(r.services) + "</div>" : "") +
+          (r.locations ? '<div class="card"><div class="mlabel">Full city order</div>' + rankedList(r.locations) + "</div>" : "") +
+        "</div>"
+      : "";
 
   return (
-    '<div class="card"><div class="mlabel">Recap for ' + esc(name) + "</div>" +
-      '<p class="lede" style="margin-top:10px">Here\'s what we agreed on the call, and what we need back from you ' +
-      "before the first page goes up.</p></div>" +
-    five + orders +
-    openBlock(open, "What we need from you")
+    cover(ctx) +
+    five +
+    orders +
+    '<div class="docrule"><span>Everything you told us</span></div>' +
+    sectionsBlock(parts) +
+    askBlock(asksFrom(ctx, parts))
+  );
+}
+
+/* ── tab: client document (on screen) ─────────────────── */
+
+function recapView(ctx, parts) {
+  return (
+    '<div class="warn">' + ICON.doc +
+      "<div><strong>This is exactly what the client gets.</strong> Print or save as PDF from the " +
+      "button below and it prints this page and nothing else &mdash; whichever tab you happen to " +
+      "be on. Your call notes are not in here.</div></div>" +
+    clientDoc(ctx, parts)
   );
 }
 
@@ -221,12 +302,21 @@ function rawView(ctx, parts) {
     '<div class="card"><div class="mlabel">Structured export</div>' +
       '<p style="margin:10px 0 0;font-size:15px;color:var(--green-text)">' +
       "Everything captured, ready for Airtable, Notion, or the OS.</p>" +
-      '<pre class="raw" style="margin-top:18px">' + esc(JSON.stringify(buildJson(ctx, parts), null, 2)) + "</pre>" +
+      '<pre class="raw" style="margin-top:18px">' + esc(JSON.stringify(payload(ctx, parts), null, 2)) + "</pre>" +
     "</div>"
   );
 }
 
 /* ── export builders ──────────────────────────────────── */
+
+/**
+ * Open items are computed by the readout, not by export.js, so they ride
+ * in on ctx rather than being recomputed from a second walk of the
+ * modules — two walks is two chances to disagree.
+ */
+function payload(ctx, parts) {
+  return buildPayload({ ...ctx, openItems: openItems(ctx, parts) }, parts, BUILD);
+}
 
 function buildJson(ctx, parts) {
   const out = {
@@ -367,15 +457,24 @@ export default {
     const actions =
       '<div class="navrow" style="padding-bottom:40px">' +
         '<button class="btn" data-action="link">' + ICON.link + " Copy share link</button>" +
-        '<button class="btn dark" data-action="' + (tab === "brief" ? "brief" : "recap") + '">Copy ' +
+        '<button class="btn ghost" data-action="' + (tab === "brief" ? "brief" : "recap") + '">Copy ' +
           (tab === "brief" ? "brief" : "recap") + " as text</button>" +
         '<button class="btn ghost" data-action="json">Download JSON</button>' +
         '<button class="btn ghost" data-action="csv">Download CSV</button>' +
-        '<button class="btn ghost" data-action="print">Print</button>' +
+        '<button class="btn dark" data-action="print">' + ICON.doc + " Save client PDF</button>" +
         '<button class="btn ghost" data-action="clear" style="margin-left:auto;color:var(--risk)">Clear this kickoff</button>' +
       "</div>";
 
-    return sectionHead(ctx.num, this.title, this.lede) + tabs + view + actions;
+    return (
+      '<div class="screenonly">' +
+        sectionHead(ctx.num, this.title, this.lede) + tabs + view + actions +
+      "</div>" +
+      // Rendered on every tab and hidden on screen. Print then emits the
+      // client document no matter which tab is open — the old behaviour
+      // printed whatever was showing, so printing from the internal brief
+      // sent the client their own close rate and the notes from the call.
+      '<div class="printdoc">' + clientDoc(ctx, parts) + "</div>"
+    );
   },
 
   status() { return "done"; },
@@ -387,8 +486,8 @@ export default {
     return {
       recap: () => buildText(ctx, parts, "recap"),
       brief: () => buildText(ctx, parts, "brief"),
-      json: () => JSON.stringify(buildJson(ctx, parts), null, 2),
-      csv: () => buildCsv(ctx, parts),
+      json: () => JSON.stringify(payload(ctx, parts), null, 2),
+      csv: () => machineCsv(payload(ctx, parts)),
     };
   },
 };

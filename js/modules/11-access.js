@@ -33,7 +33,7 @@ export const LEADSIE_URL = "https://app.leadsie.com/connect/servicescalers/manag
 // CORE is what we need on essentially every account. EXTRA is everything
 // else: real, but only worth putting on screen when it comes up, so it
 // doesn't pad the list with twelve rows nobody fills in.
-const CORE = [
+export const CORE_ACCOUNTS = [
   { key: "ga4", label: "Google Analytics", note: "Editor. Check it's GA4 and not a dead Universal property." },
   { key: "gsc", label: "Google Search Console", note: "Full user. If nobody has it, we verify via DNS." },
   { key: "gads", label: "Google Ads", note: "Standard access on their existing account — we don't start a fresh one." },
@@ -44,7 +44,7 @@ const CORE = [
   { key: "meta", label: "Meta", note: "Partner access to the Business Manager, not a personal page invite." },
 ];
 
-const EXTRA = [
+export const EXTRA_ACCOUNTS = [
   { key: "gbp", label: "Google Business Profile", note: "Manager access. Worth grabbing when local is in play." },
   { key: "dns", label: "Domain / DNS registrar", note: "Often the web guy from 2016. This one takes weeks." },
   { key: "calls", label: "Call tracking", note: "CallRail or similar, if they already run one." },
@@ -54,6 +54,9 @@ const EXTRA = [
   { key: "yelp", label: "Yelp", note: "Ads or just the listing." },
   { key: "social", label: "Other social", note: "Instagram, LinkedIn, TikTok, YouTube." },
 ];
+
+const CORE = CORE_ACCOUNTS;
+const EXTRA = EXTRA_ACCOUNTS;
 
 const BY_KEY = {};
 CORE.concat(EXTRA).forEach((a) => { BY_KEY[a.key] = a; });
@@ -236,12 +239,14 @@ export default {
       open.push({
         what: "Leadsie link not sent",
         detail: "One link covers most of the Google and Meta access — send it before anything else.",
+        ask: "Click the access link we send you. It connects your Google and Meta accounts in one go — no passwords, and you can revoke it any time.",
       });
     } else if (s.leadsie === "sent" || s.leadsie === "partial") {
       open.push({
         what: "Leadsie link outstanding",
         detail: (filled(s.leadsieWho) ? s.leadsieWho + " still has to click through." : "Still waiting on the client to click through.") +
           " Chase it the same day.",
+        ask: "Click the access link we sent you. It connects your Google and Meta accounts in one go — no passwords, and you can revoke it any time.",
       });
     }
 
@@ -250,6 +255,7 @@ export default {
       open.push({
         what: r.label + " access — " + r.status,
         detail: "Not resolved on the call. Decide who chases it before the build starts.",
+        ask: "Approve our access request for " + r.label + ".",
       });
     });
 

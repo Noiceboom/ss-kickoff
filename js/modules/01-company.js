@@ -234,10 +234,12 @@ export default {
 
     const open = [];
     if (!filled(s.contactName)) {
-      open.push({ what: "Point of contact", detail: "No named contact — nobody to chase for anything below" });
+      open.push({ what: "Point of contact", detail: "No named contact — nobody to chase for anything below",
+        ask: "Tell us who we should be speaking to day to day." });
     }
     if (!filled(s.contactEmail) && !filled(s.contactPhone)) {
-      open.push({ what: "Contact details", detail: "No email or phone for the point of contact" });
+      open.push({ what: "Contact details", detail: "No email or phone for the point of contact",
+        ask: "Send us a direct email and phone number for your main contact." });
     }
     // When billing falls back to the point of contact, that contact's email
     // IS the billing email — so a blank one still means invoices have nowhere
@@ -247,16 +249,20 @@ export default {
         open.push({
           what: "Billing contact",
           detail: "Billing is set to the point of contact, but no email for them — invoices have nowhere to go",
+          ask: "Send us the email address invoices should go to.",
         });
       }
     } else if (!filled(s.billingEmail)) {
-      open.push({ what: "Billing contact", detail: "No billing email — the first invoice will bounce around" });
+      open.push({ what: "Billing contact", detail: "No billing email — the first invoice will bounce around",
+        ask: "Send us the email address invoices should go to." });
     }
     if (!filled(s.phone)) {
-      open.push({ what: "Main business phone", detail: "Blocks call tracking setup and ad extensions" });
+      open.push({ what: "Main business phone", detail: "Blocks call tracking setup and ad extensions",
+        ask: "Confirm the main phone number you want used in your ads." });
     }
     if (s.trackingOk === "unsure") {
-      open.push({ what: "Call tracking", detail: "They weren't sure about swapping the number — needs a decision" });
+      open.push({ what: "Call tracking", detail: "They weren't sure about swapping the number — needs a decision",
+        ask: "Let us know if we can use a call-tracking number on your site." });
     }
 
     return { rows, open };

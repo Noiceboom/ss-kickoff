@@ -510,7 +510,44 @@ pre.raw{background:var(--char);color:var(--cream);border-radius:14px;padding:20p
   .upfile{flex-wrap:wrap}
   .rowhead{display:none !important}
 }
+/* the client document — hidden on screen, the only thing that prints */
+.printdoc{display:none}
+
+.cover{padding:52px 46px 46px}
+.covertop{display:flex;justify-content:space-between;align-items:baseline;gap:20px}
+.cover h1{font-size:52px;line-height:1.02;margin:30px 0 0;letter-spacing:-.5px}
+.covermkt{font-family:"OSCondensed",sans-serif;font-size:17px;letter-spacing:2.4px;
+  text-transform:uppercase;color:var(--orange);margin-top:12px}
+.coverline{height:3px;width:64px;background:var(--orange);margin:30px 0 24px;border-radius:2px}
+.coverlede{font-size:17px;line-height:1.6;max-width:60ch;margin:0;color:#d7d9d4}
+.coverweb{font-family:"OSCondensed",sans-serif;font-size:14px;letter-spacing:1.6px;
+  text-transform:uppercase;color:#8d9490;margin-top:30px}
+
+.docrule{display:flex;align-items:center;gap:16px;margin:40px 0 22px}
+.docrule::before,.docrule::after{content:"";flex:1;height:2px;background:var(--line)}
+.docrule span{font-family:"OSCondensed",sans-serif;font-size:12px;letter-spacing:2.2px;
+  text-transform:uppercase;color:var(--muted);white-space:nowrap}
+
+.asklist{list-style:none;counter-reset:ask;margin:18px 0 0;padding:0}
+.asklist li{counter-increment:ask;position:relative;padding:0 0 18px 44px;margin-top:18px;
+  border-bottom:1px solid var(--line)}
+.asklist li:last-child{border-bottom:0;padding-bottom:0}
+.asklist li::before{content:counter(ask);position:absolute;left:0;top:-2px;width:28px;height:28px;
+  display:flex;align-items:center;justify-content:center;background:var(--orange);color:#fff;
+  border-radius:50%;font-family:"OSCondensed",sans-serif;font-weight:800;font-size:14px}
+.asklist .w{display:block;font-family:"OSCondensed",sans-serif;font-weight:800;font-size:13px;
+  letter-spacing:1.6px;text-transform:uppercase;color:var(--muted)}
+.asklist .a{display:block;font-size:17px;line-height:1.5;margin-top:5px}
+
 @media print{
+  /* keep the brand in the PDF — this is emailed, not photocopied */
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  @page{margin:14mm}
+  .screenonly{display:none!important}
+  .printdoc{display:block}
+  .printdoc .cover{break-after:page;page-break-after:always}
+  .printdoc .docsec,.printdoc .asks,.printdoc .card,.printdoc .dark{break-inside:avoid}
+  .printdoc .docrule{margin-top:0}
   header,.steps,.navrow,.tools,.arrows,.grip,.toast,.tabs,.skiprow,.notebtn,.newrow,.pnhint{display:none!important}
   .pagenote{border:1px solid var(--line);background:#fff;break-inside:avoid}
   body{background:#fff}
@@ -518,6 +555,11 @@ pre.raw{background:var(--char);color:var(--cream);border-radius:14px;padding:20p
   .dark{background:#fff;color:var(--char);border:1px solid var(--char)}
   .dark h2,.dark h3,.dark .kpi .v{color:var(--char)}
   .dark .mlabel,.dark .kpi .l,.dark .dl dt{color:var(--muted)}
+  /* …except in the client document, where the dark panels are the design */
+  .printdoc .dark{background:var(--char);color:var(--cream);border:0}
+  .printdoc .dark h2,.printdoc .dark h3,.printdoc .dark .kpi .v{color:var(--cream)}
+  .printdoc .dark .mlabel{color:var(--orange)}
+  .printdoc .cover .covertop .mlabel{color:#8d9490}
   pre.raw{background:#fff;color:var(--char);border:1px solid var(--line)}
 }
 

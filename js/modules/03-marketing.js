@@ -239,10 +239,12 @@ export default {
       });
     }
     if (filled(s.agency) && !filled(s.contractEnd)) {
-      open.push({ what: "Incumbent contract", detail: "An agency is named but nobody knows when the contract ends" });
+      open.push({ what: "Incumbent contract", detail: "An agency is named but nobody knows when the contract ends",
+        ask: "Check when your current contract ends and how much notice it needs." });
     }
     if (filled(s.agency) && !filled(s.ownsAccounts)) {
-      open.push({ what: "Ad account ownership", detail: "Unknown — if the agency owns them, the history doesn't transfer" });
+      open.push({ what: "Ad account ownership", detail: "Unknown — if the agency owns them, the history doesn't transfer",
+        ask: "Find out whether you or your current agency owns your ad accounts." });
     }
 
     return table ? { rows, table, open } : { rows, open };

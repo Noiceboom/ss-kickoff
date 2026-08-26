@@ -278,16 +278,20 @@ export default {
 
     const open = [];
     if (filled(s.revTarget) && !filled(s.budget)) {
-      open.push({ what: "Marketing budget", detail: "They named a target but no budget — nothing can be scoped against that" });
+      open.push({ what: "Marketing budget", detail: "They named a target but no budget — nothing can be scoped against that",
+        ask: "Confirm the monthly marketing budget you're comfortable with." });
     }
     if (!filled(s.capacity)) {
-      open.push({ what: "Capacity ceiling", detail: "We don't know how much more work they can actually take" });
+      open.push({ what: "Capacity ceiling", detail: "We don't know how much more work they can actually take",
+        ask: "Let us know how much extra work you can take on before it becomes a problem." });
     }
     if (!filled(s.closeRate)) {
-      open.push({ what: "Close rate", detail: "Unknown — we can't work out what a lead is worth to them" });
+      open.push({ what: "Close rate", detail: "Unknown — we can't work out what a lead is worth to them",
+        ask: "Send us your close rate if you track it — it tells us what a lead is worth." });
     }
     if (!filled(s.goodLead)) {
-      open.push({ what: "Definition of a good lead", detail: "Unsettled — this is what reporting arguments are made of" });
+      open.push({ what: "Definition of a good lead", detail: "Unsettled — this is what reporting arguments are made of",
+        ask: "Agree with us what counts as a good lead, so we're measuring the same thing." });
     }
     if (s.budgetFlex === "unsure") {
       open.push({ what: "Budget flexibility", detail: "They weren't sure whether the number can move" });

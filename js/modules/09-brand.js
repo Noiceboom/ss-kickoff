@@ -222,19 +222,22 @@ export default {
 
     const open = [];
     if (s.logoStatus === "raster" && !s.logoFile) {
-      open.push({ what: "Logo", detail: "Raster only and nothing uploaded — we'll need the original before anything goes to print" });
+      open.push({ what: "Logo", detail: "Raster only and nothing uploaded — we'll need the original before anything goes to print",
+        ask: "Send us the original logo file if you can find it — .ai, .eps or .svg." });
     }
     if (s.logoStatus === "none" || s.logoStatus === "redesign") {
       open.push({ what: "Logo", detail: "They need one made — scope it before the site build starts" });
     }
     if (s.photoStatus === "stock" || s.photoStatus === "none") {
-      open.push({ what: "Photography", detail: "No real photos — the single biggest drag on landing page conversion" });
+      open.push({ what: "Photography", detail: "No real photos — the single biggest drag on landing page conversion",
+        ask: "Send us photos of your trucks, crews and finished jobs. Phone pictures are fine." });
     }
     if (!toneRows.length) {
       open.push({ what: "Tone", detail: "Nothing set — the copywriter is guessing" });
     }
     if (!filled(s.neverSay)) {
-      open.push({ what: "Words to avoid", detail: "Never asked. Every owner has one, and finding it in a live ad is expensive" });
+      open.push({ what: "Words to avoid", detail: "Never asked. Every owner has one, and finding it in a live ad is expensive",
+        ask: "Tell us any words or phrases you never want used in your advertising." });
     }
 
     const out = { rows, open };
