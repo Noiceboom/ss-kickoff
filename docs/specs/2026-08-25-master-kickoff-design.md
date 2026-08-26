@@ -261,9 +261,14 @@ list of `{name, selected}`, so two files claimed one version and parsed
 differently. `docs/check.mjs` pins each version by hand — every nested
 path, its key set and the type of every value — and walks the payload
 against it. Renaming `baseAddress`, turning `rank` from a number into a
-string, or dropping a key all fail with the diff. It fails in both
-directions: a pinned path the payload stops producing is also an error, so
-a pin can't quietly describe nothing.
+string, or dropping a key all fail with the diff. Container contents are pinned too —
+`array<string>`, `map<string>` — so an array of ids becoming an array of
+objects, or a notes map holding objects instead of strings, fails as well.
+
+It fails in both directions, and refuses to accept coverage it didn't get:
+a pinned path the payload stops producing is an error, and a pinned
+container the run never saw a single element of is a warning, because a
+pin on an empty array proves nothing.
 Keys are STATE keys, never on-screen labels — a field labelled "Phrases we
 must never use" one week and "Never says" the next has been `neverSay`
 throughout. Every service, city, channel and account carries the stable id

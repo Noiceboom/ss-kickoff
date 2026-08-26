@@ -352,23 +352,28 @@ for (const m of MODULES) {
       // incompatible payloads under one version.
       const SHAPES = {
         "ss-kickoff/3": {
+          // map<T> — dynamic keys (module ids), every value of type T.
+          // array<T> — every element of type T. Both are unchecked without
+          // the parameter: `skipped: "array"` passes on an array of objects.
           "": { schema: "string", build: "string", capturedAt: "string", client: "object",
-                progress: "object", skipped: "array", fields: "object", services: "object",
-                locations: "object", channels: "array", access: "object", notes: "object",
-                openItems: "array", display: "object" },
+                progress: "map<string>", skipped: "array<string>", fields: "map<object>",
+                services: "object", locations: "object", channels: "array<object>",
+                access: "object", notes: "map<string>", openItems: "array<object>",
+                display: "map<object>" },
           "client": { slug: "string", name: "string", market: "string", website: "string", trade: "string" },
-          "services": { trades: "array", items: "array" },
+          "services": { trades: "array<string>", items: "array<object>" },
           "services.items[]": { id: "string", name: "string", trade: "string", source: "string",
                 foundOnSite: "boolean", selected: "boolean", priority: "string|null",
-                rank: "number|null", hasPage: "boolean", subs: "array", aliases: "array" },
+                rank: "number|null", hasPage: "boolean", subs: "array<object>",
+                aliases: "array<string>" },
           "services.items[].subs[]": { name: "string", selected: "boolean" },
-          "locations": { baseAddress: "string", radiusMiles: "number", items: "array" },
+          "locations": { baseAddress: "string", radiusMiles: "number", items: "array<object>" },
           "locations.items[]": { id: "string", name: "string", state: "string", source: "string",
                 foundOnSite: "boolean", selected: "boolean", excluded: "boolean",
                 priority: "string|null", rank: "number|null", hasPage: "boolean" },
           "channels[]": { id: "string", label: "string", category: "string", known: "boolean",
                 rating: "string|null", monthlyLeads: "string|null", note: "string" },
-          "access": { leadsie: "object", accounts: "array", other: "array" },
+          "access": { leadsie: "object", accounts: "array<object>", other: "array<object>" },
           "access.leadsie": { url: "string", status: "string|null", who: "string" },
           "access.accounts[]": { key: "string", label: "string", core: "boolean",
                 inPlay: "boolean", status: "string|null" },
@@ -384,6 +389,9 @@ for (const m of MODULES) {
         if (!spec) { fail(`the payload declares schema "${schemaName}", which nothing pins a shape for`); return; }
         const typeOf = (v) => (v === null ? "null" : Array.isArray(v) ? "array" : typeof v);
         const seen = new Set();
+        // A pin on an empty container proves nothing. Rather than let that
+        // pass as coverage, record it and say so.
+        const containers = new Map();
 
         const walk = (path, obj) => {
           const want = spec[path];
@@ -396,15 +404,37 @@ for (const m of MODULES) {
             return;
           }
           for (const [k, allowed] of Object.entries(want)) {
-            const actual = typeOf(obj[k]);
-            if (allowed.split("|").indexOf(actual) < 0) {
-              fail(`${schemaName} "${(path ? path + "." : "") + k}" is ${actual}, pinned as ${allowed}`);
-            }
+            const here = (path ? path + "." : "") + k;
             const child = path ? path + "." + k : k;
-            if (Array.isArray(obj[k])) {
-              for (const el of obj[k]) if (el && typeof el === "object") walk(child + "[]", el);
-            } else if (obj[k] && typeof obj[k] === "object") {
-              walk(child, obj[k]);
+            const v = obj[k];
+
+            const container = /^(array|map)<(.+)>$/.exec(allowed);
+            // a map is an object at runtime; an array is an array
+            const outer = container ? (container[1] === "map" ? "object" : "array") : allowed;
+            if (outer.split("|").indexOf(typeOf(v)) < 0) {
+              fail(`${schemaName} "${here}" is ${typeOf(v)}, pinned as ${outer}`);
+              continue;
+            }
+
+            if (container) {
+              // An empty container proves nothing; only what is there is checked.
+              const inner = container[2];
+              const count = container[1] === "array" ? v.length : Object.keys(v).length;
+              containers.set(here, (containers.get(here) || 0) + count);
+              const entries = container[1] === "array"
+                ? v.map((el, i) => [here + "[" + i + "]", el])
+                : Object.entries(v).map(([key, val]) => [here + "." + key, val]);
+              for (const [label, el] of entries) {
+                if (inner.split("|").indexOf(typeOf(el)) < 0) {
+                  fail(`${schemaName} "${label}" is ${typeOf(el)}, pinned as ${inner}`);
+                }
+              }
+            }
+
+            if (Array.isArray(v)) {
+              for (const el of v) if (el && typeof el === "object") walk(child + "[]", el);
+            } else if (v && typeof v === "object" && !container) {
+              walk(child, v);
             }
           }
         };
@@ -414,16 +444,30 @@ for (const m of MODULES) {
         for (const path of Object.keys(spec)) {
           if (!seen.has(path)) fail(`${schemaName} pins "${path}", which the payload never produced`);
         }
+        for (const [path, count] of containers) {
+          if (!count) warn(`${schemaName} pins element types for "${path}", but this run never saw one — that pin is unverified`);
+        }
       }
 
       // run it against a payload rich enough to reach every pinned path
       const rich = S.fresh();
+      // Plumbing only, but carrying a snapshot of a service ticked under HVAC
+      // before that trade came off. That is the one thing that produces
+      // aliases — without it the alias pin is never exercised.
+      rich.m.services = {
+        trades: ["plumbing"],
+        on: ["hvac:water-heaters"],
+        snap: { "hvac:water-heaters": { name: "Water Heaters", subs: [] } },
+      };
       const richTrades = MODULES.find((m) => m.id === "services").trades({ ...ctxFor(bfp, rich) });
       rich.m.access = { leadsie: "sent", leadsieWho: "Mike", status_ga4: "granted",
         custom: [{ account: "Yelp Ads", status: "pending" }] };
       rich.m.marketing = { chan: ["seo"], rate_seo: "good", vol_seo: "40" };
       rich.m.locations = { base: "Kansas City, MO", radius: 30 };
       rich.m.brand = { logoStatus: "raster", photoStatus: "none" };
+      rich.skipped = ["competitors"];
+      rich.notes["goals:_page"] = "Wants off the pay-per-lead treadmill.";
+      rich.notes["competitors:_page"] = "Didn't get to it.";
       {
         const u = S.serviceUniverse(rich, bfp, richTrades.map(TRADES_MOD.getTrade).filter(Boolean));
         const on = u.filter((x) => x.on);
@@ -431,8 +475,8 @@ for (const m of MODULES) {
         const cities = S.locationUniverse(rich, bfp, []).filter((x) => x.on);
         S.setLocationPriority(rich, cities[0].id, "high");
       }
-      pinCheck(JSON.parse(readout.exports(ctxFor(bfp, rich)).json()).schema,
-               JSON.parse(readout.exports(ctxFor(bfp, rich)).json()));
+      const richPayload = JSON.parse(readout.exports(ctxFor(bfp, rich)).json());
+      pinCheck(richPayload.schema, richPayload);
 
       // a struck-out sub-service must not be exported as in scope
       const subbed = S.fresh();
