@@ -24,7 +24,17 @@ import { getTrade } from "./trades/index.js";
 import { activeTrades } from "./modules/05-services.js";
 import { CORE_ACCOUNTS, EXTRA_ACCOUNTS, LEADSIE_URL } from "./modules/11-access.js";
 
-export const SCHEMA = "ss-kickoff/1";
+// Bump this whenever the SHAPE changes — a renamed field, a changed type,
+// an entity that gains or loses a key. Adding a value to an existing enum
+// is not a shape change; turning `subs` from a list of names into a list
+// of {name, selected} is, and shipping that under an unchanged version
+// left a b32 file and a b33 file both claiming "ss-kickoff/1" while
+// parsing differently. docs/check.mjs pins the shape to the version.
+//
+//   /1  b32  first machine-readable payload
+//   /2  b33  subs became [{name, selected}]; channels gained `known`;
+//            services/locations bookkeeping left `fields`
+export const SCHEMA = "ss-kickoff/2";
 
 /**
  * Bookkeeping keys that are represented properly elsewhere in the payload.
@@ -319,6 +329,9 @@ export function buildCsv(payload) {
 
   for (const ch of payload.channels) {
     put("channel", "marketing", ch.id, "label", ch.label);
+    // a channel the built-in list doesn't know — the JSON says so, and a
+    // CSV consumer has no other way to tell
+    put("channel", "marketing", ch.id, "known", String(ch.known));
     put("channel", "marketing", ch.id, "rating", ch.rating);
     put("channel", "marketing", ch.id, "monthlyLeads", ch.monthlyLeads);
     put("channel", "marketing", ch.id, "note", ch.note);

@@ -253,7 +253,14 @@ not cosmetic.
 
 Two deliverables, and they are not the same document.
 
-**The OS payload** (`js/export.js`, `schema: "ss-kickoff/1"`) is a contract.
+**The OS payload** (`js/export.js`, `schema: "ss-kickoff/2"`) is a contract,
+and the version is part of it. Bump `SCHEMA` whenever the shape changes — a
+renamed field, a changed type, an entity gaining or losing a key. `b32` and
+`b33` both shipped as `/1` while `subs` changed from a list of names to a
+list of `{name, selected}`, so two files claimed one version and parsed
+differently. `docs/check.mjs` now pins each version's entity key sets by
+hand; changing a shape fails the check until someone decides whether it
+warrants a bump.
 Keys are STATE keys, never on-screen labels — a field labelled "Phrases we
 must never use" one week and "Never says" the next has been `neverSay`
 throughout. Every service, city, channel and account carries the stable id

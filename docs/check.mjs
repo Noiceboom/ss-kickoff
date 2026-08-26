@@ -298,7 +298,7 @@ for (const m of MODULES) {
       const j = JSON.parse(api.json());
 
       // the payload is a contract — it has to say which one
-      if (j.schema !== "ss-kickoff/1") fail(`JSON export has schema "${j.schema}"`);
+      if (!/^ss-kickoff\/\d+$/.test(j.schema || "")) fail(`JSON export has schema "${j.schema}"`);
       if (!j.build) fail("JSON export carries no build stamp");
 
       if (j.notes.brand !== st.notes["brand:_page"]) fail("JSON export dropped a note-only section");
@@ -339,6 +339,43 @@ for (const m of MODULES) {
         if (on.every((x) => x.priority)) {
           // fine — but the shape below is what used to be dropped
         }
+      }
+
+      // ── the declared version has to match the actual shape ──
+      //
+      // Pinned by hand. If a change makes this fail, that is the point:
+      // decide whether the shape moved, and bump SCHEMA if it did rather
+      // than shipping two incompatible payloads under one version.
+      const SHAPES = {
+        "ss-kickoff/2": {
+          top: ["schema", "build", "capturedAt", "client", "progress", "skipped", "fields",
+                "services", "locations", "channels", "access", "notes", "openItems", "display"],
+          service: ["id", "name", "trade", "source", "foundOnSite", "selected", "priority",
+                    "rank", "hasPage", "subs", "aliases"],
+          sub: ["name", "selected"],
+          city: ["id", "name", "state", "source", "foundOnSite", "selected", "excluded",
+                 "priority", "rank", "hasPage"],
+          channel: ["id", "label", "category", "known", "rating", "monthlyLeads", "note"],
+          account: ["key", "label", "core", "inPlay", "status"],
+        },
+      };
+      const shape = SHAPES[j.schema];
+      if (!shape) {
+        fail(`the payload declares schema "${j.schema}", which nothing pins a shape for`);
+      } else {
+        const cmp = (label, obj, want) => {
+          if (!obj) return;
+          const got = Object.keys(obj).sort().join(",");
+          const exp = want.slice().sort().join(",");
+          if (got !== exp) fail(`${j.schema} ${label} shape changed without a version bump — got [${got}]`);
+        };
+        cmp("payload", j, shape.top);
+        const anySvc = j.services.items[0];
+        cmp("service", anySvc, shape.service);
+        const anySub = (j.services.items.find((x) => x.subs.length) || {}).subs;
+        if (anySub) cmp("sub-service", anySub[0], shape.sub);
+        cmp("city", j.locations.items[0], shape.city);
+        cmp("account", j.access.accounts[0], shape.account);
       }
 
       // a struck-out sub-service must not be exported as in scope
@@ -394,6 +431,15 @@ for (const m of MODULES) {
       const hit = jo.channels.find((c) => c.id === "some-new-channel");
       if (!hit) fail("a selected channel outside the built-in list was dropped from the export");
       else if (hit.known !== false) fail("an unknown channel was not flagged as unknown");
+      if (hit && SHAPES[jo.schema]) {
+        const got = Object.keys(hit).sort().join(",");
+        const exp = SHAPES[jo.schema].channel.slice().sort().join(",");
+        if (got !== exp) fail(`${jo.schema} channel shape changed without a version bump — got [${got}]`);
+      }
+      const oddCsv = readout.exports(ctxFor(bfp, oddball)).csv();
+      if (!/"channel","marketing","some-new-channel","known","false"/.test(oddCsv)) {
+        fail("the CSV gives no way to tell an unknown channel from a known one");
+      }
 
       // rows must survive the CSV as records, not as "[object Object]"
       const comp = S.fresh();
