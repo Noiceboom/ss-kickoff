@@ -341,6 +341,67 @@ for (const m of MODULES) {
         }
       }
 
+      // a struck-out sub-service must not be exported as in scope
+      const subbed = S.fresh();
+      const svcMod = MODULES.find((m) => m.id === "services");
+      const withSubs = j.services.items.find((x) => x.subs.length > 1);
+      if (!withSubs) fail("no exported service carried sub-services to test against");
+      else {
+        S.toggleSub(subbed, "services", withSubs.id, withSubs.subs[0].name);
+        const j2 = JSON.parse(readout.exports(ctxFor(bfp, subbed)).json());
+        const again = j2.services.items.find((x) => x.id === withSubs.id);
+        const struck = (again.subs || []).find((x) => x.name === withSubs.subs[0].name);
+        if (!struck) fail("striking a sub-service removed it from the export entirely");
+        else if (struck.selected !== false) {
+          fail(`a struck sub-service exported as selected=${struck.selected}`);
+        }
+        if (!again.subs.some((x) => x.selected)) fail("striking one sub struck all of them");
+      }
+
+      // Structural bookkeeping must not double up in `fields`. Asserting
+      // this against a state that has none of it passes for free — the
+      // state below actually carries every one of these keys.
+      const booky = S.fresh();
+      booky.m.services = {
+        trades: ["plumbing"], on: ["x"], off: ["y"], prio: { x: "high" },
+        snap: { x: { name: "X", subs: [] } }, subsOff: { x: ["Sub"] },
+        added: [{ id: "z", name: "Z" }], note: "kept",
+      };
+      booky.m.locations = { on: ["a"], off: [], excluded: ["b"], prio: { a: "med" }, added: [], base: "KC", radius: 30 };
+      const jb = JSON.parse(readout.exports(ctxFor(bfp, booky)).json());
+      for (const key of ["snap", "subsOff", "added", "prio", "off", "on", "trades"]) {
+        if (jb.fields.services && key in jb.fields.services) {
+          fail(`services bookkeeping "${key}" leaked into fields`);
+        }
+      }
+      for (const key of ["excluded", "prio", "base", "radius"]) {
+        if (jb.fields.locations && key in jb.fields.locations) {
+          fail(`locations bookkeeping "${key}" leaked into fields`);
+        }
+      }
+      if (!jb.fields.services || jb.fields.services.note !== "kept") {
+        fail("filtering bookkeeping also removed a real answer");
+      }
+      // the structured copies still have to be there
+      if (jb.locations.baseAddress !== "KC" || jb.locations.radiusMiles !== 30) {
+        fail("the radius search settings were dropped from the export entirely");
+      }
+
+      // a selected channel the catalogue doesn't know must still export
+      const oddball = S.fresh();
+      oddball.m.marketing = { chan: ["seo", "some-new-channel"], rate_seo: "good" };
+      const jo = JSON.parse(readout.exports(ctxFor(bfp, oddball)).json());
+      const hit = jo.channels.find((c) => c.id === "some-new-channel");
+      if (!hit) fail("a selected channel outside the built-in list was dropped from the export");
+      else if (hit.known !== false) fail("an unknown channel was not flagged as unknown");
+
+      // rows must survive the CSV as records, not as "[object Object]"
+      const comp = S.fresh();
+      comp.m.competitors = { rows: [{ name: "Roto-Rooter", why: "Owns the map pack" }] };
+      const compCsv = readout.exports(ctxFor(bfp, comp)).csv();
+      if (/\[object Object\]/.test(compCsv)) fail("the CSV stringified a structured value");
+      if (compCsv.indexOf("Roto-Rooter") === -1) fail("the CSV dropped a competitor the client named");
+
       const csv = api.csv();
       if (!csv.includes("the guy who shows up")) fail("CSV export dropped a page note");
       if (csv.split('"').length % 2 !== 1) fail("CSV export has unbalanced quoting");

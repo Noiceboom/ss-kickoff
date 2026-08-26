@@ -33,8 +33,8 @@ export const SCHEMA = "ss-kickoff/1";
  * of the two is authoritative.
  */
 const STRUCTURAL = {
-  services: { exact: ["trades", "on", "off", "prio", "meta"], prefix: [] },
-  locations: { exact: ["on", "off", "excluded", "prio", "added"], prefix: [] },
+  services: { exact: ["trades", "on", "off", "prio", "meta", "snap", "subsOff", "added"], prefix: [] },
+  locations: { exact: ["on", "off", "excluded", "prio", "added", "base", "radius"], prefix: [] },
   marketing: { exact: ["chan"], prefix: ["rate_", "vol_", "note_"] },
   access: { exact: ["extra", "custom"], prefix: ["status_"] },
 };
@@ -82,7 +82,12 @@ function servicesBlock(ctx) {
       priority: it.prio || null,     // "high" | "med" | "low" | null
       rank: rank(it.id),
       hasPage: !!it.hasPage,
-      subs: (it.subs || []).map((s) => (typeof s === "string" ? s : s.name)),
+      // Subs carry their own on/off — the grid lets you strike one out.
+      // Flattening to names told the OS to build pages for sub-services
+      // the client had explicitly said they don't do.
+      subs: (it.subs || []).map((sub) =>
+        typeof sub === "string" ? { name: sub, selected: true } : { name: sub.name, selected: sub.on !== false }
+      ),
       aliases: it.aliases || [],
     })),
   };
@@ -115,16 +120,23 @@ function locationsBlock(ctx) {
 function channelsBlock(ctx) {
   const s = ctx.state.m.marketing || {};
   const used = Array.isArray(s.chan) ? s.chan : [];
-  return CHANNELS
-    .filter((c) => used.indexOf(c.id) > -1)
-    .map((c) => ({
+  // Driven by what is SELECTED, not by what the built-in list happens to
+  // contain. Filtering the catalogue instead would silently drop any id
+  // the catalogue no longer knows about. (Channels typed in free text
+  // live in fields.marketing.otherChan — they have no id to carry.)
+  const known = new Map(CHANNELS.map((c) => [c.id, c]));
+  return used.map((id) => {
+    const c = known.get(id) || { id: id, label: id, cat: "" };
+    return {
       id: c.id,
       label: c.label,
       category: c.cat,
+      known: known.has(id),
       rating: s["rate_" + c.id] || null,
       monthlyLeads: s["vol_" + c.id] || null,
       note: s["note_" + c.id] || "",
-    }));
+    };
+  });
 }
 
 function accessBlock(ctx) {
@@ -220,6 +232,41 @@ function cell(v) {
 }
 
 /**
+ * Flatten one field into rows.
+ *
+ * Some screens store rows, not strings — the competitors list is an array
+ * of {name, why} objects. String()ing that gives "[object Object]", which
+ * silently destroys everything the client said on the call. Each record
+ * gets its own addressable rows instead.
+ */
+function putValue(put, mod, key, v) {
+  if (v === null || v === undefined || v === "") return;
+
+  if (Array.isArray(v)) {
+    const structured = v.some((x) => x && typeof x === "object");
+    if (!structured) { put("field", mod, "", key, v.join("; ")); return; }
+    v.forEach((row, i) => {
+      if (!row || typeof row !== "object") { put("row", mod, key + "[" + i + "]", key, row); return; }
+      for (const [col, val] of Object.entries(row)) {
+        if (val === null || val === undefined || val === "") continue;
+        put("row", mod, key + "[" + i + "]", col, Array.isArray(val) ? val.join("; ") : val);
+      }
+    });
+    return;
+  }
+
+  if (typeof v === "object") {
+    for (const [col, val] of Object.entries(v)) {
+      if (val === null || val === undefined || val === "") continue;
+      put("field", mod, key, col, Array.isArray(val) ? val.join("; ") : val);
+    }
+    return;
+  }
+
+  put("field", mod, "", key, v);
+}
+
+/**
  * Long format — one fact per row — because a single CSV has to carry
  * services, cities, channels, accounts and loose fields at once, and
  * those have nothing like the same columns. `entity` and `id` make every
@@ -238,9 +285,7 @@ export function buildCsv(payload) {
   for (const [k, v] of Object.entries(payload.client)) put("client", "", payload.client.slug, k, v);
 
   for (const [mod, f] of Object.entries(payload.fields)) {
-    for (const [k, v] of Object.entries(f)) {
-      put("field", mod, "", k, Array.isArray(v) ? v.join("; ") : v);
-    }
+    for (const [k, v] of Object.entries(f)) putValue(put, mod, k, v);
   }
 
   for (const t of payload.services.trades) put("trade", "services", t, "active", "true");
@@ -253,7 +298,9 @@ export function buildCsv(payload) {
     put("service", "services", it.id, "rank", it.rank);
     put("service", "services", it.id, "source", it.source);
     put("service", "services", it.id, "foundOnSite", String(it.foundOnSite));
-    put("service", "services", it.id, "subs", it.subs.join("; "));
+    put("service", "services", it.id, "subs", it.subs.filter((x) => x.selected).map((x) => x.name).join("; "));
+    put("service", "services", it.id, "subsDropped",
+      it.subs.filter((x) => !x.selected).map((x) => x.name).join("; "));
   }
 
   put("field", "locations", "", "baseAddress", payload.locations.baseAddress);
