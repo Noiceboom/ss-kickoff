@@ -34,7 +34,9 @@ import { CORE_ACCOUNTS, EXTRA_ACCOUNTS, LEADSIE_URL } from "./modules/11-access.
 //   /1  b32  first machine-readable payload
 //   /2  b33  subs became [{name, selected}]; channels gained `known`;
 //            services/locations bookkeeping left `fields`
-export const SCHEMA = "ss-kickoff/2";
+//   /3  b35  openItems carry `ask` — the client-facing wording, which the
+//            document prints and the payload had been dropping
+export const SCHEMA = "ss-kickoff/3";
 
 /**
  * Bookkeeping keys that are represented properly elsewhere in the payload.
@@ -228,7 +230,11 @@ export function buildPayload(ctx, parts, build) {
     openItems: (ctx.openItems || []).map((o) => ({
       section: o.from || "",
       what: o.what,
+      // `detail` is written for whoever picks up the work; `ask` is the
+      // wording the client sees. Anything generating a follow-up needs the
+      // second, so both travel.
       detail: o.detail,
+      ask: o.ask || null,
       kind: o.kind,
     })),
     display: display,
@@ -348,7 +354,10 @@ export function buildCsv(payload) {
 
   for (const [mod, note] of Object.entries(payload.notes)) put("note", mod, "", "note", note);
   for (const [mod, st] of Object.entries(payload.progress)) put("progress", mod, "", "status", st);
-  for (const o of payload.openItems) put("openItem", o.section, "", o.what, o.detail);
+  for (const o of payload.openItems) {
+    put("openItem", o.section, "", o.what, o.detail);
+    if (o.ask) put("ask", o.section, "", o.what, o.ask);
+  }
 
   return lines.join("\r\n");
 }

@@ -343,40 +343,96 @@ for (const m of MODULES) {
 
       // ── the declared version has to match the actual shape ──
       //
-      // Pinned by hand. If a change makes this fail, that is the point:
-      // decide whether the shape moved, and bump SCHEMA if it did rather
-      // than shipping two incompatible payloads under one version.
+      // Pinned by hand, keys AND types, every nested entity. Checking only
+      // top-level key names let a field change from a number to a string,
+      // or a nested object be renamed, without a word.
+      //
+      // If a change makes this fail, that is the point: decide whether the
+      // shape moved, and bump SCHEMA if it did rather than shipping two
+      // incompatible payloads under one version.
       const SHAPES = {
-        "ss-kickoff/2": {
-          top: ["schema", "build", "capturedAt", "client", "progress", "skipped", "fields",
-                "services", "locations", "channels", "access", "notes", "openItems", "display"],
-          service: ["id", "name", "trade", "source", "foundOnSite", "selected", "priority",
-                    "rank", "hasPage", "subs", "aliases"],
-          sub: ["name", "selected"],
-          city: ["id", "name", "state", "source", "foundOnSite", "selected", "excluded",
-                 "priority", "rank", "hasPage"],
-          channel: ["id", "label", "category", "known", "rating", "monthlyLeads", "note"],
-          account: ["key", "label", "core", "inPlay", "status"],
+        "ss-kickoff/3": {
+          "": { schema: "string", build: "string", capturedAt: "string", client: "object",
+                progress: "object", skipped: "array", fields: "object", services: "object",
+                locations: "object", channels: "array", access: "object", notes: "object",
+                openItems: "array", display: "object" },
+          "client": { slug: "string", name: "string", market: "string", website: "string", trade: "string" },
+          "services": { trades: "array", items: "array" },
+          "services.items[]": { id: "string", name: "string", trade: "string", source: "string",
+                foundOnSite: "boolean", selected: "boolean", priority: "string|null",
+                rank: "number|null", hasPage: "boolean", subs: "array", aliases: "array" },
+          "services.items[].subs[]": { name: "string", selected: "boolean" },
+          "locations": { baseAddress: "string", radiusMiles: "number", items: "array" },
+          "locations.items[]": { id: "string", name: "string", state: "string", source: "string",
+                foundOnSite: "boolean", selected: "boolean", excluded: "boolean",
+                priority: "string|null", rank: "number|null", hasPage: "boolean" },
+          "channels[]": { id: "string", label: "string", category: "string", known: "boolean",
+                rating: "string|null", monthlyLeads: "string|null", note: "string" },
+          "access": { leadsie: "object", accounts: "array", other: "array" },
+          "access.leadsie": { url: "string", status: "string|null", who: "string" },
+          "access.accounts[]": { key: "string", label: "string", core: "boolean",
+                inPlay: "boolean", status: "string|null" },
+          "access.other[]": { label: "string", status: "string|null" },
+          "openItems[]": { section: "string", what: "string", detail: "string",
+                ask: "string|null", kind: "string" },
         },
       };
-      const shape = SHAPES[j.schema];
-      if (!shape) {
-        fail(`the payload declares schema "${j.schema}", which nothing pins a shape for`);
-      } else {
-        const cmp = (label, obj, want) => {
-          if (!obj) return;
+
+      /** Walk a pinned payload, checking key sets and value types at every path. */
+      function pinCheck(schemaName, payload) {
+        const spec = SHAPES[schemaName];
+        if (!spec) { fail(`the payload declares schema "${schemaName}", which nothing pins a shape for`); return; }
+        const typeOf = (v) => (v === null ? "null" : Array.isArray(v) ? "array" : typeof v);
+        const seen = new Set();
+
+        const walk = (path, obj) => {
+          const want = spec[path];
+          if (!want) return;                 // not a pinned path
+          seen.add(path);
           const got = Object.keys(obj).sort().join(",");
-          const exp = want.slice().sort().join(",");
-          if (got !== exp) fail(`${j.schema} ${label} shape changed without a version bump — got [${got}]`);
+          const exp = Object.keys(want).sort().join(",");
+          if (got !== exp) {
+            fail(`${schemaName} "${path || "payload"}" keys changed without a version bump — got [${got}], pinned [${exp}]`);
+            return;
+          }
+          for (const [k, allowed] of Object.entries(want)) {
+            const actual = typeOf(obj[k]);
+            if (allowed.split("|").indexOf(actual) < 0) {
+              fail(`${schemaName} "${(path ? path + "." : "") + k}" is ${actual}, pinned as ${allowed}`);
+            }
+            const child = path ? path + "." + k : k;
+            if (Array.isArray(obj[k])) {
+              for (const el of obj[k]) if (el && typeof el === "object") walk(child + "[]", el);
+            } else if (obj[k] && typeof obj[k] === "object") {
+              walk(child, obj[k]);
+            }
+          }
         };
-        cmp("payload", j, shape.top);
-        const anySvc = j.services.items[0];
-        cmp("service", anySvc, shape.service);
-        const anySub = (j.services.items.find((x) => x.subs.length) || {}).subs;
-        if (anySub) cmp("sub-service", anySub[0], shape.sub);
-        cmp("city", j.locations.items[0], shape.city);
-        cmp("account", j.access.accounts[0], shape.account);
+        walk("", payload);
+
+        // a pinned path that never got walked is a pin describing nothing
+        for (const path of Object.keys(spec)) {
+          if (!seen.has(path)) fail(`${schemaName} pins "${path}", which the payload never produced`);
+        }
       }
+
+      // run it against a payload rich enough to reach every pinned path
+      const rich = S.fresh();
+      const richTrades = MODULES.find((m) => m.id === "services").trades({ ...ctxFor(bfp, rich) });
+      rich.m.access = { leadsie: "sent", leadsieWho: "Mike", status_ga4: "granted",
+        custom: [{ account: "Yelp Ads", status: "pending" }] };
+      rich.m.marketing = { chan: ["seo"], rate_seo: "good", vol_seo: "40" };
+      rich.m.locations = { base: "Kansas City, MO", radius: 30 };
+      rich.m.brand = { logoStatus: "raster", photoStatus: "none" };
+      {
+        const u = S.serviceUniverse(rich, bfp, richTrades.map(TRADES_MOD.getTrade).filter(Boolean));
+        const on = u.filter((x) => x.on);
+        S.setPriority(rich, [on[0].id], "high");
+        const cities = S.locationUniverse(rich, bfp, []).filter((x) => x.on);
+        S.setLocationPriority(rich, cities[0].id, "high");
+      }
+      pinCheck(JSON.parse(readout.exports(ctxFor(bfp, rich)).json()).schema,
+               JSON.parse(readout.exports(ctxFor(bfp, rich)).json()));
 
       // a struck-out sub-service must not be exported as in scope
       const subbed = S.fresh();
@@ -431,11 +487,6 @@ for (const m of MODULES) {
       const hit = jo.channels.find((c) => c.id === "some-new-channel");
       if (!hit) fail("a selected channel outside the built-in list was dropped from the export");
       else if (hit.known !== false) fail("an unknown channel was not flagged as unknown");
-      if (hit && SHAPES[jo.schema]) {
-        const got = Object.keys(hit).sort().join(",");
-        const exp = SHAPES[jo.schema].channel.slice().sort().join(",");
-        if (got !== exp) fail(`${jo.schema} channel shape changed without a version bump — got [${got}]`);
-      }
       const oddCsv = readout.exports(ctxFor(bfp, oddball)).csv();
       if (!/"channel","marketing","some-new-channel","known","false"/.test(oddCsv)) {
         fail("the CSV gives no way to tell an unknown channel from a known one");

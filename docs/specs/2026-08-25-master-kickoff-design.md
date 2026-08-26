@@ -253,14 +253,17 @@ not cosmetic.
 
 Two deliverables, and they are not the same document.
 
-**The OS payload** (`js/export.js`, `schema: "ss-kickoff/2"`) is a contract,
+**The OS payload** (`js/export.js`, `schema: "ss-kickoff/3"`) is a contract,
 and the version is part of it. Bump `SCHEMA` whenever the shape changes — a
 renamed field, a changed type, an entity gaining or losing a key. `b32` and
 `b33` both shipped as `/1` while `subs` changed from a list of names to a
 list of `{name, selected}`, so two files claimed one version and parsed
-differently. `docs/check.mjs` now pins each version's entity key sets by
-hand; changing a shape fails the check until someone decides whether it
-warrants a bump.
+differently. `docs/check.mjs` pins each version by hand — every nested
+path, its key set and the type of every value — and walks the payload
+against it. Renaming `baseAddress`, turning `rank` from a number into a
+string, or dropping a key all fail with the diff. It fails in both
+directions: a pinned path the payload stops producing is also an error, so
+a pin can't quietly describe nothing.
 Keys are STATE keys, never on-screen labels — a field labelled "Phrases we
 must never use" one week and "Never says" the next has been `neverSay`
 throughout. Every service, city, channel and account carries the stable id
