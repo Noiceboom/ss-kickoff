@@ -161,10 +161,28 @@ Known traps, all of them real:
   picture — which is one of the most valuable things the call produces.
   Rehydrate `channels` back into those keys explicitly, and write a check
   that a rated channel survives the round trip.
-- **`services`, `locations`, `channels` and `access` are all resolved
-  entity lists, not raw state.** Rehydrating means reconstructing
-  `on` / `off` / `prio` / `added` / `snap` correctly. Read
-  `serviceUniverse()` and `locationUniverse()` in `js/state.js` first.
+- **Each structured block rehydrates differently.** They are resolved
+  views, not raw state, and no two of them target the same keys. Treating
+  them as one rule is how an importer ends up writing `on`/`off`/`prio`
+  onto marketing, where none of those exist:
+
+  Note the first two columns are not the same name. The payload block
+  `channels` rebuilds into the module `marketing`; assuming block name and
+  module id match is itself a bug.
+
+  | Payload block | Rebuilds into | Keys | Notes |
+  |---|---|---|---|
+  | `services` | `state.m.services` | `trades`, `on`, `off`, `prio`, `added`, `snap`, `subsOff` | Plus `state.order.services` for rank. `subsOff` is rebuilt from `subs[].selected === false` — the payload has no `subsOff` of its own |
+  | `locations` | `state.m.locations` | `on`, `off`, `excluded`, `prio`, `added`, `base`, `radius` | `baseAddress`→`base`, `radiusMiles`→`radius`. Plus `state.order.locations` |
+  | `channels` | **`state.m.marketing`** | `chan[]`, `rate_<id>`, `vol_<id>`, `note_<id>` | Nothing resembling on/off/prio. See the marketing warning above |
+  | `access` | `state.m.access` | `extra[]`, `status_<key>`, `custom[]`, `leadsie`, `leadsieWho` | Discovery drops this screen — listed only so you know why it is absent from `fields` |
+
+  The authority is `STRUCTURAL` in `js/export.js`: whatever a module lists
+  there is missing from `fields` and must come back from its block. If the
+  two ever disagree, `STRUCTURAL` is right and the table is stale.
+
+  Read `serviceUniverse()` and `locationUniverse()` in `js/state.js` before
+  writing either of the first two.
 - **Taxonomy-only services carry trade-scoped ids** (`hvac:water-heaters`);
   scraped ones do not (`water-heaters`). Get this wrong and a selection
   lands on the wrong row or vanishes. `scopedId()` and
