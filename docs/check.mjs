@@ -2183,6 +2183,30 @@ for (const m of MODULES) {
   }
 }
 
+/* ── the wrong-document escape hatch must leave the page ── */
+{
+  // Each document has its own page now, and /discovery/ declares its mode
+  // in how it loads the app — so a link built from location.pathname points
+  // back at the page you are already on, reloads as the same document, and
+  // shows the same banner. A dead end that reads as a broken link.
+  const src = readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+  const fn = (src.match(/function docUrl\(mode\) \{[\s\S]*?\n\}/) || [""])[0];
+  if (!fn) fail("docUrl() is gone — cross-document links have no single place to be built");
+  else {
+    if (/location\.pathname/.test(fn)) {
+      fail("docUrl() builds from location.pathname, so it points back at the current document");
+    }
+    if (!/ROOT/.test(fn)) fail("docUrl() is not anchored at ROOT");
+    if (!/discovery\//.test(fn)) fail("docUrl() does not know where the discovery document lives");
+    if (!/location\.hash/.test(fn)) fail("docUrl() drops the fragment — the link would carry no data");
+    if (!/R\.slug/.test(fn)) fail("docUrl() drops the client slug");
+  }
+  const banner = (src.match(/function wrongModeBanner\(\)[\s\S]*?\n\}/) || [""])[0];
+  if (banner && /location\.pathname/.test(banner)) {
+    fail("wrongModeBanner still builds a URL from location.pathname");
+  }
+}
+
 /* ── a client with no scrape keeps its own identity ────── */
 {
   // loadClient() falls back to clients/template.json for anyone without a

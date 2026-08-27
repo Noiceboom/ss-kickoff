@@ -327,18 +327,28 @@ function banner() {
  * nothing here. state.js refuses it; this is the part that says so, since
  * a silently empty screen reads as "the link is broken".
  */
+/**
+ * Where a document lives, carrying the client and the fragment across.
+ *
+ * Built from ROOT and never from location.pathname. Each document now has
+ * its own page, and /discovery/ declares its mode in how it loads the app
+ * — so a "open it as the kickoff" link built from the current path points
+ * back at /discovery/, loads as discovery again, and shows the same
+ * banner. A dead end that looks like a broken link.
+ */
+function docUrl(mode) {
+  const base = ROOT + (mode === DISCOVERY ? "discovery/" : "");
+  return base + "?c=" + encodeURIComponent(R.slug) + location.hash;
+}
+
 function wrongModeBanner() {
   if (!R.wrongMode) return "";
   const other = R.wrongMode === DISCOVERY ? "discovery call" : "kickoff";
-  const url = location.pathname + location.search +
-    (R.wrongMode === DISCOVERY ? (location.search ? "&" : "?") + "mode=discovery" : "") +
-    location.hash;
   return (
     '<div class="warn">' + ICON.warn + "<div><strong>That link is from the " + esc(other) +
     "</strong><br>It decoded fine, but it was captured in the other document, so nothing was " +
     "loaded rather than half of it. " +
-    '<a href="' + esc(R.wrongMode === DISCOVERY ? url : location.pathname + "?c=" + esc(R.slug) + location.hash) +
-    '">Open it as the ' + esc(other) + "</a>.</div></div>"
+    '<a href="' + esc(docUrl(R.wrongMode)) + '">Open it as the ' + esc(other) + "</a>.</div></div>"
   );
 }
 
