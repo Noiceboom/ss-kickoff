@@ -15,6 +15,11 @@
 // Data: public domain (US Census Bureau). No API, no key, no network at
 // call time beyond the one same-origin fetch.
 
+// Anchored at the repo root, not the page — see app.js. The city data is
+// 52 shards plus a national index; loaded relative to /discovery/ they all
+// 404 and the radius search silently returns nothing.
+const ROOT = new URL("../", import.meta.url).href;
+
 const CACHE = new Map();
 const EARTH_MILES = 3958.8;
 
@@ -50,7 +55,7 @@ export const STATES = Object.keys(ADJACENT).sort();
 
 async function loadState(code) {
   if (CACHE.has(code)) return CACHE.get(code);
-  const p = fetch("data/places/" + code + ".json", { cache: "force-cache" })
+  const p = fetch(ROOT + "data/places/" + code + ".json", { cache: "force-cache" })
     .then((r) => (r.ok ? r.json() : []))
     .then((rows) => rows.map((r) => ({ name: r[0], state: code, lat: r[1], lng: r[2], pop: r[3] })))
     .catch(() => []);
@@ -81,7 +86,7 @@ export async function loadRegion(codes) {
 let INDEX = null;
 export async function loadIndex() {
   if (!INDEX) {
-    INDEX = fetch("data/places-index.json", { cache: "force-cache" })
+    INDEX = fetch(ROOT + "data/places-index.json", { cache: "force-cache" })
       .then((r) => (r.ok ? r.json() : []))
       .then((rows) => rows.map((r) => ({ name: r[0], state: r[1], lat: r[2], lng: r[3], pop: r[4] })))
       .catch(() => []);

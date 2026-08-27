@@ -6,7 +6,7 @@ import * as S from "./state.js";
 import { esc, ICON, pageNote, sliderValue, sliderPos, snapNice, formatSlider } from "./ui.js";
 import * as rank from "./rank.js";
 import { registryFor } from "./modules/index.js";
-import { modeFromSearch, variant, DEFAULT_MODE, DISCOVERY } from "./modes.js";
+import { modeFromSearch, modeFromEntry, variant, DEFAULT_MODE, DISCOVERY } from "./modes.js";
 import { importPayload } from "./import.js";
 import { resolveTrade } from "./trades/index.js";
 import * as places from "./places.js";
@@ -18,6 +18,13 @@ import * as assets from "./assets.js";
 // visible at a glance instead of looking like the change never shipped.
 export { BUILD } from "./build.js";
 import { BUILD } from "./build.js";
+
+// Every data fetch is anchored HERE, not at the page. /discovery/ is a
+// real page one directory down, so "clients/x.json" resolves under it and
+// 404s — quietly, into the template fallback, so the doc still loads and
+// simply has no client in it. import.meta.url is the one path that does
+// not care where the page lives.
+export const ROOT = new URL("../", import.meta.url).href;
 
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const FRAGMENT_LIMIT = 6000;      // practical URL ceiling before we refuse to share
@@ -128,13 +135,13 @@ function arr(v) { return Array.isArray(v) ? v : []; }
 
 async function loadClient(slug) {
   try {
-    const res = await fetch("clients/" + slug + ".json", { cache: "no-store" });
+    const res = await fetch(ROOT + "clients/" + slug + ".json", { cache: "no-store" });
     if (!res.ok) throw new Error(res.status);
     return sanitizeClient(await res.json(), slug);
   } catch (e) {
     if (slug !== "template") {
       try {
-        const res = await fetch("clients/template.json", { cache: "no-store" });
+        const res = await fetch(ROOT + "clients/template.json", { cache: "no-store" });
         if (res.ok) {
           // Borrow the template's SHAPE, never its identity. sanitizeClient
           // prefers the file's own slug, so without this every client that
@@ -1223,7 +1230,7 @@ function doAction(name) {
 /* ── boot ─────────────────────────────────────────────── */
 
 async function boot() {
-  useMode(modeFromSearch(location.search));
+  useMode(modeFromEntry(import.meta.url, location.search));
   R.slug = slugFromUrl();
   R.client = await loadClient(R.slug);
 

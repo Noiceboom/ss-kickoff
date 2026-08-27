@@ -25,6 +25,25 @@ export function modeFromSearch(search) {
 }
 
 /**
+ * The mode, from the entry script's own URL first and the page's second.
+ *
+ * `/discovery/` is a real page, not a redirect, so it cannot say which
+ * document it is in a query string without putting `?mode=discovery` back
+ * in the address bar. It says so in how it loads the app instead:
+ *
+ *   <script type="module" src="../js/app.js?mode=discovery">
+ *
+ * The page's own `?mode=` still works, so the root URL keeps behaving
+ * exactly as it did. Where both are present the entry wins — the file you
+ * opened is a stronger statement of intent than a query someone pasted.
+ */
+export function modeFromEntry(entryUrl, search) {
+  let fromEntry = DEFAULT_MODE;
+  try { fromEntry = modeFromSearch(new URL(entryUrl).search); } catch (e) { /* ignore */ }
+  return fromEntry !== DEFAULT_MODE ? fromEntry : modeFromSearch(search);
+}
+
+/**
  * Resolve a piece of module chrome (`title`, `lede`, `nav`, `notePrompt`)
  * for a mode.
  *

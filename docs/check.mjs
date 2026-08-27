@@ -2148,6 +2148,41 @@ for (const m of MODULES) {
   }
 }
 
+/* ── /discovery/ is a real page, not a redirect ─────────── */
+{
+  const entry = readFileSync(new URL("../discovery/index.html", import.meta.url), "utf8");
+
+  // It has to say which document it is in how it loads the app, because
+  // the whole point is that the address bar stays /discovery/ with no
+  // ?mode= on it.
+  if (!/src="\.\.\/js\/app\.js\?mode=discovery"/.test(entry)) {
+    fail("discovery/index.html does not declare mode=discovery on its app entry");
+  }
+  // and its own assets live one directory up
+  for (const ref of ['href="../css/kickoff.css"', 'src="../assets/']) {
+    if (entry.indexOf(ref) === -1) fail(`discovery/index.html is missing ${ref} — it will 404 from one level down`);
+  }
+  if (/(href|src)="(css|js|assets)\//.test(entry)) {
+    fail("discovery/index.html has a page-relative asset path — it resolves under /discovery/ and 404s");
+  }
+  if (entry.indexOf("<title>Service Scalers — Discovery</title>") === -1) {
+    fail("the discovery entry does not title itself as discovery — the tab is on the shared screen too");
+  }
+
+  // Every data fetch must be anchored at the repo root. A page-relative
+  // one resolves under /discovery/, 404s, and fails QUIETLY: the client
+  // falls back to the template and the radius search returns nothing.
+  for (const file of ["js/app.js", "js/places.js"]) {
+    const src = readFileSync(new URL("../" + file, import.meta.url), "utf8");
+    for (const m of src.matchAll(/fetch\(\s*("(?:clients|data)\/[^"]*")/g)) {
+      fail(`${file} fetches ${m[1]} relative to the page — it 404s from /discovery/`);
+    }
+    if (!/const ROOT = new URL\("\.\.\/", import\.meta\.url\)/.test(src)) {
+      fail(`${file} has no ROOT anchor, so its data paths depend on where the page lives`);
+    }
+  }
+}
+
 /* ── a client with no scrape keeps its own identity ────── */
 {
   // loadClient() falls back to clients/template.json for anyone without a
