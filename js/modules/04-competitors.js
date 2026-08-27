@@ -86,7 +86,10 @@ export default {
   notePrompt:
     "Who they named, what they said about them, anything they got heated about.",
 
-  discovery: { lede: COPY.lede.discovery },
+  discovery: {
+    lede: COPY.lede.discovery,
+    notePrompt: "Anything about the competitive picture worth keeping.",
+  },
 
   render(ctx) {
     const s = slot(ctx.state, ID);

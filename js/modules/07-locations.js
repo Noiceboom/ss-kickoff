@@ -12,7 +12,8 @@
 // the ad budget must actively avoid, and that has to reach the readout as
 // a list someone can paste into a negative geo-target.
 
-import { sectionHead, skipRow, field, esc, ICON } from "../ui.js";
+import { sectionHeadFor, skipRow, field, esc, ICON } from "../ui.js";
+import { sayer } from "../modes.js";
 import {
   isSkipped, locState, locationUniverse, onLocations, excludedLocations,
   locationsByPriority, locationOrder, radiusCandidates, getNote,
@@ -20,6 +21,31 @@ import {
 import { noteBlock } from "../listgrid.js";
 
 const ID = "locations";
+
+/* ── copy ─────────────────────────────────────────────── */
+
+export const COPY = {
+  title: {
+    kickoff: "Where do they actually go?",
+    discovery: "Where do you actually go?",
+  },
+  lede: {
+    kickoff: "Start from the shop and pull in everywhere they'd drive. Rank what matters, and bar the places that would only ever waste budget.",
+    discovery: "Start from the shop and pull in everywhere you'd drive. Rank what matters, and mark anywhere you'd rather we didn't advertise.",
+  },
+  baseLede: {
+    kickoff: "Start from the shop, then pull in everything they&rsquo;d actually drive to. Their site&rsquo;s list is usually shorter than the truth.",
+    discovery: "Start from the shop, then pull in everything you&rsquo;d actually drive to. The list on a website is usually shorter than the real coverage.",
+  },
+  baseHelp: {
+    kickoff: "Where the trucks leave from. A city or a full address — paste the one off their invoice.",
+    discovery: "Where the trucks leave from. A city or a full address is fine.",
+  },
+  gridLede: {
+    kickoff: "Untick anywhere they won&rsquo;t drive. Everything ticked needs a priority.",
+    discovery: "Untick anywhere you won&rsquo;t drive. Everything ticked needs a priority.",
+  },
+};
 
 const BUCKETS = [
   { key: "high", label: "High", note: "Page one" },
@@ -86,12 +112,12 @@ function coverageCard(ctx) {
     '<div class="card">' +
       '<div class="mlabel">Coverage</div>' +
       '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
-        "Start from the shop, then pull in everything they'd actually drive to. Their site's list is usually shorter than the truth." +
+        sayer(COPY, ctx.mode)("baseLede") +
       "</div>" +
       '<div class="fields two" style="margin-top:18px">' +
         field(ID, "base", "Base city", v.base, {
           placeholder: "1420 Baltimore Ave, Kansas City, MO 64108",
-          help: "Where the trucks leave from. A city or a full address — paste the one off their invoice.",
+          help: sayer(COPY, ctx.mode)("baseHelp"),
         }) +
       "</div>" +
       (t.matches && t.matches.length
@@ -160,7 +186,7 @@ function citiesCard(ctx) {
   if (!all.length) {
     return (
       '<div class="card" style="text-align:center;color:var(--muted)">' +
-      "No cities yet. Run a radius search above, or add them by hand." +
+      "No cities yet. Run a radius search above, or add one by hand." +
       "</div>"
     );
   }
@@ -181,7 +207,7 @@ function citiesCard(ctx) {
   return (
     '<div class="card">' +
       '<div class="pickhead">' +
-        "<div><h3>Cities</h3><p>Untick anywhere they won't drive. Everything ticked needs a priority.</p></div>" +
+        "<div><h3>Cities</h3><p>" + sayer(COPY, ctx.mode)("gridLede") + "</p></div>" +
         '<div class="pickcount"><span class="v' + (on ? "" : " zero") + '">' + on + "</span>" +
           '<span class="l">of ' + all.length + "</span></div>" +
       "</div>" +
@@ -274,15 +300,20 @@ function orderCard(ctx) {
 export default {
   id: ID,
   nav: "Cities",
-  title: "Where do they actually go?",
-  lede: "Start from the shop and pull in everywhere they'd drive. Rank what matters, and bar the places that would only ever waste budget.",
+  title: COPY.title.kickoff,
+  lede: COPY.lede.kickoff,
+  discovery: {
+    title: COPY.title.discovery,
+    lede: COPY.lede.discovery,
+    notePrompt: "Anything about specific areas worth keeping — drive times, neighbourhoods, where the good work is.",
+  },
   skippable: true,
   notePrompt:
     "What they said about specific areas — drive times, neighbourhoods, where the good work is.",
 
   render(ctx) {
     return (
-      sectionHead(ctx.num, this.title, this.lede) +
+      sectionHeadFor(this, ctx) +
       skipRow(ID, isSkipped(ctx.state, ID)) +
       coverageCard(ctx) +
       citiesCard(ctx) +

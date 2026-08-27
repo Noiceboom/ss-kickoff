@@ -327,6 +327,128 @@ const UNSAFE_FOR_A_PROSPECT = [
   }
 }
 
+/* ── nothing on the sales call talks ABOUT the person reading it ── */
+//
+// The pinned-phrase list above only catches strings somebody thought to
+// pin. This catches the ones nobody did.
+//
+// The tell is grammatical. Kickoff copy is written to Sam about a client
+// who is not in the room, so it says "they". On the sales call the client
+// IS the room. Every visible string is swept for third person, and every
+// hit has to be either fixed or listed below as a deliberate exception.
+//
+// Written after eleven live leaks got past the phrase list: a module
+// title ("Who are they, on paper?"), most of two screens' ledes, and an
+// intro line telling a prospect which of THEIR cities we were "ordering
+// today". A list of remembered phrases cannot find the ones nobody
+// remembered.
+{
+  // Third person is correct when the subject genuinely is not the reader:
+  // their competitors, their old agency's ad accounts. Each is listed in
+  // full, so widening the sweep is a decision somebody makes on purpose
+  // rather than a regex quietly getting looser.
+  const ABOUT_SOMEBODY_ELSE = [
+    // competitors — "they" is the competitor
+    "We look every one of these up after the call",
+    "What do they do that you can't or won't match?",
+    "Both halves matter. Can't is something to work around",
+    "Mostly the two big franchises on brand search",
+    "Same-day everything, and they'll eat the trip charge",
+    "They took two of our commercial accounts last year",
+    "Why they win",
+    "Owns the map pack in the north suburbs",
+    // marketing — "they" is the ad accounts
+    "If they're in someone else's account, the history stays there when you leave",
+    // "them" is the cities, and the leads, not the person reading
+    "cities are listed with no page behind them",
+    "Leads come in but half of them are price shoppers",
+  ];
+
+  const unesc = (h) => String(h)
+    .replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&mdash;/g, "—")
+    .replace(/&rsquo;/g, "’").replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+
+  const THIRD_PERSON = /\b(they|their|theirs|them|they're|they've|they'd)\b/i;
+
+  /**
+   * Visible strings: the text between tags, plus the placeholders, which
+   * a prospect reads exactly as readily as anything else on the screen.
+   * Split per tag boundary rather than per word — "of their 34 cities" is
+   * only a leak as a phrase.
+   */
+  const visible = (html) => {
+    const out = [];
+    for (const run of html.replace(/<[^>]*>/g, "\n").split("\n")) {
+      const t = unesc(run).replace(/\s+/g, " ").trim();
+      if (t) out.push(t);
+    }
+    for (const m of html.matchAll(/placeholder="([^"]*)"/g)) {
+      const t = unesc(m[1]).replace(/\s+/g, " ").trim();
+      if (t) out.push(t);
+    }
+    return out;
+  };
+
+  const states = () => {
+    const bare = S.fresh("discovery");
+    const busy = S.fresh("discovery");
+    // enough filled in that conditional blocks render too
+    busy.m.company = { businessName: "Acme", emergency: true };
+    busy.m.goals = { revNow: "120000", capacity: "10" };
+    busy.m.marketing = { agency: "Lead Ninjas", chan: ["google-ads"] };
+    busy.m.competitors = { rows: [{ name: "Anchor", domain: "anchor.com", why: "map pack", threat: "real" }] };
+    busy.m.whynow = { whyNow: "Phone went quiet" };
+    busy.m.locations = { base: "Kansas City, MO", radius: 30 };
+    return [bare, busy];
+  };
+
+  const sweep = [];
+  for (const client of [bfp, tpl]) {
+    for (const st of states()) {
+      for (const m of REG.DISCOVERY) {
+        let html;
+        try { html = m.render({ ...ctxFor(client, st, "discovery"), num: "01" }); }
+        catch (e) { fail(`discovery/${m.id}: render threw during the third-person sweep — ${e.message}`); continue; }
+        // A module does NOT render all of its own copy. app.js draws the
+        // nav pill, and it draws the page-note box OUTSIDE .body — so its
+        // prompt never appears in render() output and this sweep was
+        // blind to it. Seven prompts got through that way, including
+        // "the pauses, the number they hesitated on, who they blamed"
+        // sitting at the foot of every screen on a shared call.
+        const chrome = ["nav", "title", "lede", "notePrompt"]
+          .map((k) => MODES.variant(m, "discovery", k))
+          .filter((x) => typeof x === "string" && x);
+        sweep.push({ id: m.id, lines: visible(html).concat(chrome.map((c) => unesc(c))) });
+      }
+    }
+  }
+
+  const leaks = [];
+  for (const r of sweep) {
+    for (const line of r.lines) {
+      if (!THIRD_PERSON.test(line)) continue;
+      if (ABOUT_SOMEBODY_ELSE.some((ok) => line.indexOf(ok) > -1)) continue;
+      const key = r.id + " :: " + line;
+      if (leaks.indexOf(key) < 0) leaks.push(key);
+    }
+  }
+  for (const l of leaks.slice(0, 20)) {
+    fail(`discovery copy talks about the prospect in the third person — ${l}`);
+  }
+  if (leaks.length > 20) fail(`…and ${leaks.length - 20} more third-person strings on the sales call`);
+
+  // The exceptions must still be reachable, or they are stale entries
+  // quietly widening the sweep. Same two-sided rule as the phrase pins.
+  const everything = sweep.flatMap((r) => r.lines).join("\n");
+  for (const ok of ABOUT_SOMEBODY_ELSE) {
+    if (everything.indexOf(ok) < 0) {
+      fail(`"${ok}" is listed as a deliberate third-person exception, but nothing on the sales ` +
+           `call renders it — remove it rather than leaving the sweep wider than it needs to be`);
+    }
+  }
+}
+
 /* ── the sales call asks nothing that needs a signature ── */
 //
 // Pinned by field key, not by counting cards. "The screen renders" is
@@ -2053,6 +2175,89 @@ for (const m of MODULES) {
   }).json());
   if (j.client.slug !== "acme-hvac") {
     fail(`a prospect exported with slug "${j.client.slug}" instead of its own`);
+  }
+}
+
+/* ── the sales call's PDF is not the sales call's thinking ── */
+//
+// The kickoff already solves this: the client document renders into a
+// hidden .printdoc on every tab, and print emits that and nothing else.
+// The discovery document reuses the pattern, so the same guarantee has to
+// hold — and it has more to lose. The internal tab carries the gaps in
+// what a prospect said and what is still missing before anyone can price
+// the work. That reaching a prospect is worse than any bug in this repo.
+{
+  const readout = REG.DISCOVERY.find((m) => m.id === "readout");
+  const st = S.fresh("discovery");
+  st.m.company = { businessName: "Acme Plumbing" };
+  st.m.goals = { revNow: "120000" };                  // leaves most UNKNOWNS unmet
+  st.m.marketing = { agency: "Lead Ninjas" };         // arms the contract-end unknown
+  st.notes["whynow:_page"] = "Sounded desperate, honestly";
+  st.notes["goals:_page"] = "Made the target up on the spot";
+
+  const slice = (html) => {
+    const at = html.indexOf('<div class="printdoc">');
+    return at < 0 ? "" : html.slice(at);
+  };
+
+  // Phrases that exist ONLY on the internal tab, pinned by hand.
+  const INTERNAL_ONLY = [
+    "Before this can be priced",
+    "No budget figure",
+    "Capacity unknown",
+    "Incumbent contract end unknown",
+    "Decision-makers unknown",
+    "Sounded desperate, honestly",
+    "Made the target up on the spot",
+    "Don&rsquo;t open this while you&rsquo;re sharing your screen",
+  ];
+
+  let sawInternal = false;
+  for (const tab of ["recap", "brief", "raw"]) {
+    const html = readout.render({
+      ...ctxFor(bfp, st, "discovery"), num: "08", transient: { readout: { tab } },
+    });
+    const doc = slice(html);
+    if (!doc) { fail(`discovery: no printable document rendered on the "${tab}" tab`); continue; }
+    if (doc.indexOf("Acme Plumbing") < 0) {
+      fail(`discovery: the printed document lost the prospect's own answers on the "${tab}" tab`);
+    }
+    for (const secret of INTERNAL_ONLY) {
+      if (doc.indexOf(secret) > -1) {
+        fail(`discovery: "${secret}" reached the PRINTED document from the "${tab}" tab — ` +
+             `that is the prospect reading your notes on them`);
+      }
+    }
+    // …and it must actually be on the internal tab, or the pins above are
+    // guarding a string nothing produces.
+    if (tab === "brief") {
+      sawInternal = true;
+      for (const secret of INTERNAL_ONLY) {
+        if (html.indexOf(secret) < 0) {
+          fail(`discovery: "${secret}" is pinned out of the printed document but nothing renders ` +
+               `it on the internal tab — the pin proves nothing`);
+        }
+      }
+    }
+  }
+  if (!sawInternal) fail("discovery: the internal tab never rendered, so nothing above was tested");
+
+  // The unknowns list empties itself as the call goes on, rather than
+  // being a fixed lecture. Fill everything it asks for and it says so.
+  const done = S.fresh("discovery");
+  done.m.goals = { budget: "8000", avgTicket: "4300", closeRate: "30", revTarget: "300000", capacity: "10" };
+  done.m.whynow = { liveBy: "30", whoDecides: "Just me" };
+  done.m.services = { prio: { "x": "high" } };
+  done.m.locations = { prio: { "y": "high" } };
+  const full = readout.render({
+    ...ctxFor(bfp, done, "discovery"), num: "08", transient: { readout: { tab: "brief" } },
+  });
+  if (full.indexOf("Nothing missing. You can price this.") < 0) {
+    fail("the unknowns list still reports gaps once every field it names is filled");
+  }
+  // No scoring, anywhere. Sam's call, and worth pinning so it stays made.
+  if (/\b(fit\s*score|qualification score|score:\s*\d|\d\s*\/\s*10)\b/i.test(full)) {
+    fail("the internal tab renders something that reads as a score — there is deliberately no fit scoring here");
   }
 }
 

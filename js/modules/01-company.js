@@ -31,6 +31,7 @@ export const COPY = {
     kickoff: "The factual layer — the stuff that has to be identical everywhere it appears. Who we call, the number that rings, the address Google sees.",
     discovery: "The quick version — how long you've been going, how big the operation is, and who you actually sell to.",
   },
+  title: { kickoff: "Who are they, on paper?", discovery: "Who are you, on paper?" },
   handoffLabel: { kickoff: "From the sales handoff", discovery: "The basics" },
   handoffLede: {
     kickoff: "Carried over from the deal — correct it here if sales got it wrong.",
@@ -64,9 +65,9 @@ export default {
 
   discovery: {
     nav: "Business",
+    title: COPY.title.discovery,
     lede: COPY.lede.discovery,
-    notePrompt:
-      "How the business actually runs — who answers the phone, who's really in charge, anything odd about the setup.",
+    notePrompt: "Anything about how the business runs worth keeping.",
   },
 
   render(ctx) {

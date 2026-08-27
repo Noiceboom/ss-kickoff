@@ -13,7 +13,8 @@
 // between two screens to say "that one's important" was a step nobody
 // needed.
 
-import { sectionHead, skipRow, field, esc, ICON } from "../ui.js";
+import { sectionHeadFor, skipRow, field, esc, ICON } from "../ui.js";
+import { sayer } from "../modes.js";
 import {
   isSkipped, slot, svcState, serviceUniverse, onServices,
   servicesByPriority, serviceOrder, getNote,
@@ -22,6 +23,33 @@ import { TRADES, getTrade, resolveTrade } from "../trades/index.js";
 import { noteBlock } from "../listgrid.js";
 
 const ID = "services";
+
+/* ── copy ─────────────────────────────────────────────── */
+//
+// The kickoff talks about the client in the third person because Sam is
+// the only reader. On the sales call the client IS the reader, and
+// "untick anything they don't actually do" read off a shared screen is a
+// small, avoidable insult.
+
+export const COPY = {
+  lede: {
+    kickoff: "Pick the trade, confirm what they actually do, then say how much each one matters. The build order at the bottom writes itself.",
+    discovery: "Pick the trade, confirm what you actually do, then say how much each one matters to the business.",
+  },
+  pickerLede: {
+    kickoff: "Loads each trade&rsquo;s full service list. Anything already on their site comes through ticked.",
+    discovery: "Loads each trade&rsquo;s full service list. Anything already on your site comes through ticked.",
+  },
+  tradeHint: {
+    kickoff: "Tick every trade they run — plenty do two.",
+    discovery: "Tick every trade you run — plenty of companies run two.",
+  },
+  onSite: { kickoff: "On their site", discovery: "On your site" },
+  gridLede: {
+    kickoff: "Untick anything they don&rsquo;t actually do. Everything ticked needs a priority.",
+    discovery: "Untick anything you don&rsquo;t actually do. Everything ticked needs a priority.",
+  },
+};
 
 const BUCKETS = [
   { key: "high", label: "High", note: "Build these first" },
@@ -63,13 +91,13 @@ function industryCard(ctx) {
     ? "Set from the sales handoff. Tap to change it, or add a second trade."
     : active.length > 1
       ? "Both service lists are loaded below, grouped by trade."
-      : "Tick every trade they run — plenty do two.";
+      : sayer(COPY, ctx.mode)("tradeHint");
 
   return (
     '<div class="card">' +
       '<div class="mlabel">Industry</div>' +
       '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
-        "Loads each trade's full service list. Anything already on their site comes through ticked." +
+        sayer(COPY, ctx.mode)("pickerLede") +
       "</div>" +
       '<div class="chips" style="margin-top:18px">' + chips + "</div>" +
       '<div style="margin-top:14px;font-size:13.5px;color:var(--muted)">' + esc(note) + "</div>" +
@@ -84,7 +112,8 @@ function tile(ctx, it) {
   const openMap = ctx.transient.notes || {};
   const badges =
     (it.source === "added" ? '<span class="badge b-ver">Added on call</span>' : "") +
-    (it.source === "both" || it.source === "scrape" ? '<span class="badge b-page">On their site</span>' : "") +
+    (it.source === "both" || it.source === "scrape"
+      ? '<span class="badge b-page">' + sayer(COPY, ctx.mode)("onSite") + "</span>" : "") +
     (it.subs.length ? '<span class="badge b-sub">' + it.subs.filter((s) => s.on).length + " / " + it.subs.length + "</span>" : "");
 
   const detail = it.on
@@ -160,7 +189,7 @@ function servicesCard(ctx) {
     '<div class="card">' +
       '<div class="pickhead">' +
         "<div><h3>" + esc(trades.length ? trades.map((t) => t.label).join(" + ") + " services" : "Services") + "</h3>" +
-          "<p>Untick anything they don't actually do. Everything ticked needs a priority.</p></div>" +
+          "<p>" + sayer(COPY, ctx.mode)("gridLede") + "</p></div>" +
         '<div class="pickcount"><span class="v' + (on ? "" : " zero") + '">' + on + "</span>" +
           '<span class="l">of ' + all.length + "</span></div>" +
       "</div>" +
@@ -237,14 +266,18 @@ export default {
   id: ID,
   nav: "Services",
   title: "Is this everything you sell?",
-  lede: "Pick the trade, confirm what they actually do, then say how much each one matters. The build order at the bottom writes itself.",
+  lede: COPY.lede.kickoff,
+  discovery: {
+    lede: COPY.lede.discovery,
+    notePrompt: "Anything about specific jobs worth keeping — margins, crews, work you'd rather not take.",
+  },
   skippable: true,
   notePrompt:
     "What they said about specific jobs — margins, which crew does what, work they'd rather not take.",
 
   render(ctx) {
     return (
-      sectionHead(ctx.num, this.title, this.lede) +
+      sectionHeadFor(this, ctx) +
       skipRow(ID, isSkipped(ctx.state, ID)) +
       industryCard(ctx) +
       servicesCard(ctx) +

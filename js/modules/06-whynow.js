@@ -42,8 +42,10 @@ export default {
   title: "Why now?",
   lede: "Before we talk about services or cities — what made today the day you took this call.",
   skippable: true,
-  notePrompt:
-    "How they told it, not just what they said. The pauses, the number they hesitated on, who they blamed.",
+  // Every other module keeps its Sam-facing prompt for the kickoff and
+  // overrides it for discovery. This screen only exists on the sales call,
+  // so there is no kickoff wording to keep — the neutral one IS the one.
+  notePrompt: "Anything about how this came up that's worth keeping.",
 
   render(ctx) {
     const s = slot(ctx.state, ID);
@@ -66,7 +68,10 @@ export default {
           }) +
           field(ID, "costOfNothing", "If nothing changes, what does that cost you over the next year?", v("costOfNothing"), {
             type: "longtext", rows: 2,
-            placeholder: "In their words — a number, a truck they can't add, a guy they'd have to let go.",
+            // Written as an EXAMPLE ANSWER, not as a note to whoever is
+            // driving. A placeholder reading "in their words" is an
+            // instruction about the person reading it.
+            placeholder: "Another year of turning down the commercial work, and I still can't put a third truck on.",
           }) +
         "</div>" +
       "</div>" +

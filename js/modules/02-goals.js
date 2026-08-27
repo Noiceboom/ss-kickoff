@@ -151,13 +151,21 @@ const BUDGET_FLEX = [
   { value: "unsure", label: "Needs a conversation" },
 ];
 
+// Option LABELS are as visible as help text, and this list is a set of
+// sentences about the person answering. Kept per mode for the same reason
+// everything else here is.
+const CONSTRAINTS_BY_MODE = {
+  kickoff: "Nothing — they can absorb it",
+  discovery: "Nothing — we could absorb it",
+};
+
 const CONSTRAINTS = [
   { value: "", label: "—" },
   { value: "techs", label: "Techs in the field" },
   { value: "office", label: "Phones / dispatch" },
   { value: "trucks", label: "Trucks and equipment" },
   { value: "cash", label: "Cash to fund the work" },
-  { value: "nothing", label: "Nothing — they can absorb it" },
+  { value: "nothing", label: CONSTRAINTS_BY_MODE.kickoff },
 ];
 
 /* ── slider scales ────────────────────────────────────── */
@@ -195,8 +203,7 @@ export default {
 
   discovery: {
     lede: COPY.lede.discovery,
-    notePrompt:
-      "Numbers they hedged on, the target they walked back, what growth actually seems to mean to them.",
+    notePrompt: "Anything about the numbers worth keeping — caveats, ranges, where each figure came from.",
   },
 
   render(ctx) {
@@ -287,7 +294,10 @@ export default {
         "</div>" +
         '<div class="fields two" style="margin-top:22px">' +
           field(ID, "capacityBlock", "What breaks first?", v("capacityBlock"), {
-            type: "select", options: CONSTRAINTS,
+            type: "select",
+            options: CONSTRAINTS.map((o) => (o.value === "nothing"
+              ? { value: o.value, label: CONSTRAINTS_BY_MODE[ctx.mode] || CONSTRAINTS_BY_MODE.kickoff }
+              : o)),
             help: t("capacityBlock"),
           }) +
           field(ID, "win90", "What does winning look like in 90 days?", v("win90"), {

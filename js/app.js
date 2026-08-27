@@ -7,6 +7,7 @@ import { esc, ICON, pageNote, sliderValue, sliderPos, snapNice, formatSlider } f
 import * as rank from "./rank.js";
 import { registryFor } from "./modules/index.js";
 import { modeFromSearch, variant, DEFAULT_MODE, DISCOVERY } from "./modes.js";
+import { importPayload } from "./import.js";
 import { resolveTrade } from "./trades/index.js";
 import * as places from "./places.js";
 import * as assets from "./assets.js";
@@ -52,6 +53,11 @@ function useMode(mode) {
   MODULES = registryFor(mode);
   byId = new Map(MODULES.map((m) => [m.id, m]));
   document.documentElement.setAttribute("data-mode", mode);
+  // The browser tab is on the shared screen too, and it is the one piece
+  // of chrome no amount of care inside the page controls.
+  document.title = mode === DISCOVERY
+    ? "Service Scalers — Discovery"
+    : "Service Scalers — Kickoff Doc";
 }
 
 /** This screen's label, in the words this document uses for it. */
@@ -598,6 +604,7 @@ document.addEventListener("blur", (e) => {
 document.addEventListener("change", (e) => {
   const el = e.target;
   if (el && el.getAttribute && el.getAttribute("data-putfile")) { putFile(el); return; }
+  if (el && el.getAttribute && el.getAttribute("data-loadjson")) { loadDiscovery(el); return; }
   if (!el || el.tagName !== "SELECT") return;
   if (el.getAttribute("data-f") || el.getAttribute("data-row")) {
     el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -915,6 +922,69 @@ async function putFile(input) {
     refreshPreviews();
   } catch (e) {
     toast(e.message || "Could not read that file");
+  }
+}
+
+/* ── loading a sales call ─────────────────────────────── */
+//
+// Deliberately NOT silent. This replaces the whole kickoff, so it asks
+// first — and it asks BEFORE reading the file, so a mis-clicked file
+// costs nothing. The confirm carries the client name out of the payload
+// rather than a generic "are you sure": picking last week's prospect by
+// mistake is the actual failure mode, and a name is the only thing that
+// catches it.
+async function loadDiscovery(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  // Let the same file be picked again after a cancel or a failure —
+  // without this the input keeps its value and the change never fires.
+  const reset = () => { try { input.value = ""; } catch (e) { /* ignore */ } };
+
+  let payload;
+  try {
+    payload = JSON.parse(await file.text());
+  } catch (e) {
+    toast("That file isn't valid JSON");
+    reset();
+    return;
+  }
+
+  let result;
+  try {
+    result = importPayload(payload);
+  } catch (e) {
+    toast(e.message || "Could not read that export");
+    reset();
+    return;
+  }
+
+  const who = result.name || result.slug || "that call";
+  if (S.hasWork(R.state) && !window.confirm(
+    "Load the sales call for " + who + "?\n\n" +
+    "This replaces everything currently captured in this kickoff. " +
+    "There is no undo."
+  )) { reset(); return; }
+
+  R.state = result.state;
+  // Radius results are derived from the base city, which has just changed.
+  R.transient = {};
+  R.mismatch = findMismatch();
+  render();
+  flushSave();
+  reset();
+
+  for (const w of result.warnings) if (window.console) console.warn("[import]", w);
+  toast(result.warnings.length
+    ? "Loaded " + who + " — " + result.warnings.length + " warning(s) in the console"
+    : "Loaded " + who);
+
+  // The imported base city needs its radius search rerun, exactly as boot
+  // does — otherwise the cities screen opens with an empty picker.
+  if (S.getField(R.state, "locations", "base", "")) {
+    suggestBase().then(() => {
+      const t = locT();
+      if (!t.base && t.matches && t.matches.length) { t.base = t.matches[0]; t.matches = []; runRadius(); }
+    });
   }
 }
 

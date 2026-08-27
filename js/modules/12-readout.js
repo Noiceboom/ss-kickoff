@@ -5,19 +5,140 @@
 // Consumes every other module's summary(). Three views over one
 // captured state, plus the export API app.js calls for copy/download.
 
-import { esc, ICON, sectionHead } from "../ui.js";
-import { isSkipped, getPageNote, statusWithNote } from "../state.js";
+import { esc, ICON, sectionHeadFor, filled } from "../ui.js";
+import { isSkipped, getPageNote, statusWithNote, slot } from "../state.js";
 import { buildPayload, buildCsv as machineCsv } from "../export.js";
 import { BUILD } from "../build.js";
+import { sayer, DISCOVERY } from "../modes.js";
 
 const ID = "readout";
-const TABS = [
-  { key: "recap", label: "Client document" },
-  { key: "brief", label: "Internal brief" },
-  { key: "raw", label: "Raw data" },
-];
+
+const TABS = {
+  kickoff: [
+    { key: "recap", label: "Client document" },
+    { key: "brief", label: "Internal brief" },
+    { key: "raw", label: "Raw data" },
+  ],
+  // Named for what it costs to open, not for what it contains. On a
+  // shared screen the tab strip is the thing being read while the mouse
+  // is moving, and "Internal brief" does not stop a hand mid-click.
+  discovery: [
+    { key: "recap", label: "Your document" },
+    { key: "brief", label: "Internal \u2014 don\u2019t open on the call" },
+    { key: "raw", label: "Raw data" },
+  ],
+};
+
+const tabsFor = (mode) => TABS[mode] || TABS.kickoff;
+
+/* ── copy ─────────────────────────────────────────────── */
+
+export const COPY = {
+  lede: {
+    kickoff: "Three views over the same call. Send the recap same-day, hand the brief to whoever picks up the work, and keep the raw export for the OS.",
+    discovery: "Three views over the same call. The first is what you get, the second is mine, and the third is the one that carries everything across if we work together.",
+  },
+  recapWarn: {
+    kickoff: "This is exactly what the client gets.",
+    discovery: "This is exactly what the prospect gets.",
+  },
+  recapWarnBody: {
+    kickoff: "Print or save as PDF from the button below and it prints this page and nothing else &mdash; whichever tab you happen to be on. Your call notes are not in here.",
+    discovery: "Print or save as PDF from the button below and it prints this page and nothing else &mdash; whichever tab you happen to be on. Your notes, and everything on the internal tab, are not in here.",
+  },
+  coverLede: {
+    kickoff: "Everything we agreed on the kickoff call &mdash; the services and areas we&rsquo;re building around, in the order you told us they matter, and the handful of things we need back from you before the first page goes up.",
+    discovery: "Everything you told us on our call, written down so you can check we heard it right &mdash; where the business is now, where you want it to get to, and the services and areas that matter most.",
+  },
+  asksLabel: {
+    kickoff: "What we need from you",
+    discovery: "What we still need to know",
+  },
+  asksLede: {
+    kickoff: "Short list. Each one unblocks something we can&rsquo;t start without.",
+    discovery: "Short list. Each one changes what we&rsquo;d put in front of you next.",
+  },
+  asksNone: {
+    kickoff: "Nothing &mdash; you gave us everything on the call. We&rsquo;ll take it from here.",
+    discovery: "Nothing &mdash; you covered everything. We have what we need to put something together.",
+  },
+  docTitle: { kickoff: "Kickoff", discovery: "Discovery call" },
+};
 
 /* ── gather ───────────────────────────────────────────── */
+
+/* ── what stops this being priced ─────────────────────── */
+//
+// Sam's call, and the reason there is no score anywhere in this file:
+// a number like "6/10" invites you to trust it over the conversation, and
+// it is the single worst thing to have on screen when you tab wrong.
+//
+// This is the other half of that decision — not a judgement about the
+// prospect, just the list of things still missing before anyone can put a
+// price on the work. Derived from empty fields, so it empties itself as
+// the call goes on.
+//
+// Internal tab only. It never reaches the client document and never
+// reaches print.
+const UNKNOWNS = [
+  { mod: "goals", key: "budget", what: "No budget figure",
+    why: "Nothing to size a proposal against — build-to-a-cap and build-to-a-return are different documents" },
+  { mod: "goals", key: "avgTicket", what: "No average ticket",
+    why: "Without it there is no way to say what a lead is worth to them" },
+  { mod: "goals", key: "closeRate", what: "No close rate",
+    why: "Leads-to-revenue is guesswork until this is a number" },
+  { mod: "goals", key: "revTarget", what: "No target revenue",
+    why: "No gap to size the work against" },
+  { mod: "goals", key: "capacity", what: "Capacity unknown",
+    why: "Selling volume into a business that cannot service it is a churn story" },
+  { mod: "whynow", key: "liveBy", what: "No timeline",
+    why: "No date to work back from, and no idea whether this is live or a nurture" },
+  { mod: "whynow", key: "whoDecides", what: "Decision-makers unknown",
+    why: "A proposal can land in front of someone who has heard none of this" },
+  { mod: "marketing", key: "contractEnd", what: "Incumbent contract end unknown",
+    why: "Cannot say when we could actually start", when: (st) => filled(slot(st, "marketing").agency) },
+];
+
+function unknowns(ctx) {
+  const out = [];
+  for (const u of UNKNOWNS) {
+    if (u.when && !u.when(ctx.state)) continue;
+    if (filled(slot(ctx.state, u.mod)[u.key])) continue;
+    out.push(u);
+  }
+  return out;
+}
+
+function unknownsBlock(ctx) {
+  const list = unknowns(ctx);
+  const svc = (ctx.state.m.services || {}).prio;
+  const loc = (ctx.state.m.locations || {}).prio;
+  const extra = [];
+  if (!svc || !Object.keys(svc).length) {
+    extra.push({ what: "No service is prioritised", why: "Nothing to lead the first month with" });
+  }
+  if (!loc || !Object.keys(loc).length) {
+    extra.push({ what: "No city is prioritised", why: "Nothing to lead the first month with" });
+  }
+  const all = list.concat(extra);
+
+  if (!all.length) {
+    return '<div class="card"><div class="mlabel">Before this can be priced</div>' +
+      '<div style="margin-top:10px;font-size:15px;color:var(--ok)">Nothing missing. You can price this.</div></div>';
+  }
+  return (
+    '<div class="card"><div class="mlabel">Before this can be priced (' + all.length + ")</div>" +
+      '<div style="font-size:14px;color:var(--muted);margin-top:5px">' +
+        "What is still unanswered. Not a score, and not a judgement &mdash; just what is missing." +
+      "</div>" +
+      '<div style="margin-top:12px">' + all.map((u) =>
+        '<div class="open"><span class="w">' + esc(u.what) + "</span>" +
+        '<span class="badge b-st">Unknown</span>' +
+        '<span class="d">' + esc(u.why) + "</span></div>"
+      ).join("") + "</div>" +
+    "</div>"
+  );
+}
 
 /** Walk the registry once, collecting each module's summary and status. */
 function collect(ctx) {
@@ -166,6 +287,18 @@ function isRanked(id) {
 //      work ("the copywriter is guessing", "this is what reporting
 //      arguments are made of") and reads as an insult in a deliverable.
 
+/** Bound copy resolver — this file calls it from free functions, not methods. */
+function t(ctx, key) { return sayer(COPY, ctx.mode)(key); }
+
+/**
+ * A prospect usually has no clients/<slug>.json, so `client.name` is
+ * empty and the only name we have is the one they typed on the call.
+ * The cover of the document they get should not say "Discovery call".
+ */
+function nameFrom(ctx) {
+  return String((ctx.state.m.company || {}).businessName || "").trim();
+}
+
 function cover(ctx) {
   const c = ctx.client.client || {};
   const when = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
@@ -175,12 +308,10 @@ function cover(ctx) {
         '<span class="mlabel">Service Scalers</span>' +
         '<span class="mlabel">' + esc(when) + "</span>" +
       "</div>" +
-      "<h1>" + esc(c.name || "Kickoff") + "</h1>" +
+      "<h1>" + esc(c.name || nameFrom(ctx) || t(ctx, "docTitle")) + "</h1>" +
       (c.market ? '<div class="covermkt">' + esc(c.market) + "</div>" : "") +
       '<div class="coverline"></div>' +
-      '<p class="coverlede">Everything we agreed on the kickoff call &mdash; the services and ' +
-        "areas we&rsquo;re building around, in the order you told us they matter, and the " +
-        "handful of things we need back from you before the first page goes up.</p>" +
+      '<p class="coverlede">' + t(ctx, "coverLede") + "</p>" +
       (c.website ? '<div class="coverweb">' + esc(c.website) + "</div>" : "") +
     "</div>"
   );
@@ -191,16 +322,15 @@ function asksFrom(ctx, parts) {
   return openItems(ctx, parts).filter((o) => o.ask);
 }
 
-function askBlock(items) {
+function askBlock(ctx, items) {
   if (!items.length) {
-    return '<div class="card"><div class="mlabel">What we need from you</div>' +
-      '<div style="margin-top:10px;font-size:16px;color:var(--ok)">Nothing &mdash; you gave us ' +
-      "everything on the call. We&rsquo;ll take it from here.</div></div>";
+    return '<div class="card"><div class="mlabel">' + t(ctx, "asksLabel") + "</div>" +
+      '<div style="margin-top:10px;font-size:16px;color:var(--ok)">' + t(ctx, "asksNone") + "</div></div>";
   }
   return (
-    '<div class="card asks"><div class="mlabel">What we need from you</div>' +
+    '<div class="card asks"><div class="mlabel">' + t(ctx, "asksLabel") + "</div>" +
       '<div style="font-size:14px;color:var(--muted);margin-top:5px">' +
-        "Short list. Each one unblocks something we can&rsquo;t start without." +
+        t(ctx, "asksLede") +
       "</div>" +
       '<ol class="asklist">' + items.map((o) =>
         "<li><span class=\"w\">" + esc(o.what) + "</span>" +
@@ -249,7 +379,7 @@ function clientDoc(ctx, parts) {
     orders +
     '<div class="docrule"><span>Everything you told us</span></div>' +
     sectionsBlock(parts) +
-    askBlock(asksFrom(ctx, parts))
+    askBlock(ctx, asksFrom(ctx, parts))
   );
 }
 
@@ -258,9 +388,7 @@ function clientDoc(ctx, parts) {
 function recapView(ctx, parts) {
   return (
     '<div class="warn">' + ICON.doc +
-      "<div><strong>This is exactly what the client gets.</strong> Print or save as PDF from the " +
-      "button below and it prints this page and nothing else &mdash; whichever tab you happen to " +
-      "be on. Your call notes are not in here.</div></div>" +
+      "<div><strong>" + t(ctx, "recapWarn") + "</strong> " + t(ctx, "recapWarnBody") + "</div></div>" +
     clientDoc(ctx, parts)
   );
 }
@@ -286,7 +414,20 @@ function briefView(ctx, parts) {
         "</div></div>"
       : "";
 
-  return openBlock(open, "Open items") + notesBlock(parts) + priorities + detail;
+  // In discovery this tab is the one thing on the machine that must not
+  // be read by the person on the other end of the call, so it says so at
+  // the top of itself rather than relying on the tab label alone.
+  const guard = ctx.mode === DISCOVERY
+    ? '<div class="warn">' + ICON.lock +
+        "<div><strong>Don&rsquo;t open this while you&rsquo;re sharing your screen.</strong><br>" +
+        "Your own notes, the gaps in what they told you, and what is still missing before this " +
+        "can be priced. None of it is in the document they get, and none of it prints." +
+        "</div></div>"
+    : "";
+
+  return guard + openBlock(open, "Open items") +
+    (ctx.mode === DISCOVERY ? unknownsBlock(ctx) : "") +
+    notesBlock(parts) + priorities + detail;
 }
 
 /* ── tab: raw ─────────────────────────────────────────── */
@@ -437,16 +578,21 @@ export default {
   id: ID,
   nav: "Readout",
   title: "Here's what we agreed",
-  lede: "Three views over the same call. Send the recap same-day, hand the brief to whoever picks up the work, and keep the raw export for the OS.",
+  lede: COPY.lede.kickoff,
   skippable: false,
+
+  discovery: {
+    title: "Here\u2019s what you told us",
+    lede: COPY.lede.discovery,
+  },
 
   render(ctx) {
     const parts = collect(ctx);
     const tab = (ctx.transient[ID] && ctx.transient[ID].tab) || "recap";
 
-    const tabs = '<div class="tabs">' + TABS.map((t) =>
-      '<button class="chip' + (t.key === tab ? " on" : "") + '" data-tab="' + ID + "|" + t.key + '">' +
-      esc(t.label) + "</button>"
+    const tabs = '<div class="tabs">' + tabsFor(ctx.mode).map((x) =>
+      '<button class="chip' + (x.key === tab ? " on" : "") + '" data-tab="' + ID + "|" + x.key + '">' +
+      esc(x.label) + "</button>"
     ).join("") + "</div>";
 
     const view =
@@ -461,13 +607,14 @@ export default {
           (tab === "brief" ? "brief" : "recap") + " as text</button>" +
         '<button class="btn ghost" data-action="json">Download JSON</button>' +
         '<button class="btn ghost" data-action="csv">Download CSV</button>' +
-        '<button class="btn dark" data-action="print">' + ICON.doc + " Save client PDF</button>" +
+        '<button class="btn dark" data-action="print">' + ICON.doc + " Save " +
+          (ctx.mode === DISCOVERY ? "the" : "client") + " PDF</button>" +
         '<button class="btn ghost" data-action="clear" style="margin-left:auto;color:var(--risk)">Clear this kickoff</button>' +
       "</div>";
 
     return (
       '<div class="screenonly">' +
-        sectionHead(ctx.num, this.title, this.lede) + tabs + view + actions +
+        sectionHeadFor(this, ctx) + tabs + view + actions +
       "</div>" +
       // Rendered on every tab and hidden on screen. Print then emits the
       // client document no matter which tab is open — the old behaviour

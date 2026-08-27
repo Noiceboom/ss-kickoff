@@ -54,6 +54,14 @@ export const COPY = {
     kickoff: "Anything they refuse to touch?",
     discovery: "Anything you won't do again?",
   },
+  pickerLabel: {
+    kickoff: "Lead channels they&rsquo;ve tried",
+    discovery: "Lead channels you&rsquo;ve tried",
+  },
+  pickerLede: {
+    kickoff: "Tap what they&rsquo;ve run.",
+    discovery: "Tap what you&rsquo;ve run.",
+  },
 };
 
 const CORE = ["chanAny", "worked", "burned"];
@@ -113,7 +121,7 @@ function tile(s, ch, on) {
   );
 }
 
-function picker(s, query) {
+function picker(s, query, mode) {
   const on = new Set(selected(s));
   const count = on.size;
 
@@ -125,8 +133,8 @@ function picker(s, query) {
 
   return (
     '<div class="pickhead">' +
-      "<div><h3>Lead channels they've tried</h3>" +
-        "<p>Tap what they've run. Then rate it &mdash; good, mixed, or a waste &mdash; " +
+      "<div><h3>" + sayer(COPY, mode)("pickerLabel") + "</h3>" +
+        "<p>" + sayer(COPY, mode)("pickerLede") + " Then rate it &mdash; good, mixed, or a waste &mdash; " +
         "and log what it actually brings in.</p></div>" +
       '<div class="pickcount"><span class="v' + (count ? "" : " zero") + '">' + count + "</span>" +
         '<span class="l">tried</span></div>' +
@@ -152,7 +160,10 @@ export default {
   notePrompt:
     "What they said about the last agency, what they've already tried, where the money went.",
 
-  discovery: { lede: COPY.lede.discovery },
+  discovery: {
+    lede: COPY.lede.discovery,
+    notePrompt: "Anything about the current setup worth keeping.",
+  },
 
   render(ctx) {
     const s = slot(ctx.state, ID);
@@ -183,7 +194,7 @@ export default {
         "</div>" +
       "</div>" +
 
-      '<div class="card">' + picker(s, (ctx.transient[ID] || {}).filter || "") +
+      '<div class="card">' + picker(s, (ctx.transient[ID] || {}).filter || "", ctx.mode) +
         '<div class="pickother">' +
           '<div class="mlabel">Something we missed</div>' +
           '<div class="fields one" style="margin-top:12px">' +
