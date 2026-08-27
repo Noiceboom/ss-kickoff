@@ -2435,6 +2435,7 @@ for (const f of fails) console.log("FAIL  " + f);
 console.log(
   fails.length
     ? `\n${fails.length} failure(s), ${warns.length} warning(s)`
-    : `\nAll checks passed — ${MODULES.length} modules, 2 clients, ${warns.length} warning(s)`
+    : `\nAll checks passed — ${MODULES.length} kickoff + ${DISCOVERY.length} discovery screens ` +
+      `(${ALL_MODULES.length} modules), 2 clients, ${warns.length} warning(s)`
 );
 process.exit(fails.length ? 1 : 0);
