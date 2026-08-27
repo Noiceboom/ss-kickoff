@@ -33,6 +33,11 @@ export function fresh(mode) {
     // stamped. validate() clears this when loading a saved state that
     // predates the stamp, which is what keeps real migrations running.
     mig: { rank: true, access: true },
+    // Set only by js/import.js, and only on a kickoff built from a sales
+    // call. Holds what the discovery document captured that the kickoff
+    // has no screen for — `whynow`, its note, and the asks the prospect
+    // already saw. Absent on a kickoff started from scratch.
+    handoff: null,
   };
 }
 
@@ -1178,6 +1183,9 @@ export function validate(obj, mode) {
   if (obj.order && typeof obj.order === "object") s.order = obj.order;
   if (Array.isArray(obj.skipped)) s.skipped = obj.skipped;
   if (obj.notes && typeof obj.notes === "object") s.notes = obj.notes;
+  if (obj.handoff && typeof obj.handoff === "object" && !Array.isArray(obj.handoff)) {
+    s.handoff = obj.handoff;
+  }
   // Explicitly reset rather than defaulting: a saved state with no `mig`
   // predates the stamp and DOES need migrating, so fresh()'s stamp must
   // not leak through and skip it.

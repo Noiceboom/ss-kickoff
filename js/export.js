@@ -36,7 +36,10 @@ import { CORE_ACCOUNTS, EXTRA_ACCOUNTS, LEADSIE_URL } from "./modules/11-access.
 //            services/locations bookkeeping left `fields`
 //   /3  b35  openItems carry `ask` — the client-facing wording, which the
 //            document prints and the payload had been dropping
-export const SCHEMA = "ss-kickoff/3";
+//   /4  b38  `mode` — which of the two documents produced this. The
+//            importer keys on it, and a discovery payload replayed as a
+//            kickoff one would otherwise be indistinguishable.
+export const SCHEMA = "ss-kickoff/4";
 
 /**
  * Bookkeeping keys that are represented properly elsewhere in the payload.
@@ -210,6 +213,10 @@ export function buildPayload(ctx, parts, build) {
 
   return {
     schema: SCHEMA,
+    // Which document this came off. The shape is identical either way —
+    // one schema, one pin — so this is the only thing telling an importer
+    // whether it is looking at a sales call or a kickoff.
+    mode: ctx.mode || "kickoff",
     build: build || "",
     capturedAt: new Date().toISOString(),
     client: {

@@ -419,6 +419,255 @@ const UNSAFE_FOR_A_PROSPECT = [
   if (back.mode !== "discovery") fail("the share fragment does not carry which document it came from");
 }
 
+/* ── the handoff: a sales call replayed as a kickoff ───── */
+//
+// The one the prompt says will go wrong, so it is asserted BY ID at every
+// step. Nothing here matches on a display name: a taxonomy label gets
+// reworded roughly once a quarter and every name-based assertion passes
+// happily while the data lands on the wrong row.
+{
+  const IMP = await import(url("js/import.js"));
+  const readout = MODULES.find((m) => m.id === "readout");
+  const svcMod = MODULES.find((m) => m.id === "services");
+
+  // Build a discovery session the way a real call would: a trade picked,
+  // a taxonomy-only service ticked High, a scraped service switched OFF,
+  // a service typed in on the call, cities excluded and ranked, channels
+  // rated, and free text on three screens.
+  const d = S.fresh("discovery");
+  d.m.company = { businessName: "Acme Plumbing & Drain", founded: "2011", crews: "6" };
+  d.m.whynow = { whyNow: "Phone went quiet in March", broken: "Only price shoppers", liveBy: "30" };
+  d.m.goals = { revNow: "120000", revTarget: "300000", avgTicket: "4300", closeRate: "30" };
+  d.m.marketing = { agency: "Lead Ninjas", chan: ["google-ads"],
+                    "rate_google-ads": "waste", "vol_google-ads": "40",
+                    "note_google-ads": "Never saw a report" };
+  d.notes["services:_page"] = "Wants water heaters led with";
+  d.notes["whynow:_page"] = "Sounded genuinely done with the last lot";
+
+  const trade = "plumbing";
+  d.m.services = { trades: [trade] };
+  const dctx = () => ctxFor(bfp, d, "discovery");
+
+  // A taxonomy-only service: scoped id, ticked, High.
+  const universe0 = S.serviceUniverse(d, bfp, [(await import(url("js/trades/index.js"))).getTrade(trade)].filter(Boolean));
+  const taxOnly = universe0.find((x) => x.source === "trade");
+  const scraped = universe0.find((x) => x.source === "both" || x.source === "scrape");
+  if (!taxOnly || !scraped) {
+    fail("could not build a discovery fixture — no taxonomy-only and scraped service found");
+  } else {
+    if (taxOnly.id.indexOf(":") < 0) {
+      fail(`fixture assumption broken: taxonomy-only "${taxOnly.id}" is not trade-scoped`);
+    }
+    S.toggleService(d, taxOnly.id, true, { name: taxOnly.name, subs: taxOnly.subs.map((s2) => s2.name) });
+    S.setPriority(d, taxOnly.id, "high");
+    S.toggleService(d, scraped.id, false);          // switched OFF on the call
+    S.addItem(d, "services", { id: "svc-typed-1", name: "Trenchless Sewer Repair", subs: ["Pipe bursting"] });
+    S.setPriority(d, "svc-typed-1", "high");
+    // A second one, typed in and then switched back off — "they mentioned
+    // it, then said they don't really do it". Its OFF-ness is carried by
+    // `off`, exactly as a scraped service's is, and nothing else records it.
+    S.addItem(d, "services", { id: "svc-typed-2", name: "Septic Pumping", subs: [] });
+    S.toggleService(d, "svc-typed-2", false);
+    // BOTH high, so the bucket alone cannot decide which leads — only
+    // state.order can. Ranking across two priority bands would pass with
+    // the order thrown away entirely.
+    d.order.services = ["svc-typed-1", taxOnly.id];
+
+    // Cities: one scraped kept and ranked, one scraped excluded.
+    const keep = bfp.locations[0].id;
+    const drop = bfp.locations[1].id;
+    S.setLocationPriority(d, keep, "high");
+    S.setLocationPriority(d, bfp.locations[2].id, "med");
+    S.toggleExcluded(d, drop, { name: bfp.locations[1].name });
+    S.setField(d, "locations", "base", "Kansas City, MO");
+    S.setField(d, "locations", "radius", 30);
+
+    // A city that only exists because a radius search found it. This is
+    // the trap: `source: "radius"` rows live in the universe ONLY while a
+    // search is holding them in TRANSIENT state. Import one as a bare `on`
+    // id and it selects nothing, silently, because the row is not there.
+    // Bonner Springs is deliberately NOT in the client file — a radius city
+    // that the scrape already knows about would dedupe into the scraped row
+    // and prove nothing about radius handling.
+    const nearby = [{ id: "bonner-springs-ks", name: "Bonner Springs", state: "KS", miles: 19, pop: 7800 }];
+    S.toggleLocation(d, "bonner-springs-ks", true);
+    S.setLocationPriority(d, "bonner-springs-ks", "high");
+    // And one typed in on the call.
+    S.addLocations(d, [{ id: "loc-typed-1", name: "Parkville", state: "MO" }]);
+    // The radius city ranked FIRST, ahead of a scraped one. Both are high,
+    // and the universe lists scraped cities before radius ones — so ranking
+    // them the other way round is the only thing that can produce this
+    // order, and throwing the order away cannot reproduce it by accident.
+    d.order.locations = ["bonner-springs-ks", keep];
+
+    const dctxN = () => ({ ...ctxFor(bfp, d, "discovery"), transient: { locations: { nearby: nearby } } });
+    const payload = JSON.parse(readout.exports(dctxN()).json());
+    if (!payload.locations.items.some((x) => x.id === "bonner-springs-ks" && x.source === "radius")) {
+      fail("fixture assumption broken: no radius-sourced city reached the payload");
+    }
+
+    if (payload.mode !== "discovery") fail(`the discovery export is stamped mode "${payload.mode}"`);
+
+    const { state: k, warnings } = IMP.importPayload(payload);
+    if (warnings.length) warn(`importer warned: ${warnings.join(" | ")}`);
+
+    /* — the assertion the prompt asks for, by id — */
+    const kTrades = Array.isArray(k.m.services.trades) ? k.m.services.trades : [];
+    if (kTrades.indexOf(trade) < 0) fail(`the trade "${trade}" did not survive the handoff`);
+
+    const kUni = S.serviceUniverse(k, bfp, [(await import(url("js/trades/index.js"))).getTrade(trade)].filter(Boolean));
+    const byId = new Map(kUni.map((x) => [x.id, x]));
+
+    const arrivedTax = byId.get(taxOnly.id);
+    if (!arrivedTax) {
+      fail(`taxonomy service ${taxOnly.id} is not in the kickoff universe at all after the handoff`);
+    } else {
+      if (!arrivedTax.on) fail(`${taxOnly.id} arrived in the kickoff UNSELECTED — it was ticked on the sales call`);
+      if (arrivedTax.prio !== "high") fail(`${taxOnly.id} arrived with priority "${arrivedTax.prio}", not high`);
+    }
+    // The snapshot is what keeps it alive through a trade change. Assert
+    // it survives that, not merely that the id is in `on`.
+    const noTrade = JSON.parse(JSON.stringify(k));
+    noTrade.m.services.trades = ["hvac"];
+    const afterSwap = S.serviceUniverse(noTrade, bfp, [(await import(url("js/trades/index.js"))).getTrade("hvac")].filter(Boolean));
+    const stillThere = afterSwap.find((x) => x.id === taxOnly.id || (x.aliases || []).indexOf(taxOnly.id) > -1);
+    if (!stillThere) fail(`${taxOnly.id} vanished when the trade changed — its snap entry did not survive the handoff`);
+
+    const arrivedScraped = byId.get(scraped.id);
+    if (!arrivedScraped) fail(`scraped service ${scraped.id} is missing from the kickoff universe`);
+    else if (arrivedScraped.on) {
+      fail(`${scraped.id} arrived SELECTED — it was switched off on the sales call, and \`off\` is what carries that`);
+    }
+
+    const typed = byId.get("svc-typed-1");
+    if (!typed) fail("a service typed on the sales call did not survive the handoff");
+    else {
+      if (!typed.on) fail("the typed-in service arrived unselected");
+      if (typed.prio !== "high") fail(`the typed-in service arrived with priority "${typed.prio}"`);
+      if (typed.source !== "added") fail(`the typed-in service arrived as source "${typed.source}", not added`);
+      if (typed.name !== "Trenchless Sewer Repair") fail("the typed-in service lost its name");
+    }
+    const typedOff = byId.get("svc-typed-2");
+    if (!typedOff) fail("a service typed on the call and then switched off vanished entirely — " +
+                        "it must survive as a row that is off, not disappear");
+    else if (typedOff.on) fail("svc-typed-2 arrived SELECTED — it was switched off on the sales call");
+    // Its id must be the SAME id, not one regenerated from the name —
+    // every note and priority in the payload hangs off the original.
+    if ((k.m.services.added || []).some((x) => x.id !== "svc-typed-1" && x.name === "Trenchless Sewer Repair")) {
+      fail("the typed-in service was re-ided on import — its notes and priority are orphaned");
+    }
+
+    /* — build order, by id — */
+    const kOrder = S.serviceOrder(k, bfp, [(await import(url("js/trades/index.js"))).getTrade(trade)].filter(Boolean))
+      .map((x) => x.id);
+    if (kOrder[0] !== "svc-typed-1" || kOrder[1] !== taxOnly.id) {
+      fail(`the kickoff build order is [${kOrder.slice(0, 2).join(", ")}], not ` +
+           `[svc-typed-1, ${taxOnly.id}] — two services share the high band, so this is rank, not bucketing`);
+    }
+
+    /* — cities — */
+    const kLoc = S.locationUniverse(k, bfp, []);
+    const locById = new Map(kLoc.map((x) => [x.id, x]));
+    if (!locById.get(keep) || !locById.get(keep).on) fail(`city ${keep} did not arrive selected`);
+    if (locById.get(keep) && locById.get(keep).prio !== "high") fail(`city ${keep} lost its priority`);
+    if (!locById.get(drop) || !locById.get(drop).excluded) {
+      fail(`city ${drop} did not arrive excluded — "do not market here" was lost`);
+    }
+    // Imported with NO radius search running — exactly the state the
+    // kickoff opens in before suggestBase() has finished, and the moment a
+    // bare `on` id would resolve to nothing.
+    const radiusCity = locById.get("bonner-springs-ks");
+    if (!radiusCity) {
+      fail("a city found by radius search on the sales call is not in the kickoff universe at all — " +
+           "it was imported as a bare `on` id, which resolves to nothing without a live search");
+    } else {
+      if (!radiusCity.on) fail("the radius city arrived unselected");
+      if (radiusCity.prio !== "high") fail("the radius city lost its priority");
+      if (radiusCity.name !== "Bonner Springs") fail("the radius city lost its name");
+    }
+    if (!locById.get("loc-typed-1") || !locById.get("loc-typed-1").on) {
+      fail("a city typed in on the sales call did not arrive selected");
+    }
+    if (locById.get(bfp.locations[2].id) && locById.get(bfp.locations[2].id).prio !== "med") {
+      fail("a medium-priority city did not keep its priority through the handoff");
+    }
+    const kLocOrder = S.locationOrder(k, bfp, []).map((x) => x.id);
+    if (kLocOrder[0] !== "bonner-springs-ks" || kLocOrder[1] !== keep) {
+      fail(`the city build order is [${kLocOrder.slice(0, 2).join(", ")}], not ` +
+           `[bonner-springs-ks, ${keep}] — both are high, so this is rank, not bucketing`);
+    }
+    if (S.locState(k).base !== "Kansas City, MO") fail("baseAddress did not rebuild into `base`");
+    if (S.locState(k).radius !== 30) fail("radiusMiles did not rebuild into `radius`");
+
+    /* — marketing: the block that is not named after its module — */
+    const mk = k.m.marketing || {};
+    if (!Array.isArray(mk.chan) || mk.chan.indexOf("google-ads") < 0) {
+      fail("channel selections did not rebuild into marketing.chan — the whole `what's running today` picture is gone");
+    }
+    if (mk["rate_google-ads"] !== "waste") fail("a channel RATING did not survive the handoff");
+    if (mk["vol_google-ads"] !== "40") fail("a channel lead VOLUME did not survive the handoff");
+    if (mk["note_google-ads"] !== "Never saw a report") fail("a per-channel NOTE did not survive the handoff");
+    if (mk.agency !== "Lead Ninjas") fail("fields.marketing did not replay alongside the channels block");
+
+    /* — plain fields and notes — */
+    if ((k.m.goals || {}).revTarget !== "300000") fail("fields.goals did not replay");
+    if ((k.m.company || {}).businessName !== "Acme Plumbing & Drain") fail("fields.company did not replay");
+    if (k.notes["services:_page"] !== "Wants water heaters led with") fail("a page note did not replay");
+
+    /* — the screen the kickoff does not have — */
+    if (k.m.whynow) {
+      fail("`whynow` was replayed into state.m, where no kickoff module resolves it — " +
+           "invisible on screen and dropped from the next export");
+    }
+    if (!k.handoff || k.handoff.from !== "discovery") fail("the imported state does not record where it came from");
+    if (!k.handoff.fields.whynow || k.handoff.fields.whynow.whyNow !== "Phone went quiet in March") {
+      fail("the `why now` answers did not survive into handoff");
+    }
+    if (k.handoff.notes.whynow !== "Sounded genuinely done with the last lot") {
+      fail("the `why now` page note did not survive into handoff");
+    }
+    if (k.handoff.name !== "Acme Plumbing & Drain") {
+      fail(`handoff.name is "${k.handoff.name}" — the name they typed must beat an empty client.name`);
+    }
+
+    /* — things that must NOT carry across — */
+    if (k.step !== MODULES[0].id) fail(`the imported state opens on "${k.step}" instead of the first kickoff screen`);
+    if (k.mode !== "kickoff") fail("the imported state is not stamped as a kickoff");
+    if (S.validate(JSON.parse(JSON.stringify(k)), "kickoff") === null) {
+      fail("the imported state does not survive validate() — it cannot be saved or shared");
+    }
+    if (!S.validate(JSON.parse(JSON.stringify(k)), "kickoff").handoff) {
+      fail("validate() strips `handoff` — every sales-call answer is lost on the first reload");
+    }
+
+    // Migration stamps are shared across both documents. A new stamp that
+    // means one thing in discovery and another in the kickoff corrupts one
+    // of them, so the known set is pinned.
+    const stamps = Object.keys(S.fresh().mig).sort().join(",");
+    if (stamps !== "access,rank") {
+      fail(`migration stamps are now "${stamps}" — both documents share this namespace, so a new ` +
+           `stamp must be checked against the other before it is added`);
+    }
+  }
+
+  // Garbage in is refused, not half-applied.
+  for (const junk of [null, 42, "hello", [], {}, { schema: "something-else/1" }]) {
+    let threw = false;
+    try { IMP.importPayload(junk); } catch (e) { threw = true; }
+    if (!threw) fail(`importPayload accepted ${JSON.stringify(junk)} as a payload`);
+  }
+  // A kickoff payload is a legal thing to import; it just says so.
+  {
+    const kst = S.fresh("kickoff");
+    kst.m.goals = { revNow: "90000" };
+    const kp = JSON.parse(readout.exports(ctxFor(bfp, kst)).json());
+    const r = IMP.importPayload(kp);
+    if (!r.warnings.some((w) => /kickoff, not a sales call/.test(w))) {
+      fail("importing a kickoff payload did not warn that it came from the wrong document");
+    }
+  }
+}
+
 /* ── XSS: hostile state must not produce live markup ──── */
 
 for (const m of MODULES) {
@@ -635,6 +884,36 @@ for (const m of MODULES) {
           // array<T> — every element of type T. Both are unchecked without
           // the parameter: `skipped: "array"` passes on an array of objects.
           "": { schema: "string", build: "string", capturedAt: "string", client: "object",
+                progress: "map<string>", skipped: "array<string>", fields: "map<object>",
+                services: "object", locations: "object", channels: "array<object>",
+                access: "object", notes: "map<string>", openItems: "array<object>",
+                display: "map<object>" },
+          "client": { slug: "string", name: "string", market: "string", website: "string", trade: "string" },
+          "services": { trades: "array<string>", items: "array<object>" },
+          "services.items[]": { id: "string", name: "string", trade: "string", source: "string",
+                foundOnSite: "boolean", selected: "boolean", priority: "string|null",
+                rank: "number|null", hasPage: "boolean", subs: "array<object>",
+                aliases: "array<string>" },
+          "services.items[].subs[]": { name: "string", selected: "boolean" },
+          "locations": { baseAddress: "string", radiusMiles: "number", items: "array<object>" },
+          "locations.items[]": { id: "string", name: "string", state: "string", source: "string",
+                foundOnSite: "boolean", selected: "boolean", excluded: "boolean",
+                priority: "string|null", rank: "number|null", hasPage: "boolean" },
+          "channels[]": { id: "string", label: "string", category: "string", known: "boolean",
+                rating: "string|null", monthlyLeads: "string|null", note: "string" },
+          "access": { leadsie: "object", accounts: "array<object>", other: "array<object>" },
+          "access.leadsie": { url: "string", status: "string|null", who: "string" },
+          "access.accounts[]": { key: "string", label: "string", core: "boolean",
+                inPlay: "boolean", status: "string|null" },
+          "access.other[]": { label: "string", status: "string|null" },
+          "openItems[]": { section: "string", what: "string", detail: "string",
+                ask: "string|null", kind: "string" },
+        },
+        "ss-kickoff/4": {
+          // map<T> — dynamic keys (module ids), every value of type T.
+          // array<T> — every element of type T. Both are unchecked without
+          // the parameter: `skipped: "array"` passes on an array of objects.
+          "": { schema: "string", mode: "string", build: "string", capturedAt: "string", client: "object",
                 progress: "map<string>", skipped: "array<string>", fields: "map<object>",
                 services: "object", locations: "object", channels: "array<object>",
                 access: "object", notes: "map<string>", openItems: "array<object>",
