@@ -146,12 +146,25 @@ answered state. Build the importer as its own module with its own checks.
 
 Known traps, all of them real:
 
-- **`fields.<module>` is keyed on state keys**, so it maps back directly.
-  That part is easy and is why the contract was built that way.
-- **`services` and `locations` in the payload are resolved entity lists,
-  not raw state.** Rehydrating means reconstructing `on` / `off` / `prio` /
-  `added` / `snap` correctly. Read `serviceUniverse()` and
-  `locationUniverse()` in `js/state.js` first.
+- **`fields.<module>` is keyed on state keys and maps back directly — but
+  it is not the whole module.** Anything the payload represents as a
+  structured block is *deliberately excluded* from `fields` by the
+  `STRUCTURAL` denylist in `js/export.js`, so replaying `fields` alone
+  silently drops it. Check that list before assuming a module round-trips.
+- **Marketing is the trap here, and it is the one that will bite you.**
+  `fields.marketing` contains only the loose text answers — for a fully
+  filled-in screen it can be as little as `{"agency":"Lead Ninjas"}`. Every
+  channel selection, rating, monthly lead volume and per-channel note lives
+  **only** in the top-level `channels` array, reconstructed from `chan`,
+  `rate_<id>`, `vol_<id>` and `note_<id>`. An importer that replays
+  `fields.marketing` and stops will lose the entire "what's running today"
+  picture — which is one of the most valuable things the call produces.
+  Rehydrate `channels` back into those keys explicitly, and write a check
+  that a rated channel survives the round trip.
+- **`services`, `locations`, `channels` and `access` are all resolved
+  entity lists, not raw state.** Rehydrating means reconstructing
+  `on` / `off` / `prio` / `added` / `snap` correctly. Read
+  `serviceUniverse()` and `locationUniverse()` in `js/state.js` first.
 - **Taxonomy-only services carry trade-scoped ids** (`hvac:water-heaters`);
   scraped ones do not (`water-heaters`). Get this wrong and a selection
   lands on the wrong row or vanishes. `scopedId()` and
@@ -160,6 +173,18 @@ Known traps, all of them real:
   yet. Anything they name that the taxonomy does not know must survive as
   an `added` item with a **stable id** — regenerating ids from names later
   orphans every note and priority attached to them.
+- **With no client file, `loadClient()` falls back to
+  `clients/template.json`, and that file has a `slug` of its own.** Until
+  `b37` that identity won its way into everything downstream: the header,
+  the download filename and `client.slug` in the export. Every prospect
+  produced a payload stamped `"slug": "template"`, so a folder of discovery
+  JSONs was mutually indistinguishable and an import had nothing to key on.
+  Fixed in `js/app.js` and pinned by a check — do not undo it, and do not
+  assume anything else that borrows the template keeps its own identity
+  until you have looked.
+- **`client.name` is empty for a prospect with no file**, while the name
+  they actually gave you is in `fields.company.businessName`. Decide which
+  wins on import and be consistent; the export currently carries both.
 - **The localStorage key is `ss-kickoff:<slug>` and does not know about
   modes.** Two modes on one slug will silently overwrite each other.
   Namespace it, and write a migration for anything already saved.

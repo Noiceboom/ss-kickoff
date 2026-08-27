@@ -1468,6 +1468,36 @@ for (const m of MODULES) {
   }
 }
 
+/* ── a client with no scrape keeps its own identity ────── */
+{
+  // loadClient() falls back to clients/template.json for anyone without a
+  // scrape — which is every prospect. sanitizeClient prefers the file's own
+  // slug, so the template's identity used to overwrite theirs.
+  const src = readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+  const fallback = (src.match(/clients\/template\.json[\s\S]{0,600}?\n\s{6}\} catch \(e2\)/) || [""])[0];
+  if (!fallback) fail("could not find the template fallback in app.js to check it");
+  else {
+    if (/sanitizeClient\(await res\.json\(\), "template"\)/.test(fallback)) {
+      fail("the template fallback hardcodes slug \"template\" — every unscraped client exports as template");
+    }
+    if (!/c\.slug = slug/.test(fallback)) {
+      fail("the template fallback does not restore the requested slug over the template's own");
+    }
+  }
+
+  // and the payload must carry whatever slug it was given
+  const tpl = JSON.parse(readFileSync(new URL("../clients/template.json", import.meta.url), "utf8"));
+  const asLoaded = { ...tpl, slug: "acme-hvac" };
+  const readout = MODULES.find((m) => m.id === "readout");
+  const j = JSON.parse(readout.exports({
+    state: S.fresh(), client: asLoaded, transient: {}, slug: "acme-hvac",
+    mismatch: [], modules: MODULES, num: "09",
+  }).json());
+  if (j.client.slug !== "acme-hvac") {
+    fail(`a prospect exported with slug "${j.client.slug}" instead of its own`);
+  }
+}
+
 /* ── the printed document is the client artifact ───────── */
 {
   const readout = MODULES.find((m) => m.id === "readout");

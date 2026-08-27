@@ -111,7 +111,16 @@ async function loadClient(slug) {
     if (slug !== "template") {
       try {
         const res = await fetch("clients/template.json", { cache: "no-store" });
-        if (res.ok) return sanitizeClient(await res.json(), "template");
+        if (res.ok) {
+          // Borrow the template's SHAPE, never its identity. sanitizeClient
+          // prefers the file's own slug, so without this every client that
+          // has no scrape yet answers to "template" — same header, same
+          // download filename, same slug in the export. A folder of them
+          // would be mutually indistinguishable.
+          const c = sanitizeClient(await res.json(), slug);
+          c.slug = slug;
+          return c;
+        }
       } catch (e2) { /* fall through */ }
     }
     return emptyClient(slug);
