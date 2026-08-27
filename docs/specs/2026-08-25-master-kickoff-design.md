@@ -2,6 +2,11 @@
 
 **Status:** approved 2026-08-25 · revised post-review
 **Supersedes:** the hardcoded one-off at `Noiceboom/bf-plumbing-kickoff`
+**Extended by:** `2026-08-27-discovery-mode-design.md` — a second registry
+selected by `?mode=discovery`, run on the first sales call with the
+prospect reading the screen. Everything below still governs both modes;
+read that document before touching module copy, `storageKey()`, or the
+export payload.
 
 ## Problem
 
