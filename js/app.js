@@ -5,7 +5,8 @@
 import * as S from "./state.js";
 import { esc, ICON, pageNote, sliderValue, sliderPos, snapNice, formatSlider } from "./ui.js";
 import * as rank from "./rank.js";
-import MODULES from "./modules/index.js";
+import { registryFor } from "./modules/index.js";
+import { modeFromSearch, variant, DEFAULT_MODE, DISCOVERY } from "./modes.js";
 import { resolveTrade } from "./trades/index.js";
 import * as places from "./places.js";
 import * as assets from "./assets.js";
@@ -32,13 +33,29 @@ const R = {
   client: null,
   state: null,
   slug: "template",
+  mode: DEFAULT_MODE,
   transient: {},        // never persisted, never encoded
   saveTimer: null,
   warnedSecret: 0,
   mismatch: [],
+  wrongMode: "",       // a share link built in the other document
 };
 
-const byId = new Map(MODULES.map((m) => [m.id, m]));
+// Which document we are. Chosen once, at boot, before anything renders —
+// every reference below reads these bindings rather than the registry
+// module directly, so there is one switch and not eleven.
+let MODULES = registryFor(DEFAULT_MODE);
+let byId = new Map(MODULES.map((m) => [m.id, m]));
+
+function useMode(mode) {
+  R.mode = mode;
+  MODULES = registryFor(mode);
+  byId = new Map(MODULES.map((m) => [m.id, m]));
+  document.documentElement.setAttribute("data-mode", mode);
+}
+
+/** This screen's label, in the words this document uses for it. */
+function navOf(m) { return variant(m, R.mode, "nav"); }
 
 function moduleAt(id) { return byId.get(id) || MODULES[0]; }
 /** Two-digit screen number, derived from position in the registry. */
@@ -52,6 +69,7 @@ function ctx(num) {
     client: R.client,
     transient: R.transient,
     slug: R.slug,
+    mode: R.mode,
     mismatch: R.mismatch,
     modules: MODULES,
   };
@@ -170,7 +188,7 @@ function queueSave() {
 function flushSave() {
   clearTimeout(R.saveTimer);
   R.saveTimer = null;
-  if (S.save(R.state, R.slug)) markSaved();
+  if (S.save(R.state, R.slug, R.mode)) markSaved();
   // Typing never re-renders the screen, which would otherwise leave the
   // progress dots stale until you navigated. The pill strip is its own
   // container, so refreshing it here can't disturb a focused field.
@@ -188,7 +206,8 @@ const DEFAULT_PROMPT = "Anything they said on this screen worth keeping.";
 function takesNote(m) { return m.id !== "readout"; }
 
 function noteFor(m) {
-  return pageNote(m.id, m.nav, S.getPageNote(R.state, m.id), m.notePrompt || DEFAULT_PROMPT);
+  return pageNote(m.id, navOf(m), S.getPageNote(R.state, m.id),
+    variant(m, R.mode, "notePrompt") || DEFAULT_PROMPT);
 }
 
 function statusOf(m) {
@@ -205,7 +224,7 @@ function renderPills() {
     const st = statusOf(m);
     return '<button class="pill' + (m.id === cur ? " on" : "") + '" data-st="' + st +
       '" data-go="' + esc(m.id) + '"><b>' + (i < 10 ? "0" : "") + i + "</b>" +
-      esc(m.nav) + '<span class="dot"></span></button>';
+      esc(navOf(m)) + '<span class="dot"></span></button>';
   }).join("");
 
   const done = MODULES.filter((m) => { const s = statusOf(m); return s === "done" || s === "skipped"; }).length;
@@ -221,9 +240,12 @@ function renderPills() {
 
 function renderHeader() {
   const c = R.client.client;
-  const name = c.name || "New kickoff";
-  const sub = ([c.market, R.client.slug].filter(Boolean).join(" · ") || "no client loaded") +
-    " · " + BUILD;
+  const name = c.name || (R.mode === DISCOVERY ? "New discovery call" : "New kickoff");
+  const sub = [
+    R.mode === DISCOVERY ? "Discovery" : "Kickoff",
+    c.market,
+    R.client.slug,
+  ].filter(Boolean).join(" · ") + " · " + BUILD;
   document.getElementById("clientName").textContent = name;
   document.getElementById("clientSub").textContent = sub;
 }
@@ -283,6 +305,31 @@ function render() {
 }
 
 function banner() {
+  return wrongModeBanner() + mismatchBanner();
+}
+
+/**
+ * The two documents encode into the same `#s=` fragment, so a discovery
+ * link with `?mode=discovery` stripped off decodes cleanly and means
+ * nothing here. state.js refuses it; this is the part that says so, since
+ * a silently empty screen reads as "the link is broken".
+ */
+function wrongModeBanner() {
+  if (!R.wrongMode) return "";
+  const other = R.wrongMode === DISCOVERY ? "discovery call" : "kickoff";
+  const url = location.pathname + location.search +
+    (R.wrongMode === DISCOVERY ? (location.search ? "&" : "?") + "mode=discovery" : "") +
+    location.hash;
+  return (
+    '<div class="warn">' + ICON.warn + "<div><strong>That link is from the " + esc(other) +
+    "</strong><br>It decoded fine, but it was captured in the other document, so nothing was " +
+    "loaded rather than half of it. " +
+    '<a href="' + esc(R.wrongMode === DISCOVERY ? url : location.pathname + "?c=" + esc(R.slug) + location.hash) +
+    '">Open it as the ' + esc(other) + "</a>.</div></div>"
+  );
+}
+
+function mismatchBanner() {
   if (!R.mismatch.length) return "";
   return (
     '<div class="warn">' + ICON.warn + "<div><strong>Client data changed since this session was saved</strong><br>" +
@@ -298,7 +345,7 @@ function navFor(i) {
   const next = i < MODULES.length - 1 ? MODULES[i + 1] : null;
   let h = '<div class="navrow">';
   if (prev) h += '<button class="btn ghost" data-go="' + esc(prev.id) + '">Back</button>';
-  if (next) h += '<button class="btn" data-go="' + esc(next.id) + '">' + esc(next.nav) + " " + ICON.next + "</button>";
+  if (next) h += '<button class="btn" data-go="' + esc(next.id) + '">' + esc(navOf(next)) + " " + ICON.next + "</button>";
   return h + "</div>";
 }
 
@@ -1066,7 +1113,7 @@ function download(name, text, mime) {
 }
 
 function baseName() {
-  return (R.client.slug || "kickoff") + "-kickoff";
+  return (R.client.slug || "client") + "-" + R.mode;
 }
 
 function doAction(name) {
@@ -1090,9 +1137,10 @@ function doAction(name) {
   if (name === "csv" && api) { download(baseName() + ".csv", "\ufeff" + api.csv(), "text/csv;charset=utf-8"); toast("CSV downloaded"); return; }
   if (name === "print") { window.print(); return; }
   if (name === "clear") {
-    if (!window.confirm("Clear this kickoff from this browser? The share link still works if you saved it.")) return;
-    S.clear(R.slug);
-    R.state = S.fresh();
+    const what = R.mode === DISCOVERY ? "discovery call" : "kickoff";
+    if (!window.confirm("Clear this " + what + " from this browser? The share link still works if you saved it.")) return;
+    S.clear(R.slug, R.mode);
+    R.state = S.fresh(R.mode);
     // radius results are derived from the base city, which has just gone
     R.transient = {};
     R.state.step = MODULES[0].id;
@@ -1105,22 +1153,24 @@ function doAction(name) {
 /* ── boot ─────────────────────────────────────────────── */
 
 async function boot() {
+  useMode(modeFromSearch(location.search));
   R.slug = slugFromUrl();
   R.client = await loadClient(R.slug);
 
-  const loaded = S.load(R.slug);
+  const loaded = S.load(R.slug, R.mode);
 
   // A fragment must never silently overwrite an in-progress local session.
   if (loaded.from === "link") {
     let local = null;
     try {
-      const raw = localStorage.getItem(S.storageKey(R.slug));
-      if (raw) local = S.validate(JSON.parse(raw));
+      const raw = localStorage.getItem(S.storageKey(R.slug, R.mode));
+      if (raw) local = S.validate(JSON.parse(raw), R.mode);
     } catch (e) { /* ignore */ }
     if (S.hasWork(local)) {
       const ok = window.confirm(
         "This link contains a saved session for " + R.slug + ", and you already have " +
-        "an in-progress kickoff for this client in this browser.\n\n" +
+        "an in-progress " + (R.mode === DISCOVERY ? "discovery call" : "kickoff") +
+        " for this client in this browser.\n\n" +
         "OK — open the link (your local copy is replaced)\n" +
         "Cancel — keep what you have"
       );
@@ -1131,6 +1181,11 @@ async function boot() {
   } else {
     R.state = loaded.state;
   }
+
+  // A link built in the other document. It decoded fine and it is not
+  // corrupt — it simply belongs somewhere else, and loading it here would
+  // drop half its answers on the floor without saying so.
+  if (loaded.from === "wrong-mode") R.wrongMode = loaded.linkMode;
 
   if (!byId.has(R.state.step)) R.state.step = MODULES[0].id;
 

@@ -11,11 +11,50 @@
 // selection and the rating, data-f for volume and notes — so the picker
 // needed no new event plumbing beyond the filter box.
 
-import { sectionHead, skipRow, field, statusFor, filled, esc } from "../ui.js";
+import { sectionHeadFor, skipRow, field, statusFor, filled, esc } from "../ui.js";
 import { isSkipped, slot } from "../state.js";
+import { sayer } from "../modes.js";
 import { CATEGORIES, RATINGS, ALL, BY_ID } from "../channels.js";
 
 const ID = "marketing";
+
+/* ── copy ─────────────────────────────────────────────── */
+//
+// The incumbent-agency block is the sharpest on this screen. Everything
+// in it is a question Sam needs answered — who has it now, who owns the
+// accounts, what burned them — and the kickoff help says out loud WHY he
+// wants to know. On a shared screen that turns a reasonable question into
+// a visibly tactical one, so the discovery column asks the same thing and
+// keeps the reasoning to itself.
+
+export const COPY = {
+  lede: {
+    kickoff: "Everything the phone currently rings from, who runs it, and what it's actually worth. The stuff that burned them matters as much as the stuff that worked.",
+    discovery: "Everything the phone rings from today, who runs it, and what it's actually worth. What hasn't worked matters as much as what has.",
+  },
+  agency: {
+    kickoff: "Including the freelancer nobody counts as an agency.",
+    discovery: "Anyone doing the work — a full agency, a freelancer, your nephew.",
+  },
+  ownsAccounts: {
+    kickoff: "If the agency owns them, the history doesn't come with us. Worth knowing on day one.",
+    discovery: "If they're in someone else's account, the history stays there when you leave. Worth checking.",
+  },
+  learnedLabel: {
+    kickoff: "What they&rsquo;ve learned the hard way",
+    discovery: "What you&rsquo;ve learned the hard way",
+  },
+  workedField: { kickoff: "What has actually worked?", discovery: "What has actually worked?", same: true },
+  burnedField: { kickoff: "What burned them?", discovery: "What has burned you?" },
+  burned: {
+    kickoff: "This is the sentence that tells you how to keep them.",
+    discovery: "Be blunt. Knowing what not to repeat is worth more than knowing what to try.",
+  },
+  wontTouchField: {
+    kickoff: "Anything they refuse to touch?",
+    discovery: "Anything you won't do again?",
+  },
+};
 
 const CORE = ["chanAny", "worked", "burned"];
 
@@ -108,17 +147,20 @@ export default {
   id: ID,
   nav: "Marketing now",
   title: "What's running today?",
-  lede: "Everything the phone currently rings from, who runs it, and what it's actually worth. The stuff that burned them matters as much as the stuff that worked.",
+  lede: COPY.lede.kickoff,
   skippable: true,
   notePrompt:
     "What they said about the last agency, what they've already tried, where the money went.",
 
+  discovery: { lede: COPY.lede.discovery },
+
   render(ctx) {
     const s = slot(ctx.state, ID);
     const v = (k) => (s[k] !== undefined ? s[k] : "");
+    const t = sayer(COPY, ctx.mode);
 
     return (
-      sectionHead(ctx.num, this.title, this.lede) +
+      sectionHeadFor(this, ctx) +
       skipRow(ID, isSkipped(ctx.state, ID)) +
 
       '<div class="card">' +
@@ -126,7 +168,7 @@ export default {
         '<div class="fields two" style="margin-top:16px">' +
           field(ID, "agency", "Incumbent agency", v("agency"), {
             placeholder: "Nobody — it's all in-house",
-            help: "Including the freelancer nobody counts as an agency.",
+            help: t("agency"),
           }) +
           field(ID, "contractEnd", "Contract ends", v("contractEnd"), {
             placeholder: "March, month-to-month, no idea",
@@ -136,7 +178,7 @@ export default {
           }) +
           field(ID, "ownsAccounts", "Who owns the ad accounts?", v("ownsAccounts"), {
             placeholder: "Agency does",
-            help: "If the agency owns them, the history doesn't come with us. Worth knowing on day one.",
+            help: t("ownsAccounts"),
           }) +
         "</div>" +
       "</div>" +
@@ -158,18 +200,18 @@ export default {
       "</div>" +
 
       '<div class="card">' +
-        '<div class="mlabel">What they&rsquo;ve learned the hard way</div>' +
+        '<div class="mlabel">' + t("learnedLabel") + "</div>" +
         '<div class="fields one" style="margin-top:16px">' +
-          field(ID, "worked", "What has actually worked?", v("worked"), {
+          field(ID, "worked", t("workedField"), v("worked"), {
             type: "longtext",
             placeholder: "Word of mouth and the van. Everything else has been a coin flip.",
           }) +
-          field(ID, "burned", "What burned them?", v("burned"), {
+          field(ID, "burned", t("burnedField"), v("burned"), {
             type: "longtext",
             placeholder: "Paid an agency $4k a month for a year and never saw a report.",
-            help: "This is the sentence that tells you how to keep them.",
+            help: t("burned"),
           }) +
-          field(ID, "wontTouch", "Anything they refuse to touch?", v("wontTouch"), {
+          field(ID, "wontTouch", t("wontTouchField"), v("wontTouch"), {
             type: "longtext",
             placeholder: "Won't go near shared leads again.",
           }) +

@@ -7,10 +7,52 @@
 // three free-text answers underneath are the ones that actually move
 // the copy; the grid on its own is just names.
 
-import { sectionHead, skipRow, field, rowGroup, statusFor, filled } from "../ui.js";
+import { sectionHeadFor, skipRow, field, rowGroup, statusFor, filled } from "../ui.js";
 import { isSkipped, slot, getRows } from "../state.js";
+import { sayer } from "../modes.js";
 
 const ID = "competitors";
+
+/* ── copy ─────────────────────────────────────────────── */
+//
+// This screen asks a business owner to name the people beating them,
+// which is not a comfortable question, and the kickoff help makes it
+// worse by narrating the tactic — "ask about the last five jobs that got
+// away", "a positioning line we can lean on". Fine in a note to self.
+// Read off a shared screen it sounds like being worked.
+
+export const COPY = {
+  lede: {
+    kickoff: "Names and domains, not a feeling. Every one of these gets looked up after the call — what they rank for, what they're bidding on, where the hole is.",
+    discovery: "Names and domains, not a feeling. We look every one of these up after the call — what they rank for, what they're bidding on, and where the gap is.",
+  },
+  rosterLede: {
+    kickoff: "Three or four real ones beat a list of ten. If they name someone, get the domain &mdash; two shops in one metro share a name more often than you'd think.",
+    discovery: "Three or four real ones beat a list of ten. The domain matters &mdash; two shops in one metro share a name more often than you'd think.",
+  },
+  rosterEmpty: {
+    kickoff: "Nobody named yet. Easiest way in: who did you lose the last big job to?",
+    discovery: "Nobody named yet. Easiest way in: who did you lose the last big job to?",
+    same: true,
+  },
+  roster: {
+    kickoff: "Threat level is their read, not ours. It decides who we benchmark against first.",
+    discovery: "Threat level is your call, not ours — it decides who we look at first.",
+  },
+  losesTo: {
+    kickoff: "Not the same question as who they respect. Ask about the last five jobs that got away.",
+    discovery: "Not the same question as who you respect. Think about the last five jobs that got away.",
+  },
+  cantMatch: {
+    kickoff: "Both halves matter. Can't is a gap to work around; won't is a positioning line we can lean on.",
+    discovery: "Both halves matter. Can't is something to work around; won't is a decision, and we'd build around it rather than argue with it.",
+  },
+  takeShare: {
+    kickoff: "If there's a name here, it changes what we build first.",
+    discovery: "If there's a name here, it changes what we build first.",
+    same: true,
+  },
+};
 
 // Keys that count toward "done". A roster with no story behind it isn't an answer.
 const CORE = ["rows", "losesTo", "cantMatch"];
@@ -39,30 +81,32 @@ export default {
   id: ID,
   nav: "Competitors",
   title: "Who keeps taking the jobs you wanted?",
-  lede: "Names and domains, not a feeling. Every one of these gets looked up after the call — what they rank for, what they're bidding on, where the hole is.",
+  lede: COPY.lede.kickoff,
   skippable: true,
   notePrompt:
     "Who they named, what they said about them, anything they got heated about.",
 
+  discovery: { lede: COPY.lede.discovery },
+
   render(ctx) {
     const s = slot(ctx.state, ID);
     const v = (k) => (s[k] !== undefined ? s[k] : "");
+    const t = sayer(COPY, ctx.mode);
 
     return (
-      sectionHead(ctx.num, this.title, this.lede) +
+      sectionHeadFor(this, ctx) +
       skipRow(ID, isSkipped(ctx.state, ID)) +
 
       '<div class="card">' +
         '<div class="mlabel">The roster</div>' +
         '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
-          "Three or four real ones beat a list of ten. If they name someone, get the domain " +
-          "&mdash; two shops in one metro share a name more often than you'd think." +
+          t("rosterLede") +
         "</div>" +
         '<div class="fields one" style="margin-top:16px">' +
           rowGroup(ID, "rows", COLS, getRows(ctx.state, ID, "rows"), {
-            empty: "Nobody named yet. Easiest way in: who did you lose the last big job to?",
+            empty: t("rosterEmpty"),
             addLabel: "Add competitor",
-            help: "Threat level is their read, not ours. It decides who we benchmark against first.",
+            help: t("roster"),
           }) +
         "</div>" +
       "</div>" +
@@ -73,17 +117,17 @@ export default {
           field(ID, "losesTo", "Who do you lose jobs to most often?", v("losesTo"), {
             type: "longtext", rows: 3,
             placeholder: "Mostly the two big franchises on brand search. Below $400 it's whoever the homeowner's neighbour used.",
-            help: "Not the same question as who they respect. Ask about the last five jobs that got away.",
+            help: t("losesTo"),
           }) +
           field(ID, "cantMatch", "What do they do that you can't or won't match?", v("cantMatch"), {
             type: "longtext", rows: 3,
             placeholder: "Same-day everything, and they'll eat the trip charge. We won't run techs that thin.",
-            help: "Both halves matter. Can't is a gap to work around; won't is a positioning line we can lean on.",
+            help: t("cantMatch"),
           }) +
           field(ID, "takeShare", "Anyone you specifically want to take share from?", v("takeShare"), {
             type: "longtext", rows: 3,
             placeholder: "Anchor. They took two of our commercial accounts last year and I'd like them back.",
-            help: "If there's a name here, it changes what we build first.",
+            help: t("takeShare"),
           }) +
         "</div>" +
       "</div>"

@@ -12,12 +12,118 @@
 // never do.
 
 import {
-  sectionHead, skipRow, field, chipGroup, slider, derived,
+  sectionHeadFor, skipRow, field, chipGroup, slider, derived,
   statusFor, filled, money, pct,
 } from "../ui.js";
 import { isSkipped, slot } from "../state.js";
+import { sayer } from "../modes.js";
 
 const ID = "goals";
+
+/* ── copy ─────────────────────────────────────────────── */
+//
+// Every string on this screen whose wording depends on who is reading it.
+//
+// The kickoff column is written to Sam, about a client who has already
+// signed: "if they don't know, that itself is a finding", "make them
+// pick", "real numbers, not the ones on the website". All of it is true
+// and all of it is useful — and every word of it is on a shared screen
+// the prospect is reading while they answer.
+//
+// So the discovery column is not a softened version of the same
+// sentence. It is the same question asked TO the person answering it,
+// with the part that is Sam's business — what a lead is worth to us, what
+// we can afford to pay for one, what their answer reveals — taken out
+// rather than reworded. Anything that only makes sense as a note to
+// oneself does not belong on a screen someone else is reading.
+//
+// docs/check.mjs fails if any entry here is missing its discovery
+// variant, and separately pins the kickoff phrases that must never
+// appear in a discovery render.
+
+export const COPY = {
+  lede: {
+    kickoff: "Numbers on the table before anyone talks tactics. What they do today, what they want, and — the one everybody skips — how much more work they can actually take without falling over.",
+    discovery: "Numbers on the table before we talk about tactics: where you are now, where you want to be, and how much more work you could actually take on.",
+  },
+
+  todayLabel: { kickoff: "Where they are today", discovery: "Where you are today" },
+  todayLede: {
+    kickoff: "Real numbers, not the ones on the website. Drag to roughly right — an honest guess beats a precise dodge.",
+    discovery: "Drag each one to roughly right. Ballpark is genuinely fine — we're looking for the shape, not the accounts.",
+  },
+  revNow: {
+    kickoff: "An average month, not their best one.",
+    discovery: "An average month, not your best one.",
+  },
+  leadsNow: {
+    kickoff: "Calls and forms from everywhere, not just paid.",
+    discovery: "Calls and forms from everywhere, not just paid.",
+    same: true,
+  },
+  avgTicket: {
+    kickoff: "What a closed job is worth. This sets what we can afford to pay for a lead.",
+    discovery: "What a closed job is worth to you, on average.",
+  },
+  closeRate: {
+    kickoff: "Of the leads that come in, how many turn into paid work. If they don't know, that itself is a finding.",
+    discovery: "Of the leads that come in, how many turn into paid work. A rough number is fine.",
+  },
+
+  targetLabel: { kickoff: "Where they want to be", discovery: "Where you want to be" },
+  revTarget: {
+    kickoff: "The number that makes this engagement a win in their head.",
+    discovery: "The number that would make this obviously worth doing.",
+  },
+  budget: {
+    kickoff: "Everything in — ad spend plus fees. If they won't name a number, ask what they spend today.",
+    discovery: "Everything in — ad spend plus fees.",
+  },
+  budgetFlex: {
+    kickoff: "Decides whether we build to a cap or build to a return.",
+    discovery: "A fixed ceiling and an open one are two different plans. Worth knowing which this is.",
+  },
+  horizon: {
+    kickoff: "The window they're judging us in. Say it out loud so nobody's quietly on a different clock.",
+    discovery: "The window we're both working to, so nobody's quietly on a different clock.",
+  },
+
+  mattersLede: {
+    kickoff: "How they'll decide whether this is working — which is not always the same as the revenue number above.",
+    discovery: "How you'll decide whether this is working — which isn't always the same as the revenue number above.",
+  },
+  priorityLabel: { kickoff: "If they could only keep one", discovery: "If you could only have one" },
+  priority: {
+    kickoff: "Volume and quality pull against each other. Make them pick.",
+    discovery: "Volume and quality pull against each other, so it's worth saying which one you'd take.",
+  },
+  goodLead: {
+    kickoff: "The single most argued-about definition in this business. Settle it now and the reporting never becomes a fight.",
+    discovery: "The most argued-about definition in this business. Better to agree it now than when we're both looking at a report.",
+  },
+
+  capacityLabel: { kickoff: "What they can actually absorb", discovery: "What you could actually absorb" },
+  capacityLede: {
+    kickoff: "The question everybody skips, then regrets in month two.",
+    discovery: "Worth asking before anyone turns the taps on. More work than you can service isn't a win.",
+  },
+  capacityField: {
+    kickoff: "How many MORE jobs a week could they take?",
+    discovery: "How many more jobs a week could you take?",
+  },
+  capacity: {
+    kickoff: "Today, with the crew they have. Not after hiring.",
+    discovery: "Today, with the crew you have — not after hiring.",
+  },
+  capacityBlock: {
+    kickoff: "When the phone rings more than they can handle, this is what gives.",
+    discovery: "If the phone rang twice as much starting tomorrow, what gives first?",
+  },
+  win90: {
+    kickoff: "In their words. This line ends up in the recap.",
+    discovery: "In your words — this one goes in the document you get after this call.",
+  },
+};
 
 const CORE = ["revNow", "revTarget", "budget", "closeRate", "capacity"];
 
@@ -82,105 +188,112 @@ export default {
   id: ID,
   nav: "Goals",
   title: "Where are you trying to get to?",
-  lede: "Numbers on the table before anyone talks tactics. What they do today, what they want, and — the one everybody skips — how much more work they can actually take without falling over.",
+  lede: COPY.lede.kickoff,
   skippable: true,
   notePrompt:
     "Numbers they hedged on, targets they walked back, what growth actually means to them.",
 
+  discovery: {
+    lede: COPY.lede.discovery,
+    notePrompt:
+      "Numbers they hedged on, the target they walked back, what growth actually seems to mean to them.",
+  },
+
   render(ctx) {
     const s = slot(ctx.state, ID);
     const v = (k) => (s[k] !== undefined ? s[k] : "");
+    const t = sayer(COPY, ctx.mode);
 
     return (
-      sectionHead(ctx.num, this.title, this.lede) +
+      sectionHeadFor(this, ctx) +
       skipRow(ID, isSkipped(ctx.state, ID)) +
 
       '<div class="card">' +
-        '<div class="mlabel">Where they are today</div>' +
+        '<div class="mlabel">' + t("todayLabel") + "</div>" +
         '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
-          "Real numbers, not the ones on the website. Drag to roughly right &mdash; an honest guess beats a precise dodge." +
+          t("todayLede") +
         "</div>" +
         '<div class="fields sliders" style="margin-top:26px">' +
           slider(ID, "revNow", "Revenue per month, now", v("revNow"), {
             ...SCALE.revenue, start: 120000,
-            help: "An average month, not their best one.",
+            help: t("revNow"),
           }) +
           slider(ID, "leadsNow", "Leads per month, now", v("leadsNow"), {
             ...SCALE.leads, start: 150,
-            help: "Calls and forms from everywhere, not just paid.",
+            help: t("leadsNow"),
           }) +
           slider(ID, "avgTicket", "Average ticket", v("avgTicket"), {
             ...SCALE.ticket, start: 900,
-            help: "What a closed job is worth. This sets what we can afford to pay for a lead.",
+            help: t("avgTicket"),
           }) +
           slider(ID, "closeRate", "Close rate", v("closeRate"), {
             ...SCALE.rate, start: 40,
-            help: "Of the leads that come in, how many turn into paid work. If they don't know, that itself is a finding.",
+            help: t("closeRate"),
           }) +
         "</div>" +
         derived("goals:today") +
       "</div>" +
 
       '<div class="card">' +
-        '<div class="mlabel">Where they want to be</div>' +
+        '<div class="mlabel">' + t("targetLabel") + "</div>" +
         '<div class="fields sliders" style="margin-top:22px">' +
           slider(ID, "revTarget", "Revenue per month, target", v("revTarget"), {
             ...SCALE.revenue, start: 250000,
-            help: "The number that makes this engagement a win in their head.",
+            help: t("revTarget"),
           }) +
           slider(ID, "leadsTarget", "Leads per month, target", v("leadsTarget"), {
             ...SCALE.leads, start: 250,
           }) +
           slider(ID, "budget", "Marketing budget per month", v("budget"), {
             ...SCALE.budget, start: 8000,
-            help: "Everything in — ad spend plus fees. If they won't name a number, ask what they spend today.",
+            help: t("budget"),
           }) +
         "</div>" +
         derived("goals:gap") +
         '<div class="fields two" style="margin-top:24px">' +
           field(ID, "budgetFlex", "Is that number movable?", v("budgetFlex"), {
             type: "select", options: BUDGET_FLEX,
-            help: "Decides whether we build to a cap or build to a return.",
+            help: t("budgetFlex"),
           }) +
         "</div>" +
         chipGroup(ID, "horizon", "By when?", s.horizon, HORIZONS, {
-          help: "The window they're judging us in. Say it out loud so nobody's quietly on a different clock.",
+          help: t("horizon"),
         }) +
       "</div>" +
 
       '<div class="card">' +
         "<h3>What matters most</h3>" +
         '<div style="font-size:14px;color:var(--muted);margin-top:5px">' +
-          "How they'll decide whether this is working &mdash; which is not always the same as the revenue number above." +
+          t("mattersLede") +
         "</div>" +
-        chipGroup(ID, "priority", "If they could only keep one", s.priority, PRIORITIES, {
-          help: "Volume and quality pull against each other. Make them pick.",
+        chipGroup(ID, "priority", t("priorityLabel"), s.priority, PRIORITIES, {
+          help: t("priority"),
         }) +
         chipGroup(ID, "goodLead", "What counts as a good lead", s.goodLead, GOOD_LEAD, {
-          help: "The single most argued-about definition in this business. Settle it now and the reporting never becomes a fight.",
+          help: t("goodLead"),
         }) +
       "</div>" +
 
       '<div class="card">' +
-        '<div class="mlabel">What they can actually absorb</div>' +
+        '<div class="mlabel">' + t("capacityLabel") + "</div>" +
         '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
-          "The question everybody skips, then regrets in month two." +
+          t("capacityLede") +
         "</div>" +
         '<div class="fields sliders" style="margin-top:26px">' +
-          slider(ID, "capacity", "How many MORE jobs a week could they take?", v("capacity"), {
+          slider(ID, "capacity", t("capacityField"), v("capacity"), {
             ...SCALE.jobs, start: 10,
-            help: "Today, with the crew they have. Not after hiring.",
+            help: t("capacity"),
           }) +
         "</div>" +
         '<div class="fields two" style="margin-top:22px">' +
           field(ID, "capacityBlock", "What breaks first?", v("capacityBlock"), {
             type: "select", options: CONSTRAINTS,
-            help: "When the phone rings more than they can handle, this is what gives.",
+            help: t("capacityBlock"),
           }) +
           field(ID, "win90", "What does winning look like in 90 days?", v("win90"), {
             type: "longtext", wide: true,
             placeholder: "Phone ringing enough that I stop worrying about January.",
-            help: "In their words. This line ends up in the recap.",
+            help: t("win90"),
           }) +
         "</div>" +
       "</div>"

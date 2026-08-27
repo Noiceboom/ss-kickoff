@@ -8,13 +8,22 @@
 // in-progress kickoff.
 
 import { resolveChannel, isKnownChannel, CHANNEL_KEY_PREFIXES } from "./channels.js";
+import { DEFAULT_MODE, isMode } from "./modes.js";
 
 export const VERSION = 2;
 
-/** Fresh, empty state. Every module's slot starts as {}. */
-export function fresh() {
+/**
+ * Fresh, empty state. Every module's slot starts as {}.
+ *
+ * `mode` rides in state so a share link can be checked against the
+ * document it is opened in. Without it, stripping `?mode=discovery` off a
+ * link would load discovery answers into the kickoff registry, where half
+ * the module ids mean nothing and `whynow` means nothing at all.
+ */
+export function fresh(mode) {
   return {
     v: VERSION,
+    mode: isMode(mode) ? mode : DEFAULT_MODE,
     step: "intro",
     m: {},            // per-module free-form state, keyed by module id
     order: {},        // { services: [id…], locations: [id…] }
@@ -779,15 +788,36 @@ export function setNote(state, id, itemId, value) {
 
 const KEY_PREFIX = "ss-kickoff:";
 
-export function storageKey(clientSlug) { return KEY_PREFIX + (clientSlug || "_template"); }
+/**
+ * One key per client PER DOCUMENT. The two modes ask overlapping
+ * questions of the same slug, so a single key would have the discovery
+ * call and the kickoff call silently overwriting each other — the same
+ * client, the same browser, one of the two sessions gone.
+ *
+ * The kickoff keeps the original `ss-kickoff:<slug>` unchanged, which is
+ * why no migration is needed: every session already saved on a laptop
+ * still loads, byte for byte, from the key it was written to. Discovery
+ * takes a new namespace nothing has ever written to.
+ *
+ * The two cannot collide. A slug is `[a-z0-9-]{1,40}` and so can never
+ * contain a colon, which means `ss-kickoff:discovery` (the kickoff for a
+ * client slugged "discovery") and `ss-kickoff:discovery:<slug>` are
+ * always distinct strings.
+ */
+export function storageKey(clientSlug, mode) {
+  const slug = clientSlug || "_template";
+  return mode && mode !== DEFAULT_MODE
+    ? KEY_PREFIX + mode + ":" + slug
+    : KEY_PREFIX + slug;
+}
 
-export function save(state, clientSlug) {
-  try { localStorage.setItem(storageKey(clientSlug), JSON.stringify(state)); return true; }
+export function save(state, clientSlug, mode) {
+  try { localStorage.setItem(storageKey(clientSlug, mode), JSON.stringify(state)); return true; }
   catch (e) { return false; }
 }
 
-export function clear(clientSlug) {
-  try { localStorage.removeItem(storageKey(clientSlug)); } catch (e) { /* ignore */ }
+export function clear(clientSlug, mode) {
+  try { localStorage.removeItem(storageKey(clientSlug, mode)); } catch (e) { /* ignore */ }
 }
 
 /* ── URL fragment codec ───────────────────────────────── */
@@ -1133,10 +1163,16 @@ function migrate(state) {
  * carries a version we understand. Anything else is discarded rather
  * than half-applied.
  */
-export function validate(obj) {
+export function validate(obj, mode) {
   if (!obj || typeof obj !== "object") return null;
   if (obj.v !== VERSION) return null;
-  const s = fresh();
+  const want = isMode(mode) ? mode : DEFAULT_MODE;
+  // A state with no `mode` predates the second document and is therefore a
+  // kickoff. Anything that names a different document is refused outright
+  // rather than half-applied — the same rule `v` already follows.
+  const got = isMode(obj.mode) ? obj.mode : DEFAULT_MODE;
+  if (got !== want) return null;
+  const s = fresh(want);
   if (typeof obj.step === "string" && obj.step.length < 64) s.step = obj.step;
   if (obj.m && typeof obj.m === "object") s.m = obj.m;
   if (obj.order && typeof obj.order === "object") s.order = obj.order;
@@ -1153,20 +1189,27 @@ export function validate(obj) {
  * Load precedence: URL fragment (an explicitly shared session) beats
  * localStorage (this browser's own history).
  */
-export function load(clientSlug) {
+export function load(clientSlug, mode) {
+  const want = isMode(mode) ? mode : DEFAULT_MODE;
   const hash = (location.hash || "").replace(/^#s=/, "");
   if (hash && hash !== location.hash) {
     try {
-      const s = validate(decode(hash));
+      const raw = decode(hash);
+      const s = validate(raw, want);
       if (s) return { state: s, from: "link" };
+      // A well-formed link for the OTHER document. Say so out loud — the
+      // alternative is a link that looks like it simply didn't work.
+      if (raw && isMode(raw.mode) && raw.mode !== want) {
+        return { state: fresh(want), from: "wrong-mode", linkMode: raw.mode };
+      }
     } catch (e) { /* fall through */ }
   }
   try {
-    const raw = localStorage.getItem(storageKey(clientSlug));
-    if (raw) {
-      const s = validate(JSON.parse(raw));
+    const stored = localStorage.getItem(storageKey(clientSlug, want));
+    if (stored) {
+      const s = validate(JSON.parse(stored), want);
       if (s) return { state: s, from: "storage" };
     }
   } catch (e) { /* fall through */ }
-  return { state: fresh(), from: "new" };
+  return { state: fresh(want), from: "new" };
 }

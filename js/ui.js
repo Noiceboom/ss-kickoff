@@ -6,6 +6,8 @@
 // strings carrying data-* attributes; app.js owns the listeners, so a
 // module never touches the DOM.
 
+import { variant } from "./modes.js";
+
 export function esc(s) {
   return String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -43,6 +45,16 @@ export function sectionHead(num, title, lede) {
     '<div class="sechead"><div class="secnum">' + esc(num) + "</div><h2>" + esc(title) + "</h2></div>" +
     (lede ? '<p class="lede">' + esc(lede) + "</p>" : "")
   );
+}
+
+/**
+ * The section head, resolved for the document we are currently being.
+ * A module calls `sectionHeadFor(this, ctx)` instead of reading its own
+ * `title`/`lede` directly, so a mode that needs different words gets them
+ * without every module growing a conditional.
+ */
+export function sectionHeadFor(mod, ctx) {
+  return sectionHead(ctx.num, variant(mod, ctx.mode, "title"), variant(mod, ctx.mode, "lede"));
 }
 
 export function skipRow(moduleId, skipped) {

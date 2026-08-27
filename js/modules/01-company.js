@@ -10,37 +10,86 @@
 // JSON — they are shown prefilled rather than asked for. Everything else
 // gets found out on the call.
 
-import { sectionHead, skipRow, field, chipGroup, toggle, statusFor, filled, ICON } from "../ui.js";
+import { sectionHeadFor, skipRow, field, chipGroup, toggle, statusFor, filled, ICON } from "../ui.js";
 import { isSkipped, slot } from "../state.js";
+import { sayer, DISCOVERY } from "../modes.js";
 
 const ID = "company";
 
 // Keys that count toward "done". Anything not listed is a bonus field.
 const CORE = ["contactName", "contactPhone", "contactEmail", "phone", "city", "hoursWeekday"];
 
+// The sales call renders a fraction of this screen, so it cannot be
+// judged against fields it never shows — every discovery session would
+// read "empty" and land in the readout as a gap that was never asked.
+const DISCOVERY_CORE = ["businessName", "crews", "customerMix"];
+
+/* ── copy ─────────────────────────────────────────────── */
+
+export const COPY = {
+  lede: {
+    kickoff: "The factual layer — the stuff that has to be identical everywhere it appears. Who we call, the number that rings, the address Google sees.",
+    discovery: "The quick version — how long you've been going, how big the operation is, and who you actually sell to.",
+  },
+  handoffLabel: { kickoff: "From the sales handoff", discovery: "The basics" },
+  handoffLede: {
+    kickoff: "Carried over from the deal — correct it here if sales got it wrong.",
+    discovery: "Pulled off your site before the call. Correct anything we got wrong.",
+  },
+  founded: {
+    kickoff: "Worth having — \"serving the metro since 2015\" earns its place in copy.",
+    discovery: "Worth having — \"serving the metro since 2015\" earns its place in copy.",
+    same: true,
+  },
+  contactRole: {
+    kickoff: "And whether they can approve spend without asking anyone.",
+    discovery: "So we know who we're talking to.",
+  },
+  coverageRadius: { kickoff: "How far will they drive?", discovery: "How far will you drive?" },
+  customerMix: {
+    kickoff: "Pick every one that's a real part of the business.",
+    discovery: "Pick every one that's a real part of the business.",
+    same: true,
+  },
+};
+
 export default {
   id: ID,
   nav: "Company",
   title: "Who are they, on paper?",
-  lede: "The factual layer — the stuff that has to be identical everywhere it appears. Who we call, the number that rings, the address Google sees.",
+  lede: COPY.lede.kickoff,
   skippable: true,
   notePrompt:
     "How the business actually runs — who answers the phone, who's really in charge, anything odd about the setup.",
+
+  discovery: {
+    nav: "Business",
+    lede: COPY.lede.discovery,
+    notePrompt:
+      "How the business actually runs — who answers the phone, who's really in charge, anything odd about the setup.",
+  },
 
   render(ctx) {
     const s = slot(ctx.state, ID);
     const c = ctx.client.client || {};
     const v = (k, fallback) => (s[k] !== undefined ? s[k] : (fallback || ""));
     const billingSame = !!s.billingSame;
+    const t = sayer(COPY, ctx.mode);
+    // Everything gated on this only matters once somebody has signed. On
+    // the sales call there is no invoice to address, no number to swap for
+    // a tracking one and no GBP for an address to match — and a prospect
+    // asked for a billing contact in the first meeting is being asked to
+    // feel sold to.
+    const signed = ctx.mode !== DISCOVERY;
 
     return (
-      sectionHead(ctx.num, this.title, this.lede) +
+      sectionHeadFor(this, ctx) +
       skipRow(ID, isSkipped(ctx.state, ID)) +
 
       '<div class="card">' +
-        '<div class="mlabel">From the sales handoff</div>' +
+        '<div class="mlabel">' + t("handoffLabel") + "</div>" +
         '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
-          "Carried over from the deal — correct it here if sales got it wrong." +
+          t("handoffLede") +
         "</div>" +
         '<div class="fields two" style="margin-top:16px">' +
           field(ID, "businessName", "Business name", v("businessName", c.name), {
@@ -52,11 +101,12 @@ export default {
           }) +
           field(ID, "founded", "Year founded", v("founded"), {
             type: "number", placeholder: "2015",
-            help: "Worth having — \"serving the metro since 2015\" earns its place in copy.",
+            help: t("founded"),
           }) +
         "</div>" +
       "</div>" +
 
+      (signed ? (
       '<div class="card">' +
         "<h3>Who are we contacting?</h3>" +
         '<div style="font-size:14px;color:var(--muted);margin-top:5px">' +
@@ -73,7 +123,7 @@ export default {
             type: "phone", placeholder: "(816) 555-0142",
           }) +
           field(ID, "contactRole", "Role", v("contactRole"), {
-            placeholder: "Owner", help: "And whether they can approve spend without asking anyone.",
+            placeholder: "Owner", help: t("contactRole"),
           }) +
           field(ID, "contactPref", "Best way to reach them", v("contactPref"), {
             type: "select",
@@ -175,12 +225,13 @@ export default {
               }) +
             "</div>"
           : "") +
-      "</div>" +
+      "</div>"
+      ) : "") +
 
       '<div class="card">' +
         '<div class="mlabel">Coverage</div>' +
         '<div class="fields" style="margin-top:16px">' +
-          field(ID, "radius", "How far will they drive?", v("radius"), {
+          field(ID, "radius", t("coverageRadius"), v("radius"), {
             placeholder: "45 min from the shop",
           }) +
           field(ID, "crews", "Trucks / crews on the road", v("crews"), {
@@ -189,16 +240,19 @@ export default {
         "</div>" +
         chipGroup(ID, "customerMix", "Customer mix", s.customerMix, [
           "Residential", "Commercial", "New construction", "Property management", "Warranty / home shield",
-        ], { multi: true, help: "Pick every one that's a real part of the business." }) +
+        ], { multi: true, help: t("customerMix") }) +
       "</div>"
     );
   },
 
-  status(ctx) { return statusFor(ctx.state.m[ID], CORE); },
+  status(ctx) {
+    return statusFor(ctx.state.m[ID], ctx.mode === DISCOVERY ? DISCOVERY_CORE : CORE);
+  },
 
   summary(ctx) {
     const s = ctx.state.m[ID] || {};
     if (!Object.keys(s).length) return null;
+    const signed = ctx.mode !== DISCOVERY;
 
     const addr = [s.street, s.city, s.state, s.zip].filter(Boolean).join(", ");
     const hours = [
@@ -232,7 +286,11 @@ export default {
     put("Crews", s.crews);
     put("Customer mix", Array.isArray(s.customerMix) ? s.customerMix.join(", ") : s.customerMix);
 
+    // Every open item below chases something that only exists after a
+    // signature. Raised on a sales call they would read as a list of
+    // things the prospect had failed to hand over.
     const open = [];
+    if (!signed) return { rows, open };
     if (!filled(s.contactName)) {
       open.push({ what: "Point of contact", detail: "No named contact — nobody to chase for anything below",
         ask: "Tell us who we should be speaking to day to day." });

@@ -56,7 +56,12 @@ const TRADES_MOD = await import(url("js/trades/index.js"));
 const TRADES_BEFORE_RUN = TRADE_SNAPSHOT();
 
 const S = await import(url("js/state.js"));
-const MODULES = (await import(url("js/modules/index.js"))).default;
+const REG = await import(url("js/modules/index.js"));
+const MODULES = REG.KICKOFF;              // the original document
+const DISCOVERY = REG.DISCOVERY;          // the sales call
+const ALL_MODULES = REG.ALL;              // every module in either, once
+const REGISTRIES = [["kickoff", MODULES], ["discovery", DISCOVERY]];
+const MODES = await import(url("js/modes.js"));
 
 const bfp = JSON.parse(readFileSync(path.join(ROOT, "clients/bfp-kc.json"), "utf8"));
 const tpl = JSON.parse(readFileSync(path.join(ROOT, "clients/template.json"), "utf8"));
@@ -65,26 +70,74 @@ const tpl = JSON.parse(readFileSync(path.join(ROOT, "clients/template.json"), "u
 
 const files = readdirSync(path.join(ROOT, "js/modules"))
   .filter((f) => /^\d\d-/.test(f)).sort();
-if (files.length !== MODULES.length) {
-  fail(`registry lists ${MODULES.length} modules but ${files.length} module files exist`);
+
+/** module id -> its file, so a check can re-import one for its exports. */
+const FILE_OF = {};
+for (const m of ALL_MODULES) {
+  const hit = files.find((f) => f.replace(/^\d\d-|\.js$/g, "") === m.id.toLowerCase());
+  if (hit) FILE_OF[m.id] = hit;
+}
+// The union, not either registry on its own — a module file that only the
+// sales call uses is still a module file, and a file in neither registry
+// is dead weight nobody will notice.
+if (files.length !== ALL_MODULES.length) {
+  fail(`the two registries list ${ALL_MODULES.length} distinct modules but ${files.length} module files exist`);
 }
 
-const ids = new Set();
-for (const m of MODULES) {
-  if (!m || typeof m !== "object") { fail("registry contains a non-module"); continue; }
-  for (const k of ["id", "nav", "title"]) {
-    if (typeof m[k] !== "string" || !m[k]) fail(`${m.id || "?"}: missing ${k}`);
+for (const [mode, list] of REGISTRIES) {
+  const ids = new Set();
+  for (const m of list) {
+    if (!m || typeof m !== "object") { fail(`${mode}: registry contains a non-module`); continue; }
+    for (const k of ["id", "nav", "title"]) {
+      if (typeof m[k] !== "string" || !m[k]) fail(`${mode}/${m.id || "?"}: missing ${k}`);
+    }
+    if (typeof m.render !== "function") fail(`${mode}/${m.id}: render is not a function`);
+    if (typeof m.status !== "function") fail(`${mode}/${m.id}: status is not a function`);
+    if (ids.has(m.id)) fail(`${mode}: duplicate module id "${m.id}"`);
+    ids.add(m.id);
   }
-  if (typeof m.render !== "function") fail(`${m.id}: render is not a function`);
-  if (typeof m.status !== "function") fail(`${m.id}: status is not a function`);
-  if (ids.has(m.id)) fail(`duplicate module id "${m.id}"`);
-  ids.add(m.id);
+}
+
+/* ── the two documents are the documents they claim to be ── */
+//
+// Pinned BY NAME, deliberately. Deriving this list from the registry
+// would make it agree with whatever the registry happens to say, which
+// is not a test of anything. These are the decisions, written down: what
+// is on the sales call, and what must never be.
+{
+  const disc = new Set(DISCOVERY.map((m) => m.id));
+  const kick = new Set(MODULES.map((m) => m.id));
+
+  for (const id of ["intro", "whynow", "company", "goals", "marketing",
+                    "competitors", "services", "locations", "readout"]) {
+    if (!disc.has(id)) fail(`discovery lost the "${id}" screen`);
+  }
+  // Nothing that only exists because someone has signed.
+  for (const id of ["brand", "access"]) {
+    if (disc.has(id)) fail(`"${id}" is on the sales call — it only makes sense after they sign`);
+    if (!kick.has(id)) fail(`the kickoff lost the "${id}" screen`);
+  }
+  if (kick.has("whynow")) fail('"whynow" is in the kickoff registry — it is a discovery screen');
+
+  // Shared screens must be the SAME OBJECT in both lists. A copy would
+  // drift, and the handoff depends on both documents writing the same
+  // state keys under the same module id.
+  for (const m of DISCOVERY) {
+    if (m.id === "whynow") continue;
+    if (MODULES.indexOf(m) < 0) {
+      fail(`discovery's "${m.id}" is not the same module object the kickoff uses — the handoff will drift`);
+    }
+  }
 }
 
 /* ── render against both clients ──────────────────────── */
 
-function ctxFor(client, state) {
-  return { state, client, transient: {}, slug: client.slug, mismatch: [], modules: MODULES };
+function ctxFor(client, state, mode) {
+  const m = mode || "kickoff";
+  return {
+    state, client, transient: {}, slug: client.slug, mismatch: [],
+    mode: m, modules: REG.registryFor(m),
+  };
 }
 
 // A hostile payload in every free-text position — nothing may reach the
@@ -92,38 +145,42 @@ function ctxFor(client, state) {
 const XSS = '"><img src=x onerror=alert(1)>';
 
 for (const [label, client] of [["bfp-kc", bfp], ["template", tpl]]) {
-  for (const m of MODULES) {
-    const state = S.fresh();
+ for (const [mode, list] of REGISTRIES) {
+  for (const m of list) {
+    const state = S.fresh(mode);
     const before = JSON.stringify(state);
     let html;
 
     try {
-      html = m.render(ctxFor(client, state));
+      html = m.render(ctxFor(client, state, mode));
     } catch (e) {
-      fail(`${m.id} [${label}]: render threw — ${e.message}`);
+      fail(`${mode}/${m.id} [${label}]: render threw — ${e.message}`);
       continue;
     }
 
-    if (typeof html !== "string") { fail(`${m.id} [${label}]: render returned ${typeof html}`); continue; }
-    if (!html.trim()) fail(`${m.id} [${label}]: render returned empty string`);
+    if (typeof html !== "string") { fail(`${mode}/${m.id} [${label}]: render returned ${typeof html}`); continue; }
+    if (!html.trim()) fail(`${mode}/${m.id} [${label}]: render returned empty string`);
+    if (/\bundefined\b/.test(html.replace(/data-[a-z]+="[^"]*"/g, ""))) {
+      fail(`${mode}/${m.id} [${label}]: rendered the literal string "undefined"`);
+    }
 
     // render must be pure — a module that writes to state corrupts autosave
     if (JSON.stringify(state) !== before) {
-      warn(`${m.id} [${label}]: render mutated state (slot() creates an empty branch — check it is only that)`);
+      warn(`${mode}/${m.id} [${label}]: render mutated state (slot() creates an empty branch — check it is only that)`);
     }
 
     // status must be a legal value and never "skipped"
     let st;
-    try { st = m.status(ctxFor(client, state)); }
-    catch (e) { fail(`${m.id} [${label}]: status threw — ${e.message}`); }
+    try { st = m.status(ctxFor(client, state, mode)); }
+    catch (e) { fail(`${mode}/${m.id} [${label}]: status threw — ${e.message}`); }
     if (st === "skipped") fail(`${m.id}: status() returned "skipped" — app.js owns that`);
     if (st && !["empty", "partial", "done"].includes(st)) fail(`${m.id}: bad status "${st}"`);
 
     // summary must be null or the documented shape
     if (m.summary) {
       let sum;
-      try { sum = m.summary(ctxFor(client, state)); }
-      catch (e) { fail(`${m.id} [${label}]: summary threw — ${e.message}`); }
+      try { sum = m.summary(ctxFor(client, state, mode)); }
+      catch (e) { fail(`${mode}/${m.id} [${label}]: summary threw — ${e.message}`); }
       if (sum != null) {
         if (sum.rows && !Array.isArray(sum.rows)) fail(`${m.id}: summary.rows is not an array`);
         if (sum.rows) for (const r of sum.rows) {
@@ -138,6 +195,228 @@ for (const [label, client] of [["bfp-kc", bfp], ["template", tpl]]) {
       }
     }
   }
+ }
+}
+
+/* ── the prospect is reading the screen ────────────────── */
+//
+// The defining constraint of the discovery document, and the single
+// easiest thing to get wrong: the kickoff's help text is written TO Sam,
+// ABOUT the client. "If they don't know, that itself is a finding" is a
+// useful note on a kickoff call with a signed client. On a shared screen
+// in front of a prospect it is the quiet part out loud.
+//
+// Two pins, and they work in opposite directions:
+//
+//   1. Every phrase below must STILL APPEAR somewhere in a kickoff
+//      render. Without this half, deleting a line of kickoff copy would
+//      quietly turn its pin into a tautology — a check that passes
+//      because it is checking nothing is worse than no check.
+//
+//   2. No phrase below may appear ANYWHERE in a discovery render, for
+//      either client, on any screen.
+//
+// Pinned by hand, verbatim. Deriving them from the COPY maps would only
+// prove the maps agree with themselves.
+
+const UNSAFE_FOR_A_PROSPECT = [
+  // 02 goals
+  "that itself is a finding",
+  "Make them pick",
+  "what we can afford to pay for a lead",
+  "An average month, not their best one",
+  "in their head",
+  "If they won't name a number",
+  "build to a cap or build to a return",
+  "The window they're judging us in",
+  "the reporting never becomes a fight",
+  "Real numbers, not the ones on the website",
+  "a precise dodge",
+  "then regrets in month two",
+  "Today, with the crew they have",
+  "this is what gives",
+  "In their words. This line ends up in the recap",
+  "Where they are today",
+  "Where they want to be",
+  "What they can actually absorb",
+  "If they could only keep one",
+  "could they take?",
+  // 03 marketing
+  "Including the freelancer nobody counts as an agency",
+  "the history doesn't come with us",
+  "This is the sentence that tells you how to keep them",
+  // 04 competitors
+  "Threat level is their read, not ours",
+  "Ask about the last five jobs that got away",
+  "Not the same question as who they respect",
+  "a positioning line we can lean on",
+  // 01 company
+  "whether they can approve spend without asking anyone",
+];
+
+{
+  // The field kit escapes on the way out, so compare on decoded text.
+  const unesc = (h) => String(h)
+    .replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&mdash;/g, "—")
+    .replace(/&rsquo;/g, "’").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+
+  const renderAll = (mode) => {
+    const out = [];
+    for (const client of [bfp, tpl]) {
+      for (const m of REG.registryFor(mode)) {
+        for (const st of [S.fresh(mode), (() => {
+          // a half-filled session, so conditional blocks render too
+          const x = S.fresh(mode);
+          x.m.goals = { revNow: "120000", closeRate: "40", capacity: "10" };
+          x.m.company = { emergency: true, contactName: "Mike" };
+          x.m.marketing = { agency: "Someone", chan: ["google-ads"] };
+          x.m.whynow = { whyNow: "Phone is quiet" };
+          return x;
+        })()]) {
+          try { out.push({ id: m.id, html: unesc(m.render(ctxFor(client, st, mode))) }); }
+          catch (e) { fail(`${mode}/${m.id}: render threw while sweeping copy — ${e.message}`); }
+        }
+      }
+    }
+    return out;
+  };
+
+  const kickoffHtml = renderAll("kickoff").map((r) => r.html).join("\n");
+  const discoveryRenders = renderAll("discovery");
+
+  for (const phrase of UNSAFE_FOR_A_PROSPECT) {
+    if (kickoffHtml.indexOf(phrase) < 0) {
+      fail(`pinned phrase "${phrase}" no longer appears in any kickoff screen — ` +
+           `the pin guarding it against the discovery document now proves nothing`);
+    }
+    for (const r of discoveryRenders) {
+      if (r.html.indexOf(phrase) > -1) {
+        fail(`discovery/${r.id} renders "${phrase}" — that is written about the prospect, ` +
+             `to Sam, on a screen the prospect is reading`);
+        break;
+      }
+    }
+  }
+
+  // Every COPY entry must carry BOTH variants. A half-filled map falls
+  // back to the kickoff wording silently, which is the exact failure the
+  // phrase list above can only catch for phrases somebody remembered.
+  for (const m of REG.registryFor("discovery")) {
+    const file = FILE_OF[m.id];
+    if (!file) continue;
+    const mod = await import(url("js/modules/" + file));
+    if (!mod.COPY) continue;
+    for (const [key, entry] of Object.entries(mod.COPY)) {
+      if (typeof entry === "string") {
+        fail(`${m.id}: COPY.${key} is a bare string — give it {kickoff, discovery} or move it out of COPY`);
+        continue;
+      }
+      for (const mode of ["kickoff", "discovery"]) {
+        if (typeof entry[mode] !== "string" || !entry[mode]) {
+          fail(`${m.id}: COPY.${key} has no ${mode} wording`);
+        }
+      }
+      if (entry.kickoff === entry.discovery) {
+        // Legal, and sometimes right — but say so on purpose.
+        if (!entry.same) {
+          warn(`${m.id}: COPY.${key} is identical in both documents (add \`same: true\` if that is deliberate)`);
+        }
+      }
+    }
+  }
+}
+
+/* ── the sales call asks nothing that needs a signature ── */
+//
+// Pinned by field key, not by counting cards. "The screen renders" is
+// not the claim being made here; the claim is that six specific inputs
+// are absent from it, and each one is named.
+{
+  const comp = REG.DISCOVERY.find((m) => m.id === "company");
+  const disc = comp.render(ctxFor(bfp, S.fresh("discovery"), "discovery"));
+  const kick = comp.render(ctxFor(bfp, S.fresh("kickoff"), "kickoff"));
+
+  // Absent from the sales call…
+  for (const key of ["contactName", "contactEmail", "contactPhone", "contactRole",
+                     "billingName", "billingEmail", "billingPhone", "billingSame",
+                     "phone", "trackingOk", "leadEmail", "bookingUrl",
+                     "street", "city", "state", "zip", "hoursWeekday", "hoursWeekend"]) {
+    if (disc.indexOf(`company|${key}`) > -1) {
+      fail(`discovery/company still asks for "${key}" — that only exists after they sign`);
+    }
+    // …and still present on the kickoff, or the pin above proves nothing.
+    if (kick.indexOf(`company|${key}`) < 0) {
+      fail(`kickoff/company no longer asks for "${key}" — the discovery pin guarding it is now vacuous`);
+    }
+  }
+  // What the sales call DOES keep.
+  for (const key of ["businessName", "website", "founded", "radius", "crews", "customerMix"]) {
+    if (disc.indexOf(`company|${key}`) < 0) {
+      fail(`discovery/company dropped "${key}" — it is worth knowing before anything is priced`);
+    }
+  }
+  // An unasked question must not come back as an open item.
+  const st = S.fresh("discovery");
+  st.m.company = { businessName: "Acme" };
+  const open = (comp.summary(ctxFor(bfp, st, "discovery")).open || []).map((o) => o.what);
+  if (open.length) {
+    fail(`discovery/company raised open items (${open.join(", ")}) for questions it never asked`);
+  }
+  const kst = S.fresh("kickoff");
+  kst.m.company = { businessName: "Acme" };
+  if (!(comp.summary(ctxFor(bfp, kst, "kickoff")).open || []).length) {
+    fail("kickoff/company stopped raising open items — the discovery pin above is now vacuous");
+  }
+}
+
+/* ── two documents, two localStorage namespaces ────────── */
+//
+// The trap this is here for: both modes are opened at `?c=bfp-kc`, and
+// a single key would have the sales call and the kickoff call
+// overwriting each other with no error and no undo.
+{
+  const k = S.storageKey("bfp-kc", "kickoff");
+  const d = S.storageKey("bfp-kc", "discovery");
+  if (k === d) fail("both documents share one localStorage key — one will silently eat the other");
+  // The kickoff key must not move. Anything already saved on a laptop
+  // lives at this exact string, and changing it is data loss with no
+  // migration to catch it.
+  if (k !== "ss-kickoff:bfp-kc") fail(`the kickoff storage key moved to "${k}" — every saved session on every laptop is now orphaned`);
+  if (S.storageKey("bfp-kc") !== k) fail("storageKey() with no mode stopped meaning the kickoff");
+  // A slug can never contain a colon, so these can never collide — but
+  // assert it rather than reasoning about it.
+  if (S.storageKey("discovery", "kickoff") === S.storageKey("x", "discovery")) {
+    fail("a client slugged \"discovery\" collides with the discovery namespace");
+  }
+}
+
+/* ── a link from the other document is refused, not half-read ── */
+{
+  const d = S.fresh("discovery");
+  d.m.whynow = { whyNow: "Phone went quiet", broken: "No inbound" };
+  d.m.goals = { revNow: "120000" };
+  d.step = "whynow";
+
+  if (S.validate(JSON.parse(JSON.stringify(d)), "kickoff") !== null) {
+    fail("a discovery state validated as a kickoff — half its answers would land nowhere");
+  }
+  if (S.validate(JSON.parse(JSON.stringify(d)), "discovery") === null) {
+    fail("a discovery state was refused by its own document");
+  }
+  // A state written before the second document existed carries no mode
+  // and is a kickoff. It must still load.
+  const legacy = S.fresh();
+  delete legacy.mode;
+  if (S.validate(legacy, "kickoff") === null) {
+    fail("a saved state from before discovery existed no longer validates — every laptop loses its sessions");
+  }
+  if (S.validate(legacy, "discovery") !== null) {
+    fail("a mode-less legacy state was accepted as discovery");
+  }
+  // Round-trips through the share fragment carrying its mode.
+  const back = S.decode(S.encode(d));
+  if (back.mode !== "discovery") fail("the share fragment does not carry which document it came from");
 }
 
 /* ── XSS: hostile state must not produce live markup ──── */
