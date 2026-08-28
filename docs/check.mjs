@@ -2359,6 +2359,30 @@ for (const m of MODULES) {
   }
 }
 
+/* ── an IndexedDB miss has to read as a miss ───────────── */
+{
+  // Not reachable headlessly — node has no IndexedDB — so this pins the
+  // predicate rather than the behaviour. Verified in a browser: with the
+  // loose test, get() for an absent key returned the IDBRequest itself,
+  // which is truthy, so every caller read a miss as a hit. That made the
+  // b47 rename fallback dead code and objectUrl() fail on a file that was
+  // sitting right there under its old name.
+  const src = readFileSync(new URL("../js/assets.js", import.meta.url), "utf8");
+  const raw = (src.match(/function tx\([\s\S]*?\n\}/) || [""])[0];
+  // Comments in here quote the wrong predicate to explain why it was
+  // wrong, so match the code only.
+  const tx = raw.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
+  if (!raw) fail("assets.js has no tx() to check");
+  else {
+    if (/out\.result !== undefined/.test(tx)) {
+      fail("tx() treats an absent record as present — a get() miss resolves to the IDBRequest");
+    }
+    if (!/"result" in out/.test(tx)) {
+      fail("tx() does not distinguish a request's result from the request itself");
+    }
+  }
+}
+
 /* ── a renamed file key must stay readable ─────────────── */
 {
   // b44 and b45 stored the read-out's bytes under "extract"; b46 renamed

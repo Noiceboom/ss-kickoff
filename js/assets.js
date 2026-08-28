@@ -42,7 +42,11 @@ function tx(mode, fn) {
     const store = t.objectStore(STORE);
     let out;
     try { out = fn(store); } catch (e) { reject(e); return; }
-    t.oncomplete = () => resolve(out && out.result !== undefined ? out.result : out);
+    // `"result" in out`, not `out.result !== undefined`. A get() for a key
+    // that isn't there is an IDBRequest whose result is undefined — the
+    // looser test fell through to returning the REQUEST, which is truthy,
+    // so a miss read as a hit to anything checking the return value.
+    t.oncomplete = () => resolve(out && typeof out === "object" && "result" in out ? out.result : out);
     t.onerror = () => reject(t.error);
     t.onabort = () => reject(t.error || new Error("aborted"));
   }));
