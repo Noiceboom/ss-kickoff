@@ -50,6 +50,20 @@ function tx(mode, fn) {
 
 function key(slug, name) { return String(slug || "template") + ":" + name; }
 
+/**
+ * Names this store has been asked for under a different name before.
+ *
+ * The read-out's card rendered "extract" in b44 and b45, so its bytes went
+ * in under that name, while the metadata the card reads moved to
+ * "extractFile" in b46. Reads fall back so a session captured on either
+ * build can still hand its file back; without it the card shows an
+ * attached file and Download says it isn't on this machine, which is both
+ * wrong and unfixable from the screen.
+ *
+ * Deletable once no session predating b46 is still in use.
+ */
+const RENAMED_FROM = { extractFile: "extract" };
+
 export function isSupported() { return !!window.indexedDB; }
 export const MAX_MB = MAX_BYTES / 1024 / 1024;
 
@@ -79,12 +93,25 @@ export async function put(slug, name, file) {
 }
 
 export async function get(slug, name) {
-  try { return await tx("readonly", (store) => store.get(key(slug, name))); }
-  catch (e) { return null; }
+  const read = async (n) => {
+    try { return await tx("readonly", (store) => store.get(key(slug, n))); }
+    catch (e) { return null; }
+  };
+  const hit = await read(name);
+  if (hit) return hit;
+  const was = RENAMED_FROM[name];
+  return was ? await read(was) : null;
 }
 
 export async function remove(slug, name) {
-  try { await tx("readwrite", (store) => store.delete(key(slug, name))); } catch (e) { /* ignore */ }
+  const drop = async (n) => {
+    try { await tx("readwrite", (store) => store.delete(key(slug, n))); } catch (e) { /* ignore */ }
+  };
+  await drop(name);
+  // Remove has to reach the old name too, or a file captured on an earlier
+  // build survives its own deletion and comes back the next time the card
+  // looks for it.
+  if (RENAMED_FROM[name]) await drop(RENAMED_FROM[name]);
 }
 
 /** An object URL for previewing, plus a revoke handle. */

@@ -2359,6 +2359,26 @@ for (const m of MODULES) {
   }
 }
 
+/* ── a renamed file key must stay readable ─────────────── */
+{
+  // b44 and b45 stored the read-out's bytes under "extract"; b46 renamed
+  // the card's key to "extractFile". Without a read-side fallback the card
+  // shows an attached file and Download reports it isn't on this machine —
+  // wrong, and unfixable from the screen.
+  const src = readFileSync(new URL("../js/assets.js", import.meta.url), "utf8");
+  const map = (src.match(/const RENAMED_FROM = \{[^}]*\}/) || [""])[0];
+  if (!map) fail("assets.js has no record of the keys it has renamed");
+  else if (map.indexOf("extractFile") === -1 || map.indexOf('"extract"') === -1) {
+    fail("the extract -> extractFile rename is not recorded, so older read-outs are unreachable");
+  }
+  const get = (src.match(/export async function get\([\s\S]*?\n\}/) || [""])[0];
+  if (!/RENAMED_FROM\[name\]/.test(get)) fail("get() does not fall back to a renamed key");
+  const rm = (src.match(/export async function remove\([\s\S]*?\n\}/) || [""])[0];
+  if (!/RENAMED_FROM\[name\]/.test(rm)) {
+    fail("remove() ignores the renamed key, so a deleted file comes back");
+  }
+}
+
 /* ── the handoff keeps what the kickoff can use ────────── */
 {
   const IMPORTER = await import(url("js/import.js"));
