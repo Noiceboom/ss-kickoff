@@ -254,6 +254,31 @@ not cosmetic.
 | 05 | `services` | Services | Industry picker, **multi-select** (16 trades) — plenty of companies run two; the trade's full taxonomy merged with the scrape, which arrives pre-ticked; High/Med/Low per service; sub-service chips; per-item notes; **build order assembled from the priority bands on the same screen**, draggable within each band |
 | 07 | `locations` | Cities | Radius search off a base city against a bundled Census dataset; pick + High/Med/Low; **do-not-market exclusions** as a first-class state; build order on the same screen, draggable within a band |
 | 09 | `brand` | Brand | Logo status **+ file upload**, brand guide **+ upload**, colors, fonts, photo library; six **bipolar tone scales**; words to use and never use. Uploads go to IndexedDB — state carries metadata only, never bytes |
+### The recording
+
+The page cannot read a transcript for meaning. It is static files with
+`connect-src 'self'` — no backend, no key, nothing to call. So the work is
+split: `js/transcript.js` reads a Fireflies export deterministically (who
+spoke, how long, how many turns), and the judgement happens in Claude,
+outside, against the `ss-extract/1` schema the screen publishes with a
+copy button.
+
+What comes back lands as **proposals**, never as state. Each one is shown
+next to whatever is already in that field, and anything that disagrees says
+so. The bulk action only fills blanks — a machine's account of what it
+thought it heard does not get to overwrite a number somebody typed, and on
+discovery the prospect is watching while it happens.
+
+Quotes are verbatim, which is exactly what you would not want printed
+unread. They stay internal until ticked; only ticked quotes reach the
+client document. Both halves of that rule are pinned: an unapproved quote
+must not print, and an approved one must.
+
+The transcript bytes never leave the machine. `recording` in the payload
+carries the call summary, the quotes with their approval state, answers
+read but not used, and what was mentioned but never ticked — about 3KB,
+against a transcript that is routinely a megabyte.
+
 ### Exports
 
 Two deliverables, and they are not the same document.

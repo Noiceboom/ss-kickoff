@@ -569,3 +569,25 @@ pre.raw{background:var(--char);color:var(--cream);border-radius:14px;padding:20p
 .linkrow code{flex:1;min-width:220px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
   font-size:13px;color:var(--char);word-break:break-all;line-height:1.4}
 .linkrow .btn{flex:none}
+
+/* the recording screen — proposals and quotes */
+.plist{margin-top:18px;border-top:1px solid var(--line)}
+.prow{display:grid;grid-template-columns:1fr auto;gap:6px 16px;align-items:center;
+  padding:14px 0;border-bottom:1px solid var(--line)}
+.prow.done{opacity:.55}
+.pwhere{grid-column:1;font-family:"OSCondensed",sans-serif;font-size:11px;letter-spacing:1.4px;
+  text-transform:uppercase;color:var(--muted)}
+.pval{grid-column:1;font-size:16px;line-height:1.45;word-break:break-word}
+.pnow{grid-column:1;font-size:13px;color:var(--risk)}
+.pact{grid-column:2;grid-row:1 / span 3;align-self:center}
+
+.quo{display:flex;gap:14px;align-items:flex-start;margin-top:18px;padding-left:2px}
+.quotick{flex:none;width:26px;height:26px;border-radius:8px;border:2px solid var(--line);
+  background:var(--cream);cursor:pointer;display:flex;align-items:center;justify-content:center;
+  padding:0;color:transparent;transition:background .12s,border-color .12s}
+.quo.on .quotick{background:var(--ok,#2f7d5b);border-color:var(--ok,#2f7d5b);color:#fff}
+.quotick svg{stroke:currentColor}
+.qtext{font-size:17px;line-height:1.55}
+.qwho{font-family:"OSCondensed",sans-serif;font-size:11px;letter-spacing:1.4px;
+  text-transform:uppercase;color:var(--muted);margin-top:5px}
+.quo:not(.on) .qtext{color:var(--muted)}

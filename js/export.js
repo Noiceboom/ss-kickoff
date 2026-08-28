@@ -36,10 +36,13 @@ import { CORE_ACCOUNTS, EXTRA_ACCOUNTS, LEADSIE_URL } from "./modules/11-access.
 //            services/locations bookkeeping left `fields`
 //   /3  b35  openItems carry `ask` — the client-facing wording, which the
 //            document prints and the payload had been dropping
+//   /5  b44  `recording` — what a call transcript contributed: the call
+//            summary, quotes with their approval, answers read but not
+//            used. Never the transcript itself.
 //   /4  b38  `mode` — which of the two documents produced this. The
 //            importer keys on it, and a discovery payload replayed as a
 //            kickoff one would otherwise be indistinguishable.
-export const SCHEMA = "ss-kickoff/4";
+export const SCHEMA = "ss-kickoff/5";
 
 /**
  * Bookkeeping keys that are represented properly elsewhere in the payload.
@@ -48,6 +51,10 @@ export const SCHEMA = "ss-kickoff/4";
  * of the two is authoritative.
  */
 const STRUCTURAL = {
+  // The recording's own bookkeeping. `extract` and `approved` are lifted
+  // into a block of their own; `rec` and `extractFile` are file metadata
+  // for bytes that never leave the machine.
+  transcript: { exact: ["extract", "approved", "rec", "extractFile", "applied", "recSummary"], prefix: [] },
   services: { exact: ["trades", "on", "off", "prio", "meta", "snap", "subsOff", "added"], prefix: [] },
   locations: { exact: ["on", "off", "excluded", "prio", "added", "base", "radius"], prefix: [] },
   marketing: { exact: ["chan"], prefix: ["rate_", "vol_", "note_"] },
@@ -154,6 +161,39 @@ function channelsBlock(ctx) {
   });
 }
 
+/**
+ * What the recording contributed — never the recording. The transcript
+ * itself is often a megabyte and is 95% of anything it is packed into;
+ * the bytes stay in the file store and what travels is what was used.
+ */
+function recordingBlock(ctx) {
+  const s = ctx.state.m.transcript || {};
+  const ex = s.extract || null;
+  const ok = Array.isArray(s.approved) ? s.approved : [];
+  const applied = Array.isArray(s.applied) ? s.applied : [];
+  if (!s.recSummary && !ex) return null;
+
+  return {
+    file: s.rec ? { name: s.rec.name, size: s.rec.size } : null,
+    // Two sources, two keys. `call` is what the recording says about
+    // itself; `readout` is what the extraction says. They carry different
+    // fields, and collapsing them into one key would put two shapes under
+    // one name — which is the thing a consumer cannot defend against.
+    call: s.recSummary || null,
+    readout: (ex && ex.call) || null,
+    quotes: ex ? ex.quotes.map((q) => ({
+      speaker: q.speaker, at: q.at, text: q.text, module: q.module,
+      approved: ok.indexOf(q.id) > -1,
+    })) : [],
+    applied: applied,
+    unused: ex ? ex.proposals.filter((p) => applied.indexOf(p.mod + "." + p.key) < 0)
+      .map((p) => ({ module: p.mod, key: p.key, value: p.value })) : [],
+    mentionedServices: ex ? ex.mentionedServices : [],
+    mentionedCities: ex ? ex.mentionedCities : [],
+    unclear: ex ? ex.unclear : [],
+  };
+}
+
 function accessBlock(ctx) {
   const s = ctx.state.m.access || {};
   const inPlay = Array.isArray(s.extra) ? s.extra : [];
@@ -232,6 +272,7 @@ export function buildPayload(ctx, parts, build) {
     services: servicesBlock(ctx),
     locations: locationsBlock(ctx),
     channels: channelsBlock(ctx),
+    recording: recordingBlock(ctx),
     access: accessBlock(ctx),
     notes: notes,
     openItems: (ctx.openItems || []).map((o) => ({

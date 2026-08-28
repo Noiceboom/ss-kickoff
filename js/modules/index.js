@@ -25,6 +25,7 @@ import competitors from "./04-competitors.js";
 import services from "./05-services.js";
 import whynow from "./06-whynow.js";
 import locations from "./07-locations.js";
+import transcript from "./08-transcript.js";
 import brand from "./09-brand.js";
 import access from "./11-access.js";
 import readout from "./12-readout.js";
@@ -39,6 +40,7 @@ export const KICKOFF = [
   locations,
   brand,
   access,
+  transcript,
   readout,
 ];
 
@@ -61,6 +63,7 @@ export const DISCOVERY = [
   competitors,
   services,
   locations,
+  transcript,
   readout,
 ];
 

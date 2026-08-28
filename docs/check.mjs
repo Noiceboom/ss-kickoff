@@ -53,6 +53,7 @@ const TRADE_SNAPSHOT = () => JSON.stringify(
   }))
 );
 const TRADES_MOD = await import(url("js/trades/index.js"));
+const { readTranscript, readExtract } = await import(url("js/transcript.js"));
 const TRADES_BEFORE_RUN = TRADE_SNAPSHOT();
 
 const S = await import(url("js/state.js"));
@@ -1031,14 +1032,15 @@ for (const m of MODULES) {
           "openItems[]": { section: "string", what: "string", detail: "string",
                 ask: "string|null", kind: "string" },
         },
-        "ss-kickoff/4": {
+        "ss-kickoff/5": {
           // map<T> — dynamic keys (module ids), every value of type T.
           // array<T> — every element of type T. Both are unchecked without
           // the parameter: `skipped: "array"` passes on an array of objects.
           "": { schema: "string", mode: "string", build: "string", capturedAt: "string", client: "object",
                 progress: "map<string>", skipped: "array<string>", fields: "map<object>",
                 services: "object", locations: "object", channels: "array<object>",
-                access: "object", notes: "map<string>", openItems: "array<object>",
+                access: "object", notes: "map<string>", recording: "object|null",
+                openItems: "array<object>",
                 display: "map<object>" },
           "client": { slug: "string", name: "string", market: "string", website: "string", trade: "string" },
           "services": { trades: "array<string>", items: "array<object>" },
@@ -1058,6 +1060,21 @@ for (const m of MODULES) {
           "access.accounts[]": { key: "string", label: "string", core: "boolean",
                 inPlay: "boolean", status: "string|null" },
           "access.other[]": { label: "string", status: "string|null" },
+          "recording": { file: "object|null", call: "object|null", readout: "object|null",
+                quotes: "array<object>", applied: "array<string>", unused: "array<object>",
+                mentionedServices: "array<string>", mentionedCities: "array<string>",
+                unclear: "array<string>" },
+          "recording.file": { name: "string", size: "number" },
+          "recording.call": { title: "string", date: "string", durationMin: "number",
+                turns: "number", speakers: "array<object>", talkShare: "array<object>",
+                lastAt: "string" },
+          "recording.call.speakers[]": { name: "string", turns: "number" },
+          "recording.call.talkShare[]": { name: "string", pct: "number" },
+          "recording.readout": { title: "string", date: "string", durationMin: "number",
+                participants: "array<string>" },
+          "recording.quotes[]": { speaker: "string", at: "string", text: "string",
+                module: "string", approved: "boolean" },
+          "recording.unused[]": { module: "string", key: "string", value: "string" },
           "openItems[]": { section: "string", what: "string", detail: "string",
                 ask: "string|null", kind: "string" },
         },
@@ -1146,6 +1163,29 @@ for (const m of MODULES) {
       rich.m.locations = { base: "Kansas City, MO", radius: 30 };
       rich.m.brand = { logoStatus: "raster", photoStatus: "none" };
       rich.skipped = ["competitors"];
+      {
+        // Long enough to cross the talk-share threshold, so that pin is
+        // exercised rather than warned about.
+        const line = (who, n) => ({ speaker_name: who, text: new Array(n).fill("word").join(" "),
+          start_time: 0, end_time: 600 });
+        rich.m.transcript = {
+          rec: { name: "call.json", type: "application/json", size: 128000, at: 1 },
+          recSummary: readTranscript({ title: "Discovery", date: "2026-08-27", duration: 41,
+            sentences: [line("Mike Reyes", 180), line("Sam Preston", 90)] }),
+          extract: readExtract({
+            schema: "ss-extract/1",
+            call: { title: "Discovery", date: "2026-08-27", durationMin: 42, participants: ["Sam Preston"] },
+            // Two proposals: one applied, one not, so "applied" and
+            // "unused" are both non-empty and their element pins are
+            // actually exercised rather than warned about.
+            fields: { goals: { revNow: "120000", revTarget: "400000" } },
+            quotes: [{ speaker: "Mike Reyes", at: "0:05", text: "Angi is killing us.", module: "marketing" }],
+            services: ["Drains"], cities: ["Olathe, KS"], unclear: ["no close rate"],
+          }, new Set(MODULES.map((m) => m.id))),
+          approved: ["q0"],
+          applied: ["goals.revNow"],
+        };
+      }
       rich.notes["goals:_page"] = "Wants off the pay-per-lead treadmill.";
       rich.notes["competitors:_page"] = "Didn't get to it.";
       {
@@ -2146,6 +2186,95 @@ for (const m of MODULES) {
   if (!opens.includes("Logo")) {
     fail("filling in the photo plan silently suppressed the they-need-a-logo warning");
   }
+}
+
+/* ── the recording contributes, it does not travel ─────── */
+{
+  const readout = MODULES.find((m) => m.id === "readout");
+  const st = S.fresh();
+  st.m.transcript = {
+    rec: { name: "call.json", type: "application/json", size: 900000, at: 1 },
+    recSummary: readTranscript({ title: "T", duration: 30,
+      sentences: [{ speaker_name: "Mike", text: "one two three", start_time: 0, end_time: 9 }] }),
+    extract: readExtract({
+      schema: "ss-extract/1",
+      fields: { goals: { revNow: "120000" } },
+      // TWO quotes. With none approved the block returns early, so a
+      // mutation that prints every quote would never be caught — the
+      // filter is only observable when some are in and some are out.
+      quotes: [
+        { speaker: "Mike", at: "0:05", text: "Angi is killing us.", module: "marketing" },
+        { speaker: "Mike", at: "0:09", text: "We nearly went under in March.", module: "goals" },
+      ],
+    }, new Set(MODULES.map((m) => m.id))),
+    approved: [],
+    applied: [],
+  };
+
+  const j = JSON.parse(readout.exports(ctxFor(bfp, st)).json());
+
+  // The extract is lifted into `recording`. Leaving it in `fields` too
+  // ships every quote and proposal twice and gives the OS two sources of
+  // truth for the same answer.
+  const leaked = Object.keys(j.fields.transcript || {});
+  if (leaked.length) {
+    fail(`the recording's bookkeeping leaked into fields.transcript: ${leaked.join(", ")}`);
+  }
+  if (!j.recording || !j.recording.quotes.length) fail("the recording block carried no quotes");
+
+  // and the transcript itself must never be in the payload
+  const flat = JSON.stringify(j);
+  if (flat.indexOf("one two three") > -1) fail("the transcript text reached the payload");
+  if (j.recording.file && j.recording.file.size !== 900000) fail("the recording file size was lost");
+
+  // an unapproved quote must not reach the printed document
+  const doc = (() => {
+    const html = readout.render({ ...ctxFor(bfp, st), num: "09", transient: {} });
+    const at = html.indexOf('<div class="printdoc">');
+    return at < 0 ? "" : html.slice(at);
+  })();
+  if (doc.indexOf("Angi is killing us") > -1) {
+    fail("an unapproved quote reached the client document");
+  }
+  // one in, one out — the case that makes the filter observable
+  st.m.transcript.approved = ["q0"];
+  const doc2 = (() => {
+    const html = readout.render({ ...ctxFor(bfp, st), num: "09", transient: {} });
+    const at = html.indexOf('<div class="printdoc">');
+    return at < 0 ? "" : html.slice(at);
+  })();
+  if (doc2.indexOf("Angi is killing us") === -1) {
+    fail("an approved quote never reached the client document");
+  }
+  if (doc2.indexOf("nearly went under") > -1) {
+    fail("an unapproved quote printed alongside an approved one");
+  }
+}
+
+/* ── the two transcript readers refuse what they can't read ── */
+{
+  // Asserting only "it threw" passes on a raw TypeError from a missing
+  // guard, which is the same outcome with none of the explanation. The
+  // message has to say what was wrong with the file.
+  const rejects = (fn, input, what, wants) => {
+    let msg = null;
+    try { fn(input); } catch (e) { msg = String((e && e.message) || e); }
+    if (msg === null) { fail(`${what} accepted something it cannot read`); return; }
+    if (wants && !wants.test(msg)) {
+      fail(`${what} rejected the file with an unhelpful message: "${msg.slice(0, 70)}"`);
+    }
+  };
+  rejects(readTranscript, {}, "readTranscript", /transcript turns|isn't JSON/i);
+  rejects(readTranscript, { sentences: [] }, "readTranscript", /transcript turns/i);
+  rejects(readTranscript, null, "readTranscript", /isn't JSON/i);
+  rejects((x) => readExtract(x, new Set()), {}, "readExtract", /call read-out/i);
+  rejects((x) => readExtract(x, new Set()), { schema: "something-else/1" }, "readExtract", /call read-out/i);
+  rejects((x) => readExtract(x, new Set()), [], "readExtract", /call read-out/i);
+
+  // and a read-out naming a screen this document lacks is reported, not dropped in silence
+  const r = readExtract({ schema: "ss-extract/1", fields: { nosuch: { a: "b" } } }, new Set(["goals"]));
+  if (!r.warnings.length) fail("a read-out for an unknown screen was accepted silently");
+  if (r.proposals.length) fail("a proposal for an unknown screen was kept");
 }
 
 /* ── /discovery/ is a real page, not a redirect ─────────── */

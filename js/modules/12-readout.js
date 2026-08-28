@@ -350,6 +350,30 @@ function sectionsBlock(parts) {
     ).join("");
 }
 
+/**
+ * Only the quotes that were ticked. A transcript quote is verbatim, and
+ * verbatim is exactly what you would not want printed unread — this is
+ * the half of the rule that lives on the printing side of it.
+ */
+function quotesBlock(ctx) {
+  const s = ctx.state.m.transcript || {};
+  const ex = s.extract;
+  const ok = Array.isArray(s.approved) ? s.approved : [];
+  if (!ex || !Array.isArray(ex.quotes) || !ok.length) return "";
+  const picked = ex.quotes.filter((q) => ok.indexOf(q.id) > -1);
+  if (!picked.length) return "";
+  return (
+    '<div class="dark"><div class="mlabel">In your words</div>' +
+      picked.map((q) =>
+        '<div style="margin-top:22px"><div style="font-size:21px;line-height:1.45">&ldquo;' +
+        esc(q.text) + '&rdquo;</div>' +
+        (q.speaker ? '<div class="mlabel" style="margin-top:8px">' + esc(q.speaker) + "</div>" : "") +
+        "</div>"
+      ).join("") +
+    "</div>"
+  );
+}
+
 function clientDoc(ctx, parts) {
   const r = ranksFor(parts);
 
@@ -377,6 +401,7 @@ function clientDoc(ctx, parts) {
     cover(ctx) +
     five +
     orders +
+    quotesBlock(ctx) +
     '<div class="docrule"><span>Everything you told us</span></div>' +
     sectionsBlock(parts) +
     askBlock(ctx, asksFrom(ctx, parts))

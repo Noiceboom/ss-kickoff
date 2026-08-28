@@ -11,6 +11,7 @@ import { importPayload } from "./import.js";
 import { resolveTrade } from "./trades/index.js";
 import * as places from "./places.js";
 import * as assets from "./assets.js";
+import { readTranscript, readExtract } from "./transcript.js";
 
 /* ── constants ────────────────────────────────────────── */
 
@@ -650,6 +651,21 @@ document.addEventListener("click", (e) => {
     render(); queueSave(); return;
   }
 
+  if ((el = t.closest("[data-useprop]"))) {
+    useProposal(el.getAttribute("data-useprop"));
+    return;
+  }
+
+  if ((el = t.closest("[data-quote]"))) {
+    const id = el.getAttribute("data-quote");
+    const cur = S.getField(R.state, "transcript", "approved", []);
+    const list = Array.isArray(cur) ? cur.slice() : [];
+    const i = list.indexOf(id);
+    if (i > -1) list.splice(i, 1); else list.push(id);
+    S.setField(R.state, "transcript", "approved", list.length ? list : "");
+    render(); queueSave(); return;
+  }
+
   if ((el = t.closest("[data-copy]"))) {
     copy(el.getAttribute("data-copy"), "Copied");
     return;
@@ -932,14 +948,48 @@ async function putFile(input) {
   const file = input.files && input.files[0];
   if (!file) return;
   try {
+    // The two transcript files are read before they are stored. A file
+    // that cannot be parsed must not leave metadata behind claiming a
+    // transcript is attached when nothing usable came out of it.
+    let parsed = null;
+    if (mod === "transcript") parsed = await parseTranscriptFile(key, file);
+
     const meta = await assets.put(R.slug, key, file);
     S.setField(R.state, mod, key, meta);
+    if (parsed) for (const [k, v] of Object.entries(parsed.write)) S.setField(R.state, mod, k, v);
+
     render(); queueSave();
-    toast("Added " + file.name);
+    toast(parsed ? parsed.toast : "Added " + file.name);
+    if (parsed) for (const w of parsed.warnings || []) if (window.console) console.warn("[transcript]", w);
     refreshPreviews();
   } catch (e) {
     toast(e.message || "Could not read that file");
   }
+}
+
+/**
+ * Read a recording or a read-out, and say plainly when it isn't one.
+ * Throws rather than storing — see the caller.
+ */
+async function parseTranscriptFile(key, file) {
+  let raw;
+  try { raw = JSON.parse(await file.text()); }
+  catch (e) { throw new Error("That file isn't valid JSON"); }
+
+  if (key === "rec") {
+    const sum = readTranscript(raw);
+    return {
+      write: { recSummary: sum },
+      toast: sum.turns + " turns read" + (sum.speakers.length ? " from " + sum.speakers.length + " speakers" : ""),
+    };
+  }
+  const known = new Set(MODULES.map((m) => m.id));
+  const ex = readExtract(raw, known);
+  return {
+    write: { extract: ex, extractFile: null },
+    toast: ex.proposals.length + " answers and " + ex.quotes.length + " quotes read",
+    warnings: ex.warnings,
+  };
 }
 
 /* ── loading a sales call ─────────────────────────────── */
@@ -1169,6 +1219,43 @@ function addItem(key) {
   toast('Added "' + name + '"');
   const card = document.querySelector('[data-card="' + key + "|" + id + '"]');
   if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+/**
+ * Write one proposed answer — or every one that fills a blank — into the
+ * screen it belongs to. "*blank" deliberately never overwrites: a bulk
+ * action that could silently replace something typed is not one anybody
+ * should reach for mid-call.
+ */
+function useProposal(tag) {
+  const ex = S.getField(R.state, "transcript", "extract", null);
+  if (!ex || !Array.isArray(ex.proposals)) return;
+  const applied = (S.getField(R.state, "transcript", "applied", []) || []).slice();
+
+  const take = (p) => {
+    S.setField(R.state, p.mod, p.key, p.value);
+    const t = p.mod + "." + p.key;
+    if (applied.indexOf(t) < 0) applied.push(t);
+  };
+
+  if (tag === "*blank") {
+    let n = 0;
+    for (const p of ex.proposals) {
+      if (applied.indexOf(p.mod + "." + p.key) > -1) continue;
+      const now = (R.state.m[p.mod] || {})[p.key];
+      if (now !== undefined && now !== null && String(now).trim() !== "") continue;
+      take(p); n++;
+    }
+    toast(n ? "Filled " + n + " field" + (n > 1 ? "s" : "") : "Nothing left to fill");
+  } else {
+    const hit = ex.proposals.find((p) => p.mod + "." + p.key === tag);
+    if (!hit) return;
+    take(hit);
+    toast("Used it");
+  }
+
+  S.setField(R.state, "transcript", "applied", applied);
+  render(); queueSave();
 }
 
 /* ── exports ──────────────────────────────────────────── */
