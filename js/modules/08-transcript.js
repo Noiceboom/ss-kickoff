@@ -65,19 +65,54 @@ export function extractPrompt(mods) {
     "- Quotes verbatim, and short. They are evidence, not summary.",
     "- `unclear` is for anything asked but not really answered.",
     "- `services` and `cities` are things they said they do or cover, by name.",
+    "  Those two screens are not in the list below on purpose — their keys are",
+    "  generated per item, so names are what can be matched up by hand.",
     "",
     "Screens and keys available:",
     mods,
   ].join("\n");
 }
 
-/** Every field key each screen owns, so the prompt names real targets. */
+// Screens whose answers are per-item, not per-field. Their state keys are
+// generated from ids — prio_emergency, rate_google-ads — and naming those
+// in the prompt invites an extraction to guess at ids it cannot know.
+// What they sell and where they work comes back as names instead, in
+// `services` and `cities`, and gets ticked by hand.
+const BY_ITEM = new Set([ID, "readout", "services", "locations"]);
+const PER_ITEM_KEY = /^(prio_|rate_|vol_|note_|status_|owner_|how_)/;
+
+/**
+ * Every field key each screen owns, harvested from what it renders.
+ *
+ * Read off the markup rather than declared on the modules, because a
+ * declaration is a second copy of the truth and this one has to be right:
+ * a prompt naming keys that do not exist produces a read-out where
+ * nothing maps, and the failure looks like "the extraction was bad"
+ * rather than "the prompt was wrong".
+ */
 function keyMap(ctx) {
   const out = [];
   for (const m of ctx.modules) {
-    if (m.id === ID || m.id === "readout") continue;
-    const keys = typeof m.keys === "function" ? m.keys(ctx) : m.fieldKeys;
-    if (keys && keys.length) out.push("  " + m.id + ": " + keys.join(", "));
+    if (BY_ITEM.has(m.id)) continue;
+
+    let html = "";
+    try { html = m.render({ ...ctx, num: "00" }); } catch (e) { continue; }
+
+    const fields = [];
+    const chips = new Map();
+    for (const hit of html.matchAll(/data-f="([a-z]+)\|([A-Za-z0-9_]+)"/g)) {
+      if (hit[1] === m.id && !PER_ITEM_KEY.test(hit[2]) && fields.indexOf(hit[2]) < 0) fields.push(hit[2]);
+    }
+    for (const hit of html.matchAll(/data-(?:chip|status)="([a-z]+)\|([A-Za-z0-9_]+)\|([^"]*)"/g)) {
+      if (hit[1] !== m.id || PER_ITEM_KEY.test(hit[2])) continue;
+      if (!chips.has(hit[2])) chips.set(hit[2], []);
+      const vals = chips.get(hit[2]);
+      if (hit[3] && vals.indexOf(hit[3]) < 0) vals.push(hit[3]);
+    }
+
+    const parts = fields.slice();
+    for (const [k, vals] of chips) parts.push(k + " (one of: " + vals.join(" | ") + ")");
+    if (parts.length) out.push("  " + m.id + " — " + parts.join(", "));
   }
   return out.join("\n");
 }

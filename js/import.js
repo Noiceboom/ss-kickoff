@@ -201,6 +201,58 @@ function channels(payload, into) {
 // discovery and is skipped. It is written anyway, for the kickoff → kickoff
 // case, and because a block that only round-trips in one direction is a
 // block nobody notices has stopped working.
+/**
+ * The recording, replayed into transcript state.
+ *
+ * `rec` is deliberately NOT restored. That is metadata for bytes sitting
+ * in IndexedDB on the machine the sales call was run from — the file does
+ * not travel with the payload, and a Download button that fails is worse
+ * than no button at all. The call summary comes back; the file does not.
+ *
+ * Quote ids are positional and regenerated here to match, because
+ * `approved` is a list of those ids while the payload stores approval on
+ * the quote itself.
+ */
+function recording(payload, into) {
+  const r = obj(payload.recording);
+  if (!Object.keys(r).length) return;
+
+  const quotes = arr(r.quotes).map((q, i) => ({
+    id: "q" + i,
+    speaker: str(obj(q).speaker),
+    at: str(obj(q).at),
+    text: str(obj(q).text),
+    module: str(obj(q).module),
+  })).filter((q) => q.text);
+
+  const approved = [];
+  arr(r.quotes).forEach((q, i) => { if (obj(q).approved) approved.push("q" + i); });
+
+  const call = obj(r.call);
+  const slot = {
+    extract: {
+      call: obj(r.readout),
+      proposals: arr(r.unused).map((u) => ({
+        mod: str(obj(u).module), key: str(obj(u).key), value: str(obj(u).value),
+      })).filter((p) => p.mod && p.key),
+      quotes: quotes,
+      mentionedServices: arr(r.mentionedServices).map(str).filter(Boolean),
+      mentionedCities: arr(r.mentionedCities).map(str).filter(Boolean),
+      unclear: arr(r.unclear).map(str).filter(Boolean),
+      warnings: [],
+    },
+    approved: approved,
+    // Applications are per-read-out, and the answers they produced are
+    // already in `fields`. Carrying the tags across would mark proposals
+    // "used" against a document that never used them.
+    applied: [],
+  };
+  if (Object.keys(call).length) slot.recSummary = call;
+
+  if (!quotes.length && !slot.extract.proposals.length && !slot.recSummary) return;
+  into.transcript = slot;
+}
+
 function access(payload, into) {
   const block = obj(payload.access);
   const extra = [];
@@ -290,6 +342,7 @@ export function importPayload(raw) {
 
   state.m.marketing = tidy(channels(raw, { ...(state.m.marketing || {}) }));
   state.m.access = tidy(access(raw, { ...(state.m.access || {}) }));
+  recording(raw, state.m);
 
   for (const mod of Object.keys(state.m)) {
     if (!Object.keys(state.m[mod]).length) delete state.m[mod];

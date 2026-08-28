@@ -400,6 +400,26 @@ export function buildCsv(payload) {
   }
   for (const a of payload.access.other) put("account", "access", "", a.label, a.status);
 
+  const rec = payload.recording;
+  if (rec) {
+    if (rec.file) put("field", "transcript", "", "file", rec.file.name);
+    for (const [k, v] of Object.entries(rec.call || {})) {
+      if (v === null || typeof v === "object") continue;
+      put("field", "transcript", "", k, v);
+    }
+    rec.quotes.forEach((q, i) => {
+      put("quote", "transcript", "q" + i, "text", q.text);
+      put("quote", "transcript", "q" + i, "speaker", q.speaker);
+      put("quote", "transcript", "q" + i, "at", q.at);
+      put("quote", "transcript", "q" + i, "about", q.module);
+      put("quote", "transcript", "q" + i, "approved", String(q.approved));
+    });
+    rec.unused.forEach((u, i) => put("heardNotUsed", u.module, "u" + i, u.key, u.value));
+    for (const x of rec.unclear) put("unclear", "transcript", "", "detail", x);
+    if (rec.mentionedServices.length) put("field", "transcript", "", "servicesMentioned", rec.mentionedServices.join("; "));
+    if (rec.mentionedCities.length) put("field", "transcript", "", "citiesMentioned", rec.mentionedCities.join("; "));
+  }
+
   for (const [mod, note] of Object.entries(payload.notes)) put("note", mod, "", "note", note);
   for (const [mod, st] of Object.entries(payload.progress)) put("progress", mod, "", "status", st);
   for (const o of payload.openItems) {

@@ -955,7 +955,7 @@ async function putFile(input) {
     if (mod === "transcript") parsed = await parseTranscriptFile(key, file);
 
     const meta = await assets.put(R.slug, key, file);
-    S.setField(R.state, mod, key, meta);
+    S.setField(R.state, mod, (parsed && parsed.metaKey) || key, meta);
     if (parsed) for (const [k, v] of Object.entries(parsed.write)) S.setField(R.state, mod, k, v);
 
     render(); queueSave();
@@ -979,6 +979,7 @@ async function parseTranscriptFile(key, file) {
   if (key === "rec") {
     const sum = readTranscript(raw);
     return {
+      metaKey: "rec",
       write: { recSummary: sum },
       toast: sum.turns + " turns read" + (sum.speakers.length ? " from " + sum.speakers.length + " speakers" : ""),
     };
@@ -986,7 +987,14 @@ async function parseTranscriptFile(key, file) {
   const known = new Set(MODULES.map((m) => m.id));
   const ex = readExtract(raw, known);
   return {
-    write: { extract: ex, extractFile: null },
+    // The upload card renders `extractFile`, so the metadata goes there —
+    // `extract` is the parsed read-out and would be overwritten by it.
+    metaKey: "extractFile",
+    // Approvals and applications are RESET. Quote ids are positional, so
+    // a second read-out's q0 is a different sentence entirely: carrying
+    // "q0 is approved" across means a quote nobody ever read gets printed
+    // in the document the client receives.
+    write: { extract: ex, approved: "", applied: "" },
     toast: ex.proposals.length + " answers and " + ex.quotes.length + " quotes read",
     warnings: ex.warnings,
   };

@@ -2251,6 +2251,111 @@ for (const m of MODULES) {
   }
 }
 
+/* ── the extraction prompt has to name real targets ────── */
+{
+  const tr = MODULES.find((m) => m.id === "transcript");
+  for (const [label, reg] of REGISTRIES) {
+    const html = tr.render({
+      state: S.fresh(label), client: bfp, transient: {}, slug: "bfp-kc",
+      mismatch: [], modules: reg, num: "08", mode: label,
+    });
+    const hit = html.match(/data-copy="([^"]*)"/);
+    if (!hit) { fail(`the ${label} recording screen has no prompt to copy`); continue; }
+    const prompt = hit[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#39;/g, "'");
+
+    const tail = prompt.slice(prompt.indexOf("Screens and keys available:"));
+    if (tail.trim() === "Screens and keys available:") {
+      fail(`the ${label} prompt names no field keys at all — an extraction against it maps to nothing`);
+      continue;
+    }
+    // the keys it names have to be keys that exist
+    for (const [mod, key] of [["goals", "revNow"], ["goals", "closeRate"], ["marketing", "agency"]]) {
+      if (!new RegExp("\\b" + mod + "\\b[^\\n]*\\b" + key + "\\b").test(tail)) {
+        fail(`the ${label} prompt does not name ${mod}.${key}, which that screen renders`);
+      }
+    }
+    // and must NOT name per-item keys it cannot know ids for
+    if (/prio_|rate_|status_/.test(tail)) {
+      fail(`the ${label} prompt names a generated per-item key — an extraction would guess at ids`);
+    }
+    if (/\bservices —|\blocations —/.test(tail)) {
+      fail(`the ${label} prompt lists a per-item screen as if it had fixed keys`);
+    }
+  }
+}
+
+/* ── a replaced read-out must not inherit approvals ────── */
+{
+  // Quote ids are positional. Carrying "q0 is approved" onto a different
+  // read-out prints a sentence nobody ever read, in the client's document.
+  const src = readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+  const fn = (src.match(/async function parseTranscriptFile[\s\S]*?\n\}/) || [""])[0];
+  if (!fn) fail("parseTranscriptFile is gone");
+  else {
+    const tail = fn.slice(fn.indexOf("readExtract"));
+    if (!/approved:\s*""/.test(tail)) fail("uploading a new read-out does not clear the old approvals");
+    if (!/applied:\s*""/.test(tail)) fail("uploading a new read-out does not clear the old applications");
+    if (!/metaKey:\s*"extractFile"/.test(tail)) {
+      fail("the read-out's file metadata is stored under a key the upload card doesn't render");
+    }
+  }
+}
+
+/* ── the recording survives the handoff, minus the file ── */
+{
+  const st = S.fresh("discovery");
+  st.m.transcript = {
+    rec: { name: "call.json", type: "application/json", size: 900000, at: 1 },
+    recSummary: readTranscript({ title: "Discovery", duration: 41,
+      sentences: [{ speaker_name: "Mike", text: "a b c", start_time: 0, end_time: 9 }] }),
+    extract: readExtract({
+      schema: "ss-extract/1",
+      quotes: [{ speaker: "Mike", at: "0:05", text: "KEEP ME." },
+               { speaker: "Mike", at: "0:09", text: "DROP ME." }],
+      fields: { goals: { revNow: "120000" } },
+      unclear: ["no close rate"],
+    }, new Set(MODULES.map((m) => m.id))),
+    approved: ["q0"],
+    applied: ["goals.revNow"],
+  };
+  const readout = MODULES.find((m) => m.id === "readout");
+  const payload = JSON.parse(readout.exports({
+    state: st, client: bfp, transient: {}, slug: "bfp-kc",
+    mismatch: [], modules: DISCOVERY, num: "09", mode: "discovery",
+  }).json());
+
+  const t = (await import(url("js/import.js"))).importPayload(payload).state.m.transcript;
+  if (!t) { fail("the recording was lost entirely in the handoff"); }
+  else {
+    if ((t.extract.quotes || []).length !== 2) fail("quotes were lost in the handoff");
+    const prints = (t.extract.quotes || []).filter((q) => (t.approved || []).indexOf(q.id) > -1);
+    if (prints.length !== 1 || prints[0].text.indexOf("KEEP") < 0) {
+      fail(`the handoff carried the wrong approvals: ${JSON.stringify(prints.map((q) => q.text))}`);
+    }
+    // the bytes stayed on the other machine; do not claim otherwise
+    if (t.rec) fail("the handoff claims a transcript file that did not travel with it");
+    if (!t.recSummary) fail("the call summary was lost in the handoff");
+    if ((t.applied || []).length) fail("the handoff carried applications from a document that never applied them");
+  }
+}
+
+/* ── the recording reaches the CSV ─────────────────────── */
+{
+  const st = S.fresh();
+  st.m.transcript = {
+    extract: readExtract({
+      schema: "ss-extract/1",
+      quotes: [{ speaker: "Mike", at: "0:05", text: "Angi is killing us." }],
+      unclear: ["no close rate"],
+    }, new Set(MODULES.map((m) => m.id))),
+    approved: ["q0"], applied: [],
+  };
+  const csv = MODULES.find((m) => m.id === "readout").exports(ctxFor(bfp, st)).csv();
+  if (csv.indexOf("Angi is killing us") === -1) fail("the CSV dropped the recording's quotes");
+  if (!/"quote","transcript"/.test(csv)) fail("the CSV has no addressable quote rows");
+  if (csv.indexOf("no close rate") === -1) fail("the CSV dropped what the call left unanswered");
+}
+
 /* ── the two transcript readers refuse what they can't read ── */
 {
   // Asserting only "it threw" passes on a raw TypeError from a missing
