@@ -166,7 +166,7 @@ function promptCard(ctx, s) {
         '<button class="btn sm" data-copy="' + esc(prompt) + '">Copy prompt</button>' +
       "</div>" +
       '<div class="fields one" style="margin-top:20px">' +
-        upload(ID, "extract", "The read-out", s.extractFile, {
+        upload(ID, "extractFile", "The read-out", s.extractFile, {
           accept: ".json,application/json",
           cta: "Choose the read-out JSON",
           hint: EXTRACT_SCHEMA,

@@ -213,7 +213,7 @@ function channels(payload, into) {
  * `approved` is a list of those ids while the payload stores approval on
  * the quote itself.
  */
-function recording(payload, into) {
+function recording(payload, into, warn) {
   const r = obj(payload.recording);
   if (!Object.keys(r).length) return;
 
@@ -232,9 +232,19 @@ function recording(payload, into) {
   const slot = {
     extract: {
       call: obj(r.readout),
+      // Only for screens this document actually has. `whynow` exists on
+      // the sales call and not here, and a proposal pointing at it renders
+      // a Use button that writes to a module id no registry resolves —
+      // invisible on screen, absent from the readout, gone from the next
+      // export.
       proposals: arr(r.unused).map((u) => ({
         mod: str(obj(u).module), key: str(obj(u).key), value: str(obj(u).value),
-      })).filter((p) => p.mod && p.key),
+      })).filter((p) => {
+        if (!p.mod || !p.key) return false;
+        if (KICKOFF_IDS.has(p.mod)) return true;
+        if (warn) warn(`the recording had an unused answer for "${p.mod}", which this document has no screen for`);
+        return false;
+      }),
       quotes: quotes,
       mentionedServices: arr(r.mentionedServices).map(str).filter(Boolean),
       mentionedCities: arr(r.mentionedCities).map(str).filter(Boolean),
@@ -249,7 +259,13 @@ function recording(payload, into) {
   };
   if (Object.keys(call).length) slot.recSummary = call;
 
-  if (!quotes.length && !slot.extract.proposals.length && !slot.recSummary) return;
+  // Mentions and unanswered questions are reason enough to keep it.
+  // "They said they do drain cleaning and we never ticked it" and "never
+  // gave a close rate" are precisely what the kickoff call is for.
+  const anything = quotes.length || slot.extract.proposals.length || slot.recSummary ||
+    slot.extract.mentionedServices.length || slot.extract.mentionedCities.length ||
+    slot.extract.unclear.length;
+  if (!anything) return;
   into.transcript = slot;
 }
 
@@ -342,7 +358,7 @@ export function importPayload(raw) {
 
   state.m.marketing = tidy(channels(raw, { ...(state.m.marketing || {}) }));
   state.m.access = tidy(access(raw, { ...(state.m.access || {}) }));
-  recording(raw, state.m);
+  recording(raw, state.m, warn);
 
   for (const mod of Object.keys(state.m)) {
     if (!Object.keys(state.m[mod]).length) delete state.m[mod];

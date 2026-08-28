@@ -2295,9 +2295,29 @@ for (const m of MODULES) {
     const tail = fn.slice(fn.indexOf("readExtract"));
     if (!/approved:\s*""/.test(tail)) fail("uploading a new read-out does not clear the old approvals");
     if (!/applied:\s*""/.test(tail)) fail("uploading a new read-out does not clear the old applications");
-    if (!/metaKey:\s*"extractFile"/.test(tail)) {
-      fail("the read-out's file metadata is stored under a key the upload card doesn't render");
+  }
+
+  // One key per file. The card renders `extractFile`, so that is where the
+  // metadata goes and what Remove clears — while the parsed read-out lives
+  // at `extract`. Removing a file must take what reading it produced with
+  // it, or the card offers a download of bytes that are gone and ticked
+  // quotes outlive the file they came from.
+  const mod = readFileSync(new URL("../js/modules/08-transcript.js", import.meta.url), "utf8");
+  if (!/upload\(ID, "extractFile", /.test(mod)) {
+    fail("the read-out upload does not render the key its metadata is stored under");
+  }
+  const drop = (src.match(/const FILE_LEAVES_BEHIND[\s\S]*?\n\};/) || [""])[0];
+  if (!drop) fail("removing a transcript file leaves what it produced behind");
+  else {
+    for (const k of ["extract", "approved", "applied"]) {
+      if (drop.indexOf('"' + k + '"') === -1) {
+        fail(`removing the read-out does not clear "${k}"`);
+      }
     }
+    if (drop.indexOf('"recSummary"') === -1) fail("removing the recording does not clear its summary");
+  }
+  if (!/for \(const also of FILE_LEAVES_BEHIND/.test(src)) {
+    fail("dropFile never consults FILE_LEAVES_BEHIND");
   }
 }
 
@@ -2336,6 +2356,51 @@ for (const m of MODULES) {
     if (t.rec) fail("the handoff claims a transcript file that did not travel with it");
     if (!t.recSummary) fail("the call summary was lost in the handoff");
     if ((t.applied || []).length) fail("the handoff carried applications from a document that never applied them");
+  }
+}
+
+/* ── the handoff keeps what the kickoff can use ────────── */
+{
+  const IMPORTER = await import(url("js/import.js"));
+  const kickoffIds = new Set(MODULES.map((m) => m.id));
+  const payloadFrom = (ex) => {
+    const st = S.fresh("discovery");
+    st.m.transcript = { extract: readExtract(ex, new Set(DISCOVERY.map((m) => m.id))), approved: [], applied: [] };
+    return JSON.parse(DISCOVERY.find((m) => m.id === "readout").exports({
+      state: st, client: bfp, transient: {}, slug: "bfp-kc",
+      mismatch: [], modules: DISCOVERY, num: "09", mode: "discovery",
+    }).json());
+  };
+
+  // A proposal for a screen only the sales call has must not survive as a
+  // Use button that writes to a module id nothing resolves.
+  const onlyThere = DISCOVERY.find((m) => !kickoffIds.has(m.id));
+  if (!onlyThere) fail("fixture assumption broken: the two documents share every screen");
+  else {
+    const res = IMPORTER.importPayload(payloadFrom({
+      schema: "ss-extract/1",
+      fields: { [onlyThere.id]: { anything: "x" }, goals: { revNow: "120000" } },
+    }));
+    const props = ((res.state.m.transcript || {}).extract || {}).proposals || [];
+    if (props.some((p) => !kickoffIds.has(p.mod))) {
+      fail(`the handoff kept a proposal for "${onlyThere.id}", a screen this document doesn't have`);
+    }
+    if (!props.some((p) => p.mod === "goals")) fail("the handoff dropped a proposal it could have used");
+    if (!res.warnings.some((w) => w.indexOf(onlyThere.id) > -1)) {
+      fail("a dropped proposal was not reported");
+    }
+  }
+
+  // Mentions and unanswered questions are the whole point of the next call.
+  const only = IMPORTER.importPayload(payloadFrom({
+    schema: "ss-extract/1", services: ["Drain cleaning"], cities: ["Olathe, KS"],
+    unclear: ["Never gave a close rate"],
+  }));
+  const t = only.state.m.transcript;
+  if (!t) fail("a recording carrying only mentions and unanswered questions was dropped");
+  else {
+    if (!(t.extract.mentionedServices || []).length) fail("mentioned services were lost in the handoff");
+    if (!(t.extract.unclear || []).length) fail("unanswered questions were lost in the handoff");
   }
 }
 
