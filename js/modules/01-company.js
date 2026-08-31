@@ -16,6 +16,16 @@ import { sayer, DISCOVERY } from "../modes.js";
 
 const ID = "company";
 
+/**
+ * Billing goes to the point of contact unless someone said otherwise.
+ *
+ * "no" is the only value that means a second contact. Anything else —
+ * including the legacy `true` and a session that never touched it — is
+ * the same person, which is the usual answer and the one worth defaulting
+ * to. See the note in render() for why this is not a toggle.
+ */
+function billingSameOf(s) { return (s || {}).billingSame !== "no"; }
+
 // Keys that count toward "done". Anything not listed is a bonus field.
 const CORE = ["contactName", "contactPhone", "contactEmail", "phone", "city", "hoursWeekday"];
 
@@ -74,10 +84,11 @@ export default {
     const s = slot(ctx.state, ID);
     const c = ctx.client.client || {};
     const v = (k, fallback) => (s[k] !== undefined ? s[k] : (fallback || ""));
-    // Defaults ON. It is the usual answer, and an unticked default made
-    // every kickoff open with two contact blocks to fill in instead of one.
-    // `billingSame === false` is an explicit "no"; undefined is untouched.
-    const billingSame = s.billingSame === undefined ? true : !!s.billingSame;
+    // A CHIP, not a toggle. setField deletes a key set to "", and an
+    // absent key is what the default reads as — so a default-on toggle
+    // could never be switched off: clearing it restored the default.
+    // Two explicit values have no such hole.
+    const billingSame = s.billingSame !== "no";
     const t = sayer(COPY, ctx.mode);
     // Everything gated on this only matters once somebody has signed. On
     // the sales call there is no invoice to address, no number to swap for
@@ -169,7 +180,10 @@ export default {
         '<div style="margin-top:30px;padding-top:24px;border-top:1px solid var(--line)">' +
           '<div class="mlabel">Billing contact</div>' +
           '<div style="margin-top:12px">' +
-            toggle(ID, "billingSame", "Same as the point of contact", billingSame) +
+            chipGroup(ID, "billingSame", "Who pays the invoices?", billingSame ? "yes" : "no", [
+              { value: "yes", label: "Same as the point of contact" },
+              { value: "no", label: "Someone else" },
+            ]) +
           "</div>" +
           (billingSame
             ? '<div style="margin-top:14px;font-size:14px;color:var(--muted)">' +
@@ -282,9 +296,16 @@ export default {
     put("Point of contact", who(s.contactName, s.contactEmail, s.contactPhone, s.contactRole));
     put("Reach them by", s.contactPref);
     put("After-hours cover", { human: "A person", ai: "AI answering", service: "Answering service", voicemail: "Voicemail" }[s.afterHoursWho] || "");
-    put("Billing contact", s.billingSame
+    put("Billing contact", billingSameOf(s)
       ? "Same as point of contact" + (s.contactName ? " (" + s.contactName + ")" : "")
       : who(s.billingName, s.billingEmail, s.billingPhone));
+    // Everyone else we'll end up emailing — otherwise the office manager
+    // exists on screen and nowhere the work actually gets read.
+    for (const r of (Array.isArray(s.people) ? s.people : [])) {
+      if (!r || !(r.name || r.email)) continue;
+      const who = [r.role, r.email, r.phone].filter(Boolean).join(" · ");
+      rows.push([r.name || "Also", who]);
+    }
     put("Main business phone", s.phone);
     put("Address", s.serviceAreaBiz ? (addr ? addr + " (hidden on GBP)" : "Service-area business") : addr);
     put("Hours", hours);
@@ -309,7 +330,7 @@ export default {
     // When billing falls back to the point of contact, that contact's email
     // IS the billing email — so a blank one still means invoices have nowhere
     // to go. The old check skipped this case entirely.
-    if (s.billingSame) {
+    if (billingSameOf(s)) {
       if (!filled(s.contactEmail)) {
         open.push({
           what: "Billing contact",

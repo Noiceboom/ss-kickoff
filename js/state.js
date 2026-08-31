@@ -32,7 +32,7 @@ export function fresh(mode) {
     // A brand-new session has nothing legacy to migrate, so it starts
     // stamped. validate() clears this when loading a saved state that
     // predates the stamp, which is what keeps real migrations running.
-    mig: { rank: true, access: true },
+    mig: { rank: true, access: true, billing: true },
     // Set only by js/import.js, and only on a kickoff built from a sales
     // call. Holds what the discovery document captured that the kickoff
     // has no screen for — `whynow`, its note, and the asks the prospect
@@ -1130,6 +1130,24 @@ export const REPLACED_BY = {
   locationsRank: "locations",
 };
 
+/**
+ * Billing used to be a toggle: off — which is how it started — meant the
+ * billing contact was a different person. It is a two-value choice now
+ * that defaults to the same person, so an untouched legacy session would
+ * silently flip meaning and hide a billing contact somebody had filled in.
+ *
+ * Only the sessions that actually captured one are moved.
+ */
+function migrateBilling(state) {
+  if (state.mig.billing) return;
+  state.mig.billing = true;
+  const m = state.m.company;
+  if (!m || m.billingSame === "yes" || m.billingSame === "no") return;
+  const captured = ["billingName", "billingEmail", "billingPhone"]
+    .some((k) => typeof m[k] === "string" && m[k].trim());
+  m.billingSame = m.billingSame === true ? "yes" : (captured ? "no" : "yes");
+}
+
 function migrate(state) {
   for (const [mod, from, to] of RENAMES) {
     const m = state.m[mod];
@@ -1138,6 +1156,7 @@ function migrate(state) {
     delete m[from];
   }
   migrateServiceScoping(state.m.services);
+  migrateBilling(state);
   migrateRankNotes(state);
   migrateChipValues(state);
   migrateAccess(state);

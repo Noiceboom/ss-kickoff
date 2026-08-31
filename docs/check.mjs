@@ -826,7 +826,9 @@ const UNSAFE_FOR_A_PROSPECT = [
     // means one thing in discovery and another in the kickoff corrupts one
     // of them, so the known set is pinned.
     const stamps = Object.keys(S.fresh().mig).sort().join(",");
-    if (stamps !== "access,rank") {
+    // `billing` is safe in both: the contact block only renders once
+    // they've signed, so the sales call never writes billingSame at all.
+    if (stamps !== "access,billing,rank") {
       fail(`migration stamps are now "${stamps}" — both documents share this namespace, so a new ` +
            `stamp must be checked against the other before it is added`);
     }
@@ -2288,7 +2290,7 @@ for (const m of MODULES) {
   }
   {
     const said = S.fresh();
-    said.m.company = { billingSame: false };
+    said.m.company = { billingSame: "no" };
     if (!/data-f="company\|billingEmail"/.test(kick("company", said).html)) {
       fail("saying billing is NOT the same does not open the billing block");
     }
@@ -2356,6 +2358,20 @@ for (const m of MODULES) {
     if (kick("marketing", inhouse).keys.has("contractEnd")) {
       fail("choosing all in-house leaves the incumbent follow-ups on screen");
     }
+
+    // Hiding them is not enough — a contract date left in state still
+    // reaches the export, describing an agency they said does not exist.
+    const mkMod = MODULES.find((m) => m.id === "marketing");
+    const wipes = (mkMod.clears || {}).runBy || {};
+    for (const k of ["agency", "contractEnd", "notice", "ownsAccounts"]) {
+      if ((wipes.inhouse || []).indexOf(k) < 0) {
+        fail(`choosing all in-house does not clear "${k}", so it still reaches the export`);
+      }
+    }
+    const src = readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+    if (!/owner\.clears && owner\.clears\[key\]/.test(src)) {
+      fail("app.js never applies a module's declared `clears`");
+    }
   }
 
   // Competitors — roster and notes, nothing else
@@ -2364,6 +2380,37 @@ for (const m of MODULES) {
     if (cp.keys.has(gone)) fail(`kickoff/competitors still asks "${gone}"`);
   }
   if (!cp.keys.has("rows")) fail("kickoff/competitors lost its roster");
+  {
+    // A screen has to be completable from what it still asks. CORE listing
+    // fields the screen no longer renders left a filled roster stuck on
+    // "partial" for ever.
+    const filledCp = S.fresh();
+    filledCp.m.competitors = { rows: [{ name: "Roto-Rooter", why: "Owns the map pack" }] };
+    const st = MODULES.find((m) => m.id === "competitors").status(ctxFor(bfp, filledCp));
+    if (st !== "done") fail(`competitors reads "${st}" with a roster filled in — it can never complete`);
+  }
+
+  // Everything asked has to reach the readout, or it exists on screen and
+  // nowhere the work is actually read from.
+  {
+    const g = S.fresh();
+    g.m.goals = { revNow: "120000", speedToLead: "15", apptRate: "45",
+                  closeRate: "40", reviewRate: "12", budget: "18000", adSpend: "12000" };
+    const labels = ((MODULES.find((m) => m.id === "goals").summary(ctxFor(bfp, g)) || {}).rows || [])
+      .map((r) => r[0]).join(" | ");
+    for (const want of ["Response time", "Appointment booking rate", "Review rate", "Ad spend"]) {
+      if (labels.indexOf(want) === -1) fail(`goals asks for ${want} and the readout never shows it`);
+    }
+    if (labels.indexOf("Close rate") > -1) {
+      fail('the readout still calls it "Close rate" while the screen says "Sales booking rate"');
+    }
+
+    const c = S.fresh();
+    c.m.company = { businessName: "Acme", people: [{ name: "Dana Whitfield", role: "Office manager", email: "d@acme.com" }] };
+    const co = JSON.stringify(MODULES.find((m) => m.id === "company").summary(ctxFor(bfp, c)) || {});
+    if (co.indexOf("Dana Whitfield") === -1) fail("the extra contacts never reach the readout");
+    if (co.indexOf("Office manager") === -1) fail("an extra contact reaches the readout with no role");
+  }
 
   // The two new screens are kickoff-only
   const discIds = new Set(DISCOVERY.map((m) => m.id));

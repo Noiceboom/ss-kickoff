@@ -289,6 +289,7 @@ export default {
         "</div>" +
       "</div>" +
 
+      '<div class="card">' +
         "<h3>What matters most</h3>" +
         '<div style="font-size:14px;color:var(--muted);margin-top:5px">' +
           t("mattersLede") +
@@ -428,9 +429,13 @@ export default {
     const put = (k, val) => { if (filled(val)) rows.push([k, val]); };
 
     put("Revenue / mo", span("revNow", "revTarget", money));
+    put("Response time", filled(s.speedToLead) ? s.speedToLead + " min" : "");
+    put("Appointment booking rate", pct(s.apptRate));
+    put("Review rate", pct(s.reviewRate));
+    put("Ad spend / mo", money(s.adSpend));
     put("Leads / mo", span("leadsNow", "leadsTarget", (x) => String(x)));
     put("Average ticket", filled(s.avgTicket) ? money(s.avgTicket) : "");
-    put("Close rate", filled(s.closeRate) ? pct(s.closeRate) : "");
+    put("Sales booking rate", filled(s.closeRate) ? pct(s.closeRate) : "");
     put("Marketing budget", filled(s.budget) ? money(s.budget) + " / mo" : "");
     put("Budget movable", label(BUDGET_FLEX, s.budgetFlex));
     put("Horizon", s.horizon);
@@ -450,7 +455,7 @@ export default {
         ask: "Let us know how much extra work you can take on before it becomes a problem." });
     }
     if (!filled(s.closeRate)) {
-      open.push({ what: "Close rate", detail: "Unknown — we can't work out what a lead is worth to them",
+      open.push({ what: "Sales booking rate", detail: "Unknown — we can't work out what a lead is worth to them",
         ask: "Send us your close rate if you track it — it tells us what a lead is worth." });
     }
     if (!filled(s.goodLead)) {

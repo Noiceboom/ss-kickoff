@@ -55,7 +55,9 @@ export const COPY = {
 };
 
 // Keys that count toward "done". A roster with no story behind it isn't an answer.
-const CORE = ["rows", "losesTo", "cantMatch"];
+// Only what this screen still renders. Leaving the removed fields in here
+// meant a filled-in roster could never read as done.
+const CORE = ["rows"];
 
 const THREAT = [
   { value: "", label: "—" },

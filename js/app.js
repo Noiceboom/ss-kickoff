@@ -692,6 +692,14 @@ document.addEventListener("click", (e) => {
       S.setPriority(R.state, svc.idsFor ? svc.idsFor(ctx(), pid) : [pid], val);
       render(); queueSave(); return;
     }
+    // A choice can invalidate other answers. Hiding them is not enough —
+    // they stay in state and still reach the export.
+    const owner = byId.get(mod);
+    const clears = owner && owner.clears && owner.clears[key];
+    if (clears && clears[val] && S.getField(R.state, mod, key) !== val) {
+      for (const k of clears[val]) S.setField(R.state, mod, k, "");
+    }
+
     const multi = el.getAttribute("data-multi") === "1";
     if (multi) {
       const cur = S.getField(R.state, mod, key, []);

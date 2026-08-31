@@ -153,6 +153,17 @@ function picker(s, query, mode) {
 
 export default {
   id: ID,
+
+  /**
+   * Answers a choice makes untrue.
+   *
+   * Saying it is all in-house while a contract end date sits hidden
+   * underneath does not just look untidy — that date still rides into the
+   * export and out to the OS, describing an agency they have just told us
+   * does not exist.
+   */
+  clears: { runBy: { inhouse: ["agency", "contractEnd", "notice", "ownsAccounts"] } },
+
   nav: "Marketing now",
   title: "What's running today?",
   lede: COPY.lede.kickoff,
