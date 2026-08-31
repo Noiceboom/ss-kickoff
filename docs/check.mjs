@@ -78,9 +78,20 @@ const tpl = JSON.parse(readFileSync(path.join(ROOT, "clients/template.json"), "u
  * this.
  */
 function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
+  // Only comments that OWN their line. A mid-line /* or // can live inside
+  // a string or a regex — "https://…", or a character class — and removing
+  // from there would silently rewrite the code being checked into
+  // something that never existed.
+  const out = [];
+  let inBlock = false;
+  for (const line of src.split("\n")) {
+    const t = line.trim();
+    if (inBlock) { if (t.endsWith("*/") || t === "*/") inBlock = false; continue; }
+    if (/^\/\*/.test(t)) { if (!/\*\//.test(t)) inBlock = true; continue; }
+    if (/^\/\//.test(t) || /^\*/.test(t)) continue;
+    out.push(line);
+  }
+  return out.join("\n");
 }
 
 const files = readdirSync(path.join(ROOT, "js/modules"))
@@ -2921,36 +2932,75 @@ for (const m of MODULES) {
   // "Jared said …" ends up. That happened, and it was live before anyone
   // noticed.
   //
-  // What a note is FOR is what to confirm. Who said it adds nothing to
-  // that and publishes a real person.
-  const PERSONAL = [
-    [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/, "an email address"],
-    [/\(?\d{3}\)?[ .-]?\d{3}[ .-]?\d{4}/, "a phone number"],
-    [/\b[A-Z][a-z]+'s\b(?! Summit)/, "a person's name in the possessive"],
-    [/\b[A-Z][a-z]+ (said|told|mentioned|described|wants|asked)\b/, "someone quoted by name"],
-    [/\btold (me|us)\b/, "something said to someone"],
-  ];
+  // This is a BACKSTOP, not a guarantee. No pattern reliably tells a
+  // client contact from a place or a brand, and a bare name in a sentence
+  // shape nobody anticipated will still get through. The actual protection
+  // is not writing call notes into a published file.
+  const ATTRIB = "said|says|told|mentioned|described|wants|wanted|asked|confirmed|prefers" +
+    "|thinks|noted|explained|flagged|likes|hates|pushed|reckons|claims";
+  // "from" is out: "separate from KCMO" is a sentence about a city.
+  const LEAD_IN = "ask|per|confirm with|check with|spoke to|speak to|chase";
+
   for (const file of readdirSync(path.join(ROOT, "clients")).filter((f) => f.endsWith(".json"))) {
     let doc;
     try { doc = JSON.parse(readFileSync(path.join(ROOT, "clients", file), "utf8")); }
     catch (e) { fail(`clients/${file} is not valid JSON — it will 404 into the template silently`); continue; }
 
-    const texts = [];
-    const push = (where, v) => { if (typeof v === "string" && v.trim()) texts.push([where, v]); };
-    push("source.from", (doc.source || {}).from);
+    // EVERY string, wherever it is. A name is just as public sitting in a
+    // sub-service or in a field nobody thought to scan.
+    const strings = [];
+    const walk = (o, at) => {
+      if (typeof o === "string") { if (o.trim()) strings.push([at, o]); return; }
+      if (Array.isArray(o)) { o.forEach((v, i) => walk(v, at + "[" + i + "]")); return; }
+      if (o && typeof o === "object") { for (const k of Object.keys(o)) walk(o[k], at ? at + "." + k : k); }
+    };
+    walk(doc, "");
+
+    // The document's own vocabulary is legitimate: the client's name, the
+    // services, the cities, the states. That is what makes "Lee's Summit"
+    // and "Benjamin Franklin Plumbing" fine without naming them here.
+    const vocab = new Set();
+    const learn = (v) => {
+      if (typeof v !== "string") return;
+      for (const w of v.split(/[^A-Za-z]+/)) if (w) vocab.add(w.toLowerCase());
+    };
+    learn((doc.client || {}).name); learn((doc.client || {}).market);
+    learn((doc.client || {}).trade); learn((doc.client || {}).website); learn(doc.slug);
     for (const kind of ["services", "locations"]) {
       for (const it of Array.isArray(doc[kind]) ? doc[kind] : []) {
-        push(`${kind}/${it && it.id}`, it && it.verify);
-        push(`${kind}/${it && it.id} name`, it && it.name);
+        if (!it) continue;
+        learn(it.name); learn(it.id); learn(it.state);
+        for (const sub of Array.isArray(it.subs) ? it.subs : []) learn(sub);
       }
     }
-    for (const [where, text] of texts) {
-      for (const [re, what] of PERSONAL) {
-        if (re.test(text)) {
-          fail(`clients/${file} ${where} contains ${what} — this repo is public: "${text.slice(0, 70)}"`);
-          break;
-        }
+    const unknown = (w) => !vocab.has(String(w).toLowerCase());
+
+    for (const [at, text] of strings) {
+      const say = (what) => fail(
+        `clients/${file} ${at || "(root)"} contains ${what} — this repo is public: "${text.slice(0, 70)}"`);
+
+      if (/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/.test(text)) { say("an email address"); continue; }
+      if (/\(?\d{3}\)?[ .-]?\d{3}[ .-]?\d{4}/.test(text)) { say("a phone number"); continue; }
+
+      let hit = null;
+      // A person's possessive is followed by a lowercase noun — "Jared's
+      // point". A place's is followed by another capital — "Lee's Summit",
+      // "St John's Wood" — and those are cities, not contacts.
+      let m = new RegExp("\\b([A-Z][a-z]{2,})'s\\s+[a-z]").exec(text);
+      if (m && unknown(m[1])) hit = `"${m[1]}" as a possessive`;
+      if (!hit && (m = new RegExp("\\b([A-Z][a-z]{2,}) (?:" + ATTRIB + ")\\b").exec(text)) && unknown(m[1])) {
+        hit = `"${m[1]}" quoted or paraphrased`;
       }
+      // Deliberately NOT case-insensitive. The /i flag also relaxed
+      // [A-Z][a-z]{2,}, so an acronym like KCMO read as a first name — the
+      // flag was meant to loosen the lead-in words and loosened the part
+      // doing the actual work.
+      const LEAD = "(?:" + LEAD_IN + "|" + LEAD_IN.replace(/(^|\|)([a-z])/g,
+        (_, sep, c) => sep + c.toUpperCase()) + ")";
+      if (!hit && (m = new RegExp("\\b" + LEAD + " ([A-Z][a-z]{2,})\\b").exec(text)) && unknown(m[1])) {
+        hit = `"${m[1]}" as someone to contact`;
+      }
+      if (hit) say("what looks like a person — " + hit);
     }
   }
 }
