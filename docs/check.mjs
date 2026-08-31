@@ -2681,33 +2681,45 @@ for (const m of MODULES) {
   // documents have. Put an upload on any other shared screen and the
   // kickoff's bare key space starts colliding with pre-b52 files again.
   {
-    const uploads = new Set();
-    for (const m of ALL_MODULES) {
-      let html = "";
-      try {
-        html = m.render({
-          state: S.fresh(DISCOVERY.indexOf(m) > -1 && MODULES.indexOf(m) < 0 ? "discovery" : "kickoff"),
-          client: bfp, transient: {}, slug: "bfp-kc", mismatch: [],
-          modules: MODULES.indexOf(m) > -1 ? MODULES : DISCOVERY, num: "01",
-          mode: MODULES.indexOf(m) > -1 ? "kickoff" : "discovery",
-        });
-      } catch (e) { continue; }
-      if (/data-putfile="/.test(html)) uploads.add(m.id);
-    }
-    const shared = DISCOVERY.filter((m) => MODULES.indexOf(m) > -1).map((m) => m.id);
-    const sharedUploads = shared.filter((id) => uploads.has(id));
+    // Uploads are found in the SOURCE, not in a fresh render. Brand's
+    // guide upload only appears once someone says a guide exists, so
+    // rendering an empty state sees no upload on a screen that plainly
+    // takes one — and would have passed a conditional upload straight
+    // through on a shared screen.
+    const takesUpload = (id) => {
+      const file = FILE_OF[id];
+      const paths = file
+        ? [new URL("../js/modules/" + file, import.meta.url),
+           new URL("../js/modules/discovery/" + file, import.meta.url)]
+        : [];
+      for (const u of paths) {
+        let src = "";
+        try { src = readFileSync(u, "utf8"); } catch (e) { continue; }
+        if (/\bupload\(\s*ID\b|data-putfile="/.test(src)) return true;
+      }
+      return false;
+    };
+
+    // Shared by module ID, not by object identity. Four screens are
+    // deliberate forks — same id, same state keys, different file — and
+    // they share a file key space exactly as an identical object would,
+    // because the key is the client slug and the upload's own name.
+    const kickIds = new Set(MODULES.map((m) => m.id));
+    const shared = DISCOVERY.map((m) => m.id).filter((id) => kickIds.has(id));
+    const sharedUploads = shared.filter(takesUpload);
     const unexpected = sharedUploads.filter((id) => id !== "transcript");
     if (unexpected.length) {
       fail(`"${unexpected.join(", ")}" is in both documents and takes uploads — the kickoff's ` +
         "bare file scope now collides with it; scope both documents or move the upload");
     }
-    if (!uploads.has("brand")) fail("fixture assumption broken: brand no longer takes an upload");
-    if (DISCOVERY.some((m) => m.id === "brand")) {
-      fail("brand is on the sales call and takes uploads — its files would share the kickoff's keys");
+    if (!takesUpload("brand")) fail("fixture assumption broken: brand no longer takes an upload");
+    if (!takesUpload("transcript")) fail("fixture assumption broken: the recording takes no upload");
+    if (kickIds.has("brand") && DISCOVERY.some((m) => m.id === "brand")) {
+      fail("brand is in both documents and takes uploads — its files would share one key space");
     }
   }
 
-  // and NO fallback from a scoped slug to the bare one: it could not tell
+  // and NO fallback from a scoped slug to the bare one  // and NO fallback from a scoped slug to the bare one: it could not tell
   // "never uploaded" from "just deleted", so deleting the sales call's
   // recording handed back the kickoff's.
   const store = readFileSync(new URL("../js/assets.js", import.meta.url), "utf8");
