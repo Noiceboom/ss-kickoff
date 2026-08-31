@@ -69,6 +69,20 @@ const tpl = JSON.parse(readFileSync(path.join(ROOT, "clients/template.json"), "u
 
 /* ── registry sanity ──────────────────────────────────── */
 
+/**
+ * Source with comments removed.
+ *
+ * A check that greps source has to look at code. These files explain
+ * themselves in prose, often by quoting the very thing being searched
+ * for — the tx() predicate check tripped on its own comment doing exactly
+ * this.
+ */
+function stripComments(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
+}
+
 const files = readdirSync(path.join(ROOT, "js/modules"))
   .filter((f) => /^\d\d-/.test(f)).sort();
 // Screens the sales call keeps a frozen copy of. Same id, same state keys,
@@ -2368,7 +2382,7 @@ for (const m of MODULES) {
         fail(`choosing all in-house does not clear "${k}", so it still reaches the export`);
       }
     }
-    const src = readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+    const src = stripComments(readFileSync(new URL("../js/app.js", import.meta.url), "utf8"));
     if (!/owner\.clears && owner\.clears\[key\]/.test(src)) {
       fail("app.js never applies a module's declared `clears`");
     }
@@ -2558,7 +2572,7 @@ for (const m of MODULES) {
 {
   // Quote ids are positional. Carrying "q0 is approved" onto a different
   // read-out prints a sentence nobody ever read, in the client's document.
-  const src = readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+  const src = stripComments(readFileSync(new URL("../js/app.js", import.meta.url), "utf8"));
   const fn = (src.match(/async function parseTranscriptFile[\s\S]*?\n\}/) || [""])[0];
   if (!fn) fail("parseTranscriptFile is gone");
   else {
@@ -2572,7 +2586,7 @@ for (const m of MODULES) {
   // at `extract`. Removing a file must take what reading it produced with
   // it, or the card offers a download of bytes that are gone and ticked
   // quotes outlive the file they came from.
-  const mod = readFileSync(new URL("../js/modules/08-transcript.js", import.meta.url), "utf8");
+  const mod = stripComments(readFileSync(new URL("../js/modules/08-transcript.js", import.meta.url), "utf8"));
   if (!/upload\(ID, "extractFile", /.test(mod)) {
     fail("the read-out upload does not render the key its metadata is stored under");
   }
@@ -2637,7 +2651,7 @@ for (const m of MODULES) {
   // which is truthy, so every caller read a miss as a hit. That made the
   // b47 rename fallback dead code and objectUrl() fail on a file that was
   // sitting right there under its old name.
-  const src = readFileSync(new URL("../js/assets.js", import.meta.url), "utf8");
+  const src = stripComments(readFileSync(new URL("../js/assets.js", import.meta.url), "utf8"));
   const raw = (src.match(/function tx\([\s\S]*?\n\}/) || [""])[0];
   // Comments in here quote the wrong predicate to explain why it was
   // wrong, so match the code only.
@@ -2660,7 +2674,7 @@ for (const m of MODULES) {
   // recording and the sales call's recording the same record. Verified in
   // a browser: uploading the second replaced the first while the first
   // document went on offering to download it.
-  const src = readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+  const src = stripComments(readFileSync(new URL("../js/app.js", import.meta.url), "utf8"));
   const fn = (src.match(/function assetScope\(\)[\s\S]*?\n\}/) || [""])[0];
   if (!fn) fail("app.js has no assetScope() — both documents write the same file records");
   else if (!/DISCOVERY/.test(fn) || !/R\.slug/.test(fn)) {
@@ -2695,7 +2709,11 @@ for (const m of MODULES) {
       for (const u of paths) {
         let src = "";
         try { src = readFileSync(u, "utf8"); } catch (e) { continue; }
-        if (/\bupload\(\s*ID\b|data-putfile="/.test(src)) return true;
+        // Code only. These files EXPLAIN their uploads in prose — the
+        // recording screen's header names data-putfile while describing
+        // what it is for — and a comment is not an upload. The same
+        // mistake read a comment as a predicate in the tx() check.
+        if (/\bupload\(\s*ID\b|data-putfile="/.test(stripComments(src))) return true;
       }
       return false;
     };
@@ -2722,7 +2740,7 @@ for (const m of MODULES) {
   // and NO fallback from a scoped slug to the bare one  // and NO fallback from a scoped slug to the bare one: it could not tell
   // "never uploaded" from "just deleted", so deleting the sales call's
   // recording handed back the kickoff's.
-  const store = readFileSync(new URL("../js/assets.js", import.meta.url), "utf8");
+  const store = stripComments(readFileSync(new URL("../js/assets.js", import.meta.url), "utf8"));
   if (/unscoped\(/.test(store)) {
     fail("assets.js falls back to the unscoped key — deleting one document's file reveals the other's");
   }
@@ -2734,7 +2752,7 @@ for (const m of MODULES) {
   // the card's key to "extractFile". Without a read-side fallback the card
   // shows an attached file and Download reports it isn't on this machine —
   // wrong, and unfixable from the screen.
-  const src = readFileSync(new URL("../js/assets.js", import.meta.url), "utf8");
+  const src = stripComments(readFileSync(new URL("../js/assets.js", import.meta.url), "utf8"));
   const map = (src.match(/const RENAMED_FROM = \{[^}]*\}/) || [""])[0];
   if (!map) fail("assets.js has no record of the keys it has renamed");
   else if (map.indexOf("extractFile") === -1 || map.indexOf('"extract"') === -1) {
@@ -2877,7 +2895,7 @@ for (const m of MODULES) {
   // in how it loads the app — so a link built from location.pathname points
   // back at the page you are already on, reloads as the same document, and
   // shows the same banner. A dead end that reads as a broken link.
-  const src = readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+  const src = stripComments(readFileSync(new URL("../js/app.js", import.meta.url), "utf8"));
   const fn = (src.match(/function docUrl\(mode\) \{[\s\S]*?\n\}/) || [""])[0];
   if (!fn) fail("docUrl() is gone — cross-document links have no single place to be built");
   else {
@@ -2942,7 +2960,7 @@ for (const m of MODULES) {
   // loadClient() falls back to clients/template.json for anyone without a
   // scrape — which is every prospect. sanitizeClient prefers the file's own
   // slug, so the template's identity used to overwrite theirs.
-  const src = readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+  const src = stripComments(readFileSync(new URL("../js/app.js", import.meta.url), "utf8"));
   const fallback = (src.match(/clients\/template\.json[\s\S]{0,600}?\n\s{6}\} catch \(e2\)/) || [""])[0];
   if (!fallback) fail("could not find the template fallback in app.js to check it");
   else {
