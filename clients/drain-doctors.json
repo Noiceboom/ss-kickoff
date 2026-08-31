@@ -8,7 +8,7 @@
   },
   "source": {
     "scrapedAt": "2026-08-31",
-    "from": "page-sitemap.xml — 7 service pages, 10 city pages under /service-areas/san-luis-obispo-county-ca/ — plus services named on the kickoff call",
+    "from": "page-sitemap.xml — 6 service pages under /services/, 10 city pages under /service-areas/san-luis-obispo-county-ca/",
     "method": "manual"
   },
   "services": [
@@ -43,7 +43,7 @@
         "Galvanized Pipe Replacement"
       ],
       "hasPage": true,
-      "verify": "Galvanized replacement read off Jared's point about 1950s–70s homes failing — confirm they quote whole-house repipes."
+      "verify": "Galvanized replacement inferred from 1950s–70s housing stock — confirm they quote whole-house repipes."
     },
     {
       "id": "leak-detection",
@@ -60,33 +60,6 @@
       ],
       "hasPage": true,
       "verify": null
-    },
-    {
-      "id": "sewers",
-      "name": "Sewer & Main Line",
-      "subs": [
-        "Main Line Clog"
-      ],
-      "hasPage": false,
-      "verify": null
-    },
-    {
-      "id": "toilets",
-      "name": "Toilets",
-      "subs": [
-        "Clogged Toilet"
-      ],
-      "hasPage": false,
-      "verify": null
-    },
-    {
-      "id": "camera-inspection",
-      "name": "Sewer Camera Inspection",
-      "subs": [
-        "Sewer Lateral Inspection"
-      ],
-      "hasPage": false,
-      "verify": "Confirm scope — Jared described SLO's point-of-sale sewer lateral inspection, which the city part-rebates, as the promo he'd build first."
     }
   ],
   "locations": [
@@ -123,14 +96,14 @@
       "name": "Templeton",
       "state": "CA",
       "hasPage": true,
-      "verify": "Jared said \"either Templeton or Atascadero\" for the northern priority and never picked — confirm which leads."
+      "verify": "Northern priority was left between Templeton and Atascadero on the call — confirm which leads."
     },
     {
       "id": "atascadero",
       "name": "Atascadero",
       "state": "CA",
       "hasPage": true,
-      "verify": "Jared said \"either Templeton or Atascadero\" for the northern priority and never picked — confirm which leads."
+      "verify": "Northern priority was left between Templeton and Atascadero on the call — confirm which leads."
     },
     {
       "id": "pismo-beach",
