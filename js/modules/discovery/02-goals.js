@@ -1,4 +1,16 @@
 // ============================================================
+// FROZEN FOR THE SALES CALL — do not evolve this file
+// ============================================================
+//
+// A snapshot of this screen as it stood when the kickoff version began to
+// diverge. The two documents deliberately keep the same module `id` and
+// the same STATE KEYS, so everything answered here still carries across
+// the discovery -> kickoff handoff; only the screen differs.
+//
+// If a change belongs in both documents, make it in both files. If that
+// starts happening often, that is the signal to merge them back.
+
+// ============================================================
 // 02 — Goals & targets
 // ============================================================
 //
@@ -14,9 +26,9 @@
 import {
   sectionHeadFor, skipRow, field, chipGroup, slider, derived,
   statusFor, filled, money, pct,
-} from "../ui.js";
-import { isSkipped, slot } from "../state.js";
-import { sayer } from "../modes.js";
+} from "../../ui.js";
+import { isSkipped, slot } from "../../state.js";
+import { sayer } from "../../modes.js";
 
 const ID = "goals";
 
@@ -181,7 +193,6 @@ const SCALE = {
   rate: { min: 0, max: 100, curve: 1, mode: "pct" },
   budget: { min: 0, max: 150000, curve: 2.5, mode: "money", unit: "/mo" },
   jobs: { min: 0, max: 200, curve: 2, mode: "count", unit: "/wk" },
-  minutes: { min: 0, max: 1440, curve: 2.6, mode: "count", unit: "min" },
 };
 
 function num(s, key) {
@@ -221,74 +232,56 @@ export default {
         '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
           t("todayLede") +
         "</div>" +
-        // Now and goal sit side by side. Asking "what is it" here and
-        // "what should it be" three cards later made the gap — the only
-        // number that matters — something you had to hold in your head.
         '<div class="fields sliders" style="margin-top:26px">' +
           slider(ID, "revNow", "Revenue per month, now", v("revNow"), {
-            ...SCALE.revenue, start: 120000, help: t("revNow"),
-          }) +
-          slider(ID, "revTarget", "Revenue per month, goal", v("revTarget"), {
-            ...SCALE.revenue, start: 250000, help: t("revTarget"),
+            ...SCALE.revenue, start: 120000,
+            help: t("revNow"),
           }) +
           slider(ID, "leadsNow", "Leads per month, now", v("leadsNow"), {
-            ...SCALE.leads, start: 150, help: t("leadsNow"),
-          }) +
-          slider(ID, "leadsTarget", "Leads per month, goal", v("leadsTarget"), {
-            ...SCALE.leads, start: 250,
+            ...SCALE.leads, start: 150,
+            help: t("leadsNow"),
           }) +
           slider(ID, "avgTicket", "Average ticket", v("avgTicket"), {
-            ...SCALE.ticket, start: 900, help: t("avgTicket"),
+            ...SCALE.ticket, start: 900,
+            help: t("avgTicket"),
+          }) +
+          slider(ID, "closeRate", "Close rate", v("closeRate"), {
+            ...SCALE.rate, start: 40,
+            help: t("closeRate"),
           }) +
         "</div>" +
         derived("goals:today") +
-        derived("goals:gap") +
-      "</div>" +
-
-      '<div class="card">' +
-        '<div class="mlabel">What happens to a lead</div>' +
-        '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
-          "Everything between the phone ringing and the money arriving. Most of the money " +
-          "already in the building is sitting in these four numbers." +
-        "</div>" +
-        '<div class="fields sliders" style="margin-top:26px">' +
-          slider(ID, "speedToLead", "Response time", v("speedToLead"), {
-            ...SCALE.minutes, start: 15,
-            help: "How long before someone gets back to a new lead. The single biggest lever on the three numbers below it.",
-          }) +
-          slider(ID, "apptRate", "Appointment booking rate", v("apptRate"), {
-            ...SCALE.rate, start: 45,
-            help: "Of the leads that come in, how many end up as a booked appointment.",
-          }) +
-          slider(ID, "closeRate", "Sales booking rate", v("closeRate"), {
-            ...SCALE.rate, start: 40, help: t("closeRate"),
-          }) +
-          slider(ID, "reviewRate", "Review rate", v("reviewRate"), {
-            ...SCALE.rate, start: 15,
-            help: "Of the jobs completed, how many leave a review.",
-          }) +
-        "</div>" +
       "</div>" +
 
       '<div class="card">' +
         '<div class="mlabel">' + t("targetLabel") + "</div>" +
         '<div class="fields sliders" style="margin-top:22px">' +
-          slider(ID, "budget", "Marketing budget per month", v("budget"), {
-            ...SCALE.budget, start: 8000, help: t("budget"),
+          slider(ID, "revTarget", "Revenue per month, target", v("revTarget"), {
+            ...SCALE.revenue, start: 250000,
+            help: t("revTarget"),
           }) +
-          slider(ID, "adSpend", "Of that, ad spend", v("adSpend"), {
-            ...SCALE.budget, start: 5000,
-            help: "What reaches the platforms, separate from what it costs to have it run.",
+          slider(ID, "leadsTarget", "Leads per month, target", v("leadsTarget"), {
+            ...SCALE.leads, start: 250,
+          }) +
+          slider(ID, "budget", "Marketing budget per month", v("budget"), {
+            ...SCALE.budget, start: 8000,
+            help: t("budget"),
           }) +
         "</div>" +
-        derived("goals:cpl") +
+        derived("goals:gap") +
         '<div class="fields two" style="margin-top:24px">' +
           field(ID, "budgetFlex", "Is that number movable?", v("budgetFlex"), {
-            type: "select", options: BUDGET_FLEX, help: t("budgetFlex"),
+            type: "select", options: BUDGET_FLEX,
+            help: t("budgetFlex"),
           }) +
         "</div>" +
+        // `horizon` came out of both documents. The sales call already
+        // asks when they want this live on the Why-now screen, and the
+        // kickoff no longer reads it — a duplicate answer with nowhere to
+        // arrive.
       "</div>" +
 
+      '<div class="card">' +
         "<h3>What matters most</h3>" +
         '<div style="font-size:14px;color:var(--muted);margin-top:5px">' +
           t("mattersLede") +
@@ -377,27 +370,6 @@ export default {
       out["goals:gap"] = line;
     } else if (revNow && revTarget && revTarget <= revNow) {
       out["goals:gap"] = "Target is at or below today's revenue — worth checking that's deliberate.";
-    }
-
-    // what a lead is allowed to cost, if the goal is to be hit on that spend
-    const adSpend = num(s, "adSpend");
-    const leadsTarget = num(s, "leadsTarget");
-    if (adSpend && leadsTarget) {
-      const cpl = adSpend / leadsTarget;
-      let line = "That's <strong>" + money(Math.round(cpl)) +
-        "</strong> a lead to hit " + leadsTarget.toLocaleString("en-US") + " at that spend.";
-      if (ticket && rate) {
-        // What a lead is worth, so the cost has something to be judged against.
-        const worth = ticket * (rate / 100);
-        line += " A lead is worth about <strong>" + money(Math.round(worth)) + "</strong> at their " +
-          "ticket and booking rate" +
-          (cpl >= worth
-            ? " — that costs more than it returns."
-            : ", so roughly <strong>" + Math.round(worth / cpl) + "x</strong>.");
-      }
-      out["goals:cpl"] = line;
-    } else if (adSpend && !leadsTarget) {
-      out["goals:cpl"] = "Set a leads goal and this works out what a lead is allowed to cost.";
     }
 
     return out;

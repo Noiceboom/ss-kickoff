@@ -1,4 +1,16 @@
 // ============================================================
+// FROZEN FOR THE SALES CALL — do not evolve this file
+// ============================================================
+//
+// A snapshot of this screen as it stood when the kickoff version began to
+// diverge. The two documents deliberately keep the same module `id` and
+// the same STATE KEYS, so everything answered here still carries across
+// the discovery -> kickoff handoff; only the screen differs.
+//
+// If a change belongs in both documents, make it in both files. If that
+// starts happening often, that is the signal to merge them back.
+
+// ============================================================
 // 04 — Competitors
 // ============================================================
 //
@@ -7,9 +19,9 @@
 // three free-text answers underneath are the ones that actually move
 // the copy; the grid on its own is just names.
 
-import { sectionHeadFor, skipRow, field, rowGroup, statusFor, filled } from "../ui.js";
-import { isSkipped, slot, getRows } from "../state.js";
-import { sayer } from "../modes.js";
+import { sectionHeadFor, skipRow, field, rowGroup, statusFor, filled } from "../../ui.js";
+import { isSkipped, slot, getRows } from "../../state.js";
+import { sayer } from "../../modes.js";
 
 const ID = "competitors";
 
@@ -110,6 +122,27 @@ export default {
             empty: t("rosterEmpty"),
             addLabel: "Add competitor",
             help: t("roster"),
+          }) +
+        "</div>" +
+      "</div>" +
+
+      '<div class="card">' +
+        '<div class="mlabel">Where the work is going</div>' +
+        '<div class="fields one" style="margin-top:16px">' +
+          field(ID, "losesTo", "Who do you lose jobs to most often?", v("losesTo"), {
+            type: "longtext", rows: 3,
+            placeholder: "Mostly the two big franchises on brand search. Below $400 it's whoever the homeowner's neighbour used.",
+            help: t("losesTo"),
+          }) +
+          field(ID, "cantMatch", "What do they do that you can't or won't match?", v("cantMatch"), {
+            type: "longtext", rows: 3,
+            placeholder: "Same-day everything, and they'll eat the trip charge. We won't run techs that thin.",
+            help: t("cantMatch"),
+          }) +
+          field(ID, "takeShare", "Anyone you specifically want to take share from?", v("takeShare"), {
+            type: "longtext", rows: 3,
+            placeholder: "Anchor. They took two of our commercial accounts last year and I'd like them back.",
+            help: t("takeShare"),
           }) +
         "</div>" +
       "</div>"

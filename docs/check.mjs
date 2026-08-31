@@ -71,6 +71,10 @@ const tpl = JSON.parse(readFileSync(path.join(ROOT, "clients/template.json"), "u
 
 const files = readdirSync(path.join(ROOT, "js/modules"))
   .filter((f) => /^\d\d-/.test(f)).sort();
+// Screens the sales call keeps a frozen copy of. Same id, same state keys,
+// its own file — see js/modules/discovery/.
+const forked = readdirSync(path.join(ROOT, "js/modules/discovery"))
+  .filter((f) => /^\d\d-/.test(f)).sort();
 
 /** module id -> its file, so a check can re-import one for its exports. */
 const FILE_OF = {};
@@ -81,8 +85,8 @@ for (const m of ALL_MODULES) {
 // The union, not either registry on its own — a module file that only the
 // sales call uses is still a module file, and a file in neither registry
 // is dead weight nobody will notice.
-if (files.length !== ALL_MODULES.length) {
-  fail(`the two registries list ${ALL_MODULES.length} distinct modules but ${files.length} module files exist`);
+if (files.length + forked.length !== ALL_MODULES.length) {
+  fail(`the two registries list ${ALL_MODULES.length} distinct modules but ${files.length + forked.length} module files exist`);
 }
 
 for (const [mode, list] of REGISTRIES) {
@@ -120,13 +124,69 @@ for (const [mode, list] of REGISTRIES) {
   }
   if (kick.has("whynow")) fail('"whynow" is in the kickoff registry — it is a discovery screen');
 
-  // Shared screens must be the SAME OBJECT in both lists. A copy would
-  // drift, and the handoff depends on both documents writing the same
-  // state keys under the same module id.
-  for (const m of DISCOVERY) {
-    if (m.id === "whynow") continue;
-    if (MODULES.indexOf(m) < 0) {
-      fail(`discovery's "${m.id}" is not the same module object the kickoff uses — the handoff will drift`);
+  // A screen in both documents may be the same object or a deliberate
+  // fork. What matters is not whether the two render the same inputs —
+  // fields can be gated behind another answer, so markup alone says
+  // little — but whether an answer given on the sales call SURVIVES the
+  // handoff. So this replays it: write a value into every key the sales
+  // call renders, export, import, and look for it on the other side.
+  const keysRendered = (mod, reg, mode) => {
+    let html = "";
+    try {
+      html = mod.render({
+        state: S.fresh(mode), client: bfp, transient: {}, slug: "bfp-kc",
+        mismatch: [], modules: reg, num: "01", mode: mode,
+      });
+    } catch (e) { return null; }
+    const out = new Set();
+    for (const hit of html.matchAll(/data-(?:f|chip|status|toggle)="([a-z]+)\|([A-Za-z0-9_]+)/g)) {
+      if (hit[1] === mod.id) out.add(hit[2]);
+    }
+    return out;
+  };
+
+  {
+    const IMPORTER = await import(url("js/import.js"));
+    const st = S.fresh("discovery");
+    const written = [];
+    for (const m of DISCOVERY) {
+      if (m.id === "whynow" || m.id === "readout" || m.id === "transcript") continue;
+      const twin = MODULES.find((k) => k.id === m.id);
+      if (!twin || twin === m) continue;              // shared object cannot drift
+      const keys = keysRendered(m, DISCOVERY, "discovery");
+      if (!keys) { fail(`"${m.id}" could not be rendered on the sales call`); continue; }
+      const slot = st.m[m.id] || (st.m[m.id] = {});
+      for (const k of keys) {
+        if (/^(off|on|prio|added|snap|subsOff|trades|extra|custom|chan)$/.test(k)) continue;
+        slot[k] = "SURVIVES-" + m.id + "-" + k;
+        written.push([m.id, k]);
+      }
+    }
+    if (written.length < 8) fail(`only ${written.length} forked keys were exercised — the handoff test proves little`);
+
+    const payload = JSON.parse(DISCOVERY.find((m) => m.id === "readout").exports({
+      state: st, client: bfp, transient: {}, slug: "bfp-kc",
+      mismatch: [], modules: DISCOVERY, num: "09", mode: "discovery",
+    }).json());
+    const after = IMPORTER.importPayload(payload).state;
+
+    // The handoff stash is for screens the kickoff does not have — an
+    // answer to a screen it DOES have belongs on that screen, where it can
+    // be read and corrected. Accepting either would let the whole module
+    // fall into the stash and still look like it arrived.
+    const kickoffIds = new Set(MODULES.map((m) => m.id));
+    const lost = [];
+    for (const [mod, key] of written) {
+      const here = (after.m[mod] || {})[key];
+      if (here !== undefined) continue;
+      if (!kickoffIds.has(mod)) {
+        const stashed = ((after.handoff && after.handoff.fields && after.handoff.fields[mod]) || {})[key];
+        if (stashed !== undefined) continue;
+      }
+      lost.push(mod + "." + key);
+    }
+    if (lost.length) {
+      fail(`answers given on the sales call do not survive the handoff: ${lost.join(", ")}`);
     }
   }
 }
@@ -229,7 +289,6 @@ const UNSAFE_FOR_A_PROSPECT = [
   "in their head",
   "If they won't name a number",
   "build to a cap or build to a return",
-  "The window they're judging us in",
   "the reporting never becomes a fight",
   "Real numbers, not the ones on the website",
   "a precise dodge",
@@ -248,9 +307,6 @@ const UNSAFE_FOR_A_PROSPECT = [
   "This is the sentence that tells you how to keep them",
   // 04 competitors
   "Threat level is their read, not ours",
-  "Ask about the last five jobs that got away",
-  "Not the same question as who they respect",
-  "a positioning line we can lean on",
   // 01 company
   "whether they can approve spend without asking anyone",
 ];
@@ -473,8 +529,11 @@ const UNSAFE_FOR_A_PROSPECT = [
       fail(`kickoff/company no longer asks for "${key}" — the discovery pin guarding it is now vacuous`);
     }
   }
-  // What the sales call DOES keep.
-  for (const key of ["businessName", "website", "founded", "radius", "crews", "customerMix"]) {
+  // What the sales call DOES keep. `radius` is deliberately absent from
+  // both documents now — the Cities screen asks where they work, and a
+  // second free-text answer to the same question in Company was one the
+  // kickoff had nowhere to receive.
+  for (const key of ["businessName", "website", "founded", "crews", "customerMix"]) {
     if (disc.indexOf(`company|${key}`) < 0) {
       fail(`discovery/company dropped "${key}" — it is worth knowing before anything is priced`);
     }
@@ -2185,6 +2244,140 @@ for (const m of MODULES) {
   const opens = (brandMod.summary(ctxFor(bfp, planned)).open || []).map((o) => o.what);
   if (!opens.includes("Logo")) {
     fail("filling in the photo plan silently suppressed the they-need-a-logo warning");
+  }
+}
+
+/* ── the kickoff changes, screen by screen ─────────────── */
+{
+  const keysOf = (mod, reg, mode, state) => {
+    let html = "";
+    try {
+      html = mod.render({
+        state: state || S.fresh(mode), client: bfp, transient: {}, slug: "bfp-kc",
+        mismatch: [], modules: reg, num: "01", mode: mode,
+      });
+    } catch (e) { return { keys: new Set(), html: "" }; }
+    const keys = new Set();
+    for (const hit of html.matchAll(/data-(?:f|chip|status|toggle|addrow)="([a-z]+)\|([A-Za-z0-9_]+)/g)) {
+      if (hit[1] === mod.id) keys.add(hit[2]);
+    }
+    return { keys, html };
+  };
+  const kick = (id, state) => keysOf(MODULES.find((m) => m.id === id), MODULES, "kickoff", state);
+
+  // Company —
+  const co = kick("company");
+  for (const gone of ["trackingOk", "leadEmail", "bookingUrl", "radius"]) {
+    if (co.keys.has(gone)) fail(`kickoff/company still asks "${gone}" — it moved off this screen`);
+  }
+  for (const kept of ["businessName", "phone", "street", "city", "state", "zip", "crews", "customerMix"]) {
+    if (!co.keys.has(kept)) fail(`kickoff/company lost "${kept}"`);
+  }
+  if (!co.keys.has("people")) fail("kickoff/company has no way to add more people");
+  // NAP is one answer, not two cards — an address that disagrees with the
+  // phone number's listing is the whole problem this screen exists to catch.
+  {
+    const labels = [...co.html.matchAll(/class="mlabel">([^<]+)</g)].map((m) => m[1]);
+    if (labels.filter((l) => /address/i.test(l)).length > 1) {
+      fail("company splits name, address and phone across more than one card");
+    }
+  }
+  // billing defaults to "same as", so the second contact block stays shut
+  if (/data-f="company\|billingEmail"/.test(co.html)) {
+    fail("the billing block is open by default — \"same as point of contact\" should be on");
+  }
+  {
+    const said = S.fresh();
+    said.m.company = { billingSame: false };
+    if (!/data-f="company\|billingEmail"/.test(kick("company", said).html)) {
+      fail("saying billing is NOT the same does not open the billing block");
+    }
+  }
+  // after-hours cover only asked once there are after hours
+  if (co.keys.has("afterHoursWho")) fail("after-hours cover is asked before they say they run a line");
+  {
+    const em = S.fresh();
+    em.m.company = { emergency: true };
+    const h = kick("company", em);
+    if (!h.keys.has("afterHoursWho")) fail("no human-or-AI question on the after-hours line");
+    if (!/AI answering/.test(h.html)) fail("the after-hours options do not include AI");
+  }
+
+  // Goals —
+  const go = kick("goals");
+  if (go.keys.has("horizon")) fail('kickoff/goals still asks "By when?"');
+  for (const k of ["revNow", "revTarget", "leadsNow", "leadsTarget",
+                   "speedToLead", "apptRate", "closeRate", "reviewRate", "budget", "adSpend"]) {
+    if (!go.keys.has(k)) fail(`kickoff/goals is missing "${k}"`);
+  }
+  // now and goal must sit together, not three cards apart
+  const order = ["revNow", "revTarget", "leadsNow", "leadsTarget"].map((k) => go.html.indexOf('goals|' + k));
+  if (order.some((n) => n < 0) || order[1] < order[0] || order[2] < order[1] || order[3] < order[2]) {
+    fail("goals does not pair each number with its target, in order");
+  }
+  {
+    const g = S.fresh();
+    g.m.goals = { adSpend: "12000", leadsTarget: "500", avgTicket: "900", closeRate: "40" };
+    const d = MODULES.find((m) => m.id === "goals").derive(ctxFor(bfp, g));
+    if (!d["goals:cpl"]) fail("ad spend and a leads goal produce no cost per lead");
+    else if (d["goals:cpl"].indexOf("$24") === -1) {
+      fail(`cost per lead came out as "${d["goals:cpl"].replace(/<[^>]+>/g, "")}"`);
+    }
+  }
+
+  // Marketing — the agency follow-ups stay shut until there is an agency
+  const mk = kick("marketing");
+  for (const k of ["contractEnd", "notice", "ownsAccounts"]) {
+    if (mk.keys.has(k)) fail(`kickoff/marketing asks "${k}" before an agency is named`);
+  }
+  if (!mk.keys.has("runBy")) fail("marketing has no control to open the incumbent section");
+  {
+    // The gate must be a CLICK. Typing writes state without re-rendering,
+    // so a section gated on a text field never appears — verified in a
+    // browser before this check existed.
+    const typed = S.fresh();
+    typed.m.marketing = { agency: "Lead Ninjas" };
+    const a = S.fresh();
+    a.m.marketing = { runBy: "agency" };
+    const opened = kick("marketing", a).keys;
+    for (const k of ["agency", "contractEnd", "notice", "ownsAccounts"]) {
+      if (!opened.has(k)) fail(`choosing "an agency" does not reveal "${k}"`);
+    }
+    if (!/data-chip="marketing\|runBy\|/.test(mk.html)) {
+      fail("the incumbent section is not gated on something clickable");
+    }
+    // A name inherited from the sales call keeps it open…
+    if (!kick("marketing", typed).keys.has("contractEnd")) {
+      fail("an agency name carried over from the sales call does not open the follow-ups");
+    }
+    // …but saying in-house closes it, even with that name present.
+    const inhouse = S.fresh();
+    inhouse.m.marketing = { runBy: "inhouse", agency: "Lead Ninjas" };
+    if (kick("marketing", inhouse).keys.has("contractEnd")) {
+      fail("choosing all in-house leaves the incumbent follow-ups on screen");
+    }
+  }
+
+  // Competitors — roster and notes, nothing else
+  const cp = kick("competitors");
+  for (const gone of ["losesTo", "cantMatch", "takeShare"]) {
+    if (cp.keys.has(gone)) fail(`kickoff/competitors still asks "${gone}"`);
+  }
+  if (!cp.keys.has("rows")) fail("kickoff/competitors lost its roster");
+
+  // The two new screens are kickoff-only
+  const discIds = new Set(DISCOVERY.map((m) => m.id));
+  for (const id of ["conversions", "profiles"]) {
+    if (!MODULES.some((m) => m.id === id)) fail(`the kickoff has no "${id}" screen`);
+    if (discIds.has(id)) fail(`"${id}" is on the sales call — it is post-sale detail`);
+  }
+  const cv = kick("conversions");
+  for (const k of ["phoneSetup", "formTo", "counts", "doesNotCount", "numbers"]) {
+    if (!cv.keys.has(k)) fail(`conversions is missing "${k}"`);
+  }
+  const pr = kick("profiles");
+  for (const k of ["gbp", "facebook", "instagram", "other"]) {
+    if (!pr.keys.has(k)) fail(`profiles is missing "${k}"`);
   }
 }
 

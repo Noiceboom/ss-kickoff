@@ -1,4 +1,16 @@
 // ============================================================
+// FROZEN FOR THE SALES CALL — do not evolve this file
+// ============================================================
+//
+// A snapshot of this screen as it stood when the kickoff version began to
+// diverge. The two documents deliberately keep the same module `id` and
+// the same STATE KEYS, so everything answered here still carries across
+// the discovery -> kickoff handoff; only the screen differs.
+//
+// If a change belongs in both documents, make it in both files. If that
+// starts happening often, that is the signal to merge them back.
+
+// ============================================================
 // 01 — Company & contact
 // ============================================================
 //
@@ -10,9 +22,9 @@
 // JSON — they are shown prefilled rather than asked for. Everything else
 // gets found out on the call.
 
-import { sectionHeadFor, skipRow, field, chipGroup, toggle, rowGroup, statusFor, filled, ICON } from "../ui.js";
-import { isSkipped, slot, getRows } from "../state.js";
-import { sayer, DISCOVERY } from "../modes.js";
+import { sectionHeadFor, skipRow, field, chipGroup, toggle, statusFor, filled, ICON } from "../../ui.js";
+import { isSkipped, slot } from "../../state.js";
+import { sayer, DISCOVERY } from "../../modes.js";
 
 const ID = "company";
 
@@ -74,10 +86,7 @@ export default {
     const s = slot(ctx.state, ID);
     const c = ctx.client.client || {};
     const v = (k, fallback) => (s[k] !== undefined ? s[k] : (fallback || ""));
-    // Defaults ON. It is the usual answer, and an unticked default made
-    // every kickoff open with two contact blocks to fill in instead of one.
-    // `billingSame === false` is an explicit "no"; undefined is untouched.
-    const billingSame = s.billingSame === undefined ? true : !!s.billingSame;
+    const billingSame = !!s.billingSame;
     const t = sayer(COPY, ctx.mode);
     // Everything gated on this only matters once somebody has signed. On
     // the sales call there is no invoice to address, no number to swap for
@@ -106,12 +115,6 @@ export default {
           field(ID, "founded", "Year founded", v("founded"), {
             type: "number", placeholder: "2015",
             help: t("founded"),
-          }) +
-          // Was under "Coverage". Neither is coverage — where they work is
-          // the Cities screen's job — but how much crew they have and who
-          // they sell to are worth knowing and had nowhere else to go.
-          field(ID, "crews", "Trucks / crews on the road", v("crews"), {
-            type: "number", placeholder: "6",
           }) +
         "</div>" +
       "</div>" +
@@ -149,24 +152,6 @@ export default {
         "</div>" +
 
         '<div style="margin-top:30px;padding-top:24px;border-top:1px solid var(--line)">' +
-          '<div class="mlabel">Anyone else</div>' +
-          '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
-            "Office manager, dispatcher, the son who runs the Facebook page. Anyone we'll end up emailing." +
-          "</div>" +
-          '<div style="margin-top:16px">' +
-            rowGroup(ID, "people", [
-              { key: "name", label: "Name", placeholder: "Dana Whitfield" },
-              { key: "role", label: "Role", placeholder: "Office manager", width: "180px" },
-              { key: "email", label: "Email", placeholder: "dana@acmeplumbing.com" },
-              { key: "phone", label: "Phone", placeholder: "(816) 555-0143", width: "160px" },
-            ], getRows(ctx.state, ID, "people"), {
-              addLabel: "Add someone",
-              empty: "Just the two above.",
-            }) +
-          "</div>" +
-        "</div>" +
-
-        '<div style="margin-top:30px;padding-top:24px;border-top:1px solid var(--line)">' +
           '<div class="mlabel">Billing contact</div>' +
           '<div style="margin-top:12px">' +
             toggle(ID, "billingSame", "Same as the point of contact", billingSame) +
@@ -191,19 +176,40 @@ export default {
       "</div>" +
 
       '<div class="card">' +
-        '<div class="mlabel">Name, address, phone</div>' +
+        '<div class="mlabel">The number that rings</div>' +
         '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
-          "Exactly as it should appear everywhere &mdash; the site, the ads, the Google profile, " +
-          "every directory. Getting these three to agree is most of local SEO." +
+          "Not who we call &mdash; what the customer calls. This is what goes on the ads." +
         "</div>" +
         '<div class="fields two" style="margin-top:16px">' +
           field(ID, "phone", "Main business phone", v("phone"), {
             type: "phone", placeholder: "(816) 555-0100",
             help: "The number that actually gets answered.",
           }) +
-          // One card, because NAP is one thing. Split across two it was
-          // possible to fill in an address that disagreed with the phone
-          // number's listing and never see them side by side.
+          field(ID, "trackingOk", "Can we swap in a tracking number?", v("trackingOk"), {
+            type: "select",
+            options: [
+              { value: "", label: "—" },
+              { value: "yes", label: "Yes" },
+              { value: "no", label: "No" },
+              { value: "unsure", label: "Needs a conversation" },
+            ],
+          }) +
+          field(ID, "leadEmail", "Where web leads should land", v("leadEmail"), {
+            type: "email", placeholder: "office@acmeplumbing.com",
+            help: "Form fills, not invoices. Often the dispatcher, not the owner.",
+          }) +
+          field(ID, "bookingUrl", "Booking / scheduling link", v("bookingUrl"), {
+            placeholder: "https://…", help: "If they have online booking already.",
+          }) +
+        "</div>" +
+      "</div>" +
+
+      '<div class="card">' +
+        '<div class="mlabel">Address</div>' +
+        '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
+          "Must match the Google Business Profile character for character." +
+        "</div>" +
+        '<div class="fields two" style="margin-top:16px">' +
           field(ID, "street", "Street", v("street"), { placeholder: "1420 Baltimore Ave", wide: true }) +
           field(ID, "city", "City", v("city", c.market), { placeholder: "Kansas City" }) +
           field(ID, "state", "State", v("state"), { placeholder: "MO" }) +
@@ -211,10 +217,6 @@ export default {
         "</div>" +
         '<div style="margin-top:20px">' +
           toggle(ID, "serviceAreaBiz", "Service-area business (address hidden on GBP)", !!s.serviceAreaBiz) +
-        "</div>" +
-        '<div style="font-size:13px;color:var(--muted);margin-top:10px">' +
-          "These three have to match the Google Business Profile character for character, " +
-          "and match each other everywhere else." +
         "</div>" +
       "</div>" +
 
@@ -228,13 +230,7 @@ export default {
           toggle(ID, "emergency", "Runs a 24/7 emergency line", !!s.emergency) +
         "</div>" +
         (s.emergency
-          ? chipGroup(ID, "afterHoursWho", "Who picks up after hours?", s.afterHoursWho, [
-              { value: "human", label: "A person" },
-              { value: "ai", label: "AI answering" },
-              { value: "service", label: "Answering service" },
-              { value: "voicemail", label: "Voicemail" },
-            ], { help: "Changes what we can promise in ad copy, and what a missed call actually costs." }) +
-            '<div class="fields one" style="margin-top:18px">' +
+          ? '<div class="fields one" style="margin-top:18px">' +
               field(ID, "emergencyNote", "How after-hours actually works", v("emergencyNote"), {
                 type: "longtext",
                 placeholder: "Answering service until 10pm, on-call tech after. Premium rate after midnight.",
@@ -245,8 +241,17 @@ export default {
       "</div>"
       ) : "") +
 
-            '<div class="card">' +
-        '<div class="mlabel">Who they sell to</div>' +
+      '<div class="card">' +
+        // `radius` came out of BOTH documents, not just the kickoff. The
+        // Cities screen already asks where they work, and an answer the
+        // kickoff no longer reads is an answer the handoff drops on the
+        // floor. Everything else on this screen stays frozen.
+        '<div class="mlabel">Coverage</div>' +
+        '<div class="fields" style="margin-top:16px">' +
+          field(ID, "crews", "Trucks / crews on the road", v("crews"), {
+            type: "number", placeholder: "6",
+          }) +
+        "</div>" +
         chipGroup(ID, "customerMix", "Customer mix", s.customerMix, [
           "Residential", "Commercial", "New construction", "Property management", "Warranty / home shield",
         ], { multi: true, help: t("customerMix") }) +
@@ -281,15 +286,16 @@ export default {
     put("Founded", s.founded);
     put("Point of contact", who(s.contactName, s.contactEmail, s.contactPhone, s.contactRole));
     put("Reach them by", s.contactPref);
-    put("After-hours cover", { human: "A person", ai: "AI answering", service: "Answering service", voicemail: "Voicemail" }[s.afterHoursWho] || "");
     put("Billing contact", s.billingSame
       ? "Same as point of contact" + (s.contactName ? " (" + s.contactName + ")" : "")
       : who(s.billingName, s.billingEmail, s.billingPhone));
     put("Main business phone", s.phone);
+    put("Tracking number OK", s.trackingOk);
+    put("Web leads to", s.leadEmail);
+    put("Booking link", s.bookingUrl);
     put("Address", s.serviceAreaBiz ? (addr ? addr + " (hidden on GBP)" : "Service-area business") : addr);
     put("Hours", hours);
     put("After hours", s.emergencyNote);
-    put("Drive radius", s.radius);
     put("Crews", s.crews);
     put("Customer mix", Array.isArray(s.customerMix) ? s.customerMix.join(", ") : s.customerMix);
 

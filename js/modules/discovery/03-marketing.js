@@ -1,4 +1,16 @@
 // ============================================================
+// FROZEN FOR THE SALES CALL — do not evolve this file
+// ============================================================
+//
+// A snapshot of this screen as it stood when the kickoff version began to
+// diverge. The two documents deliberately keep the same module `id` and
+// the same STATE KEYS, so everything answered here still carries across
+// the discovery -> kickoff handoff; only the screen differs.
+//
+// If a change belongs in both documents, make it in both files. If that
+// starts happening often, that is the signal to merge them back.
+
+// ============================================================
 // 03 — Current marketing & spend
 // ============================================================
 //
@@ -11,10 +23,10 @@
 // selection and the rating, data-f for volume and notes — so the picker
 // needed no new event plumbing beyond the filter box.
 
-import { sectionHeadFor, skipRow, field, statusFor, filled, esc, chipGroup} from "../ui.js";
-import { isSkipped, slot } from "../state.js";
-import { sayer } from "../modes.js";
-import { CATEGORIES, RATINGS, ALL, BY_ID } from "../channels.js";
+import { sectionHeadFor, skipRow, field, statusFor, filled, esc } from "../../ui.js";
+import { isSkipped, slot } from "../../state.js";
+import { sayer } from "../../modes.js";
+import { CATEGORIES, RATINGS, ALL, BY_ID } from "../../channels.js";
 
 const ID = "marketing";
 
@@ -174,47 +186,24 @@ export default {
       sectionHeadFor(this, ctx) +
       skipRow(ID, isSkipped(ctx.state, ID)) +
 
-      // Contract dates, notice periods and who owns the ad accounts are
-      // worth knowing and are not worth interrogating. The three follow-ups
-      // stay shut until there is an agency to ask them about, so a client
-      // who volunteers nothing is never sat in front of four empty boxes.
       '<div class="card">' +
         '<div class="mlabel">Who has it now</div>' +
-        // Gated on a CHIP, not on the agency name being typed. Text input
-        // writes to state without re-rendering — that is the rule that
-        // keeps the caret still mid-sentence — so a section revealed by
-        // typing simply never appears. A click is what re-renders.
-        chipGroup(ID, "runBy", "Who's running it now?", s.runBy, [
-          { value: "inhouse", label: "All in-house" },
-          { value: "agency", label: "An agency" },
-          { value: "freelancer", label: "A freelancer" },
-        ], { help: t("agency") }) +
-        (s.runBy === "agency" || s.runBy === "freelancer"
-          ? '<div class="fields two" style="margin-top:20px">' +
-              field(ID, "agency", "Who?", v("agency"), {
-                placeholder: "Lead Ninjas",
-              }) +
-            "</div>"
-          : "") +
-        // Open when they say there is someone, or when a name arrived from
-        // the sales call before this chip existed. Saying "all in-house"
-        // wins over an inherited name — otherwise answering the question
-        // leaves the follow-ups sitting there contradicting the answer.
-        ((s.runBy === "agency" || s.runBy === "freelancer" ||
-          (!filled(s.runBy) && filled(s.agency)))
-          ? '<div class="fields two" style="margin-top:18px">' +
-              field(ID, "contractEnd", "Contract ends", v("contractEnd"), {
-                placeholder: "March, month-to-month, no idea",
-              }) +
-              field(ID, "notice", "Notice period", v("notice"), {
-                placeholder: "30 days",
-              }) +
-              field(ID, "ownsAccounts", "Who owns the ad accounts?", v("ownsAccounts"), {
-                placeholder: "Agency does",
-                help: t("ownsAccounts"),
-              }) +
-            "</div>"
-          : "") +
+        '<div class="fields two" style="margin-top:16px">' +
+          field(ID, "agency", "Incumbent agency", v("agency"), {
+            placeholder: "Nobody — it's all in-house",
+            help: t("agency"),
+          }) +
+          field(ID, "contractEnd", "Contract ends", v("contractEnd"), {
+            placeholder: "March, month-to-month, no idea",
+          }) +
+          field(ID, "notice", "Notice period", v("notice"), {
+            placeholder: "30 days",
+          }) +
+          field(ID, "ownsAccounts", "Who owns the ad accounts?", v("ownsAccounts"), {
+            placeholder: "Agency does",
+            help: t("ownsAccounts"),
+          }) +
+        "</div>" +
       "</div>" +
 
       '<div class="card">' + picker(s, (ctx.transient[ID] || {}).filter || "", ctx.mode) +

@@ -22,11 +22,20 @@ import company from "./01-company.js";
 import goals from "./02-goals.js";
 import marketing from "./03-marketing.js";
 import competitors from "./04-competitors.js";
+
+// The sales call keeps these four as they were. Same ids, same state keys,
+// different screens — see js/modules/discovery/.
+import dCompany from "./discovery/01-company.js";
+import dGoals from "./discovery/02-goals.js";
+import dMarketing from "./discovery/03-marketing.js";
+import dCompetitors from "./discovery/04-competitors.js";
 import services from "./05-services.js";
 import whynow from "./06-whynow.js";
 import locations from "./07-locations.js";
 import transcript from "./08-transcript.js";
+import conversions from "./10-conversions.js";
 import brand from "./09-brand.js";
+import profiles from "./13-profiles.js";
 import access from "./11-access.js";
 import readout from "./12-readout.js";
 
@@ -38,7 +47,9 @@ export const KICKOFF = [
   competitors,
   services,
   locations,
+  conversions,
   brand,
+  profiles,
   access,
   transcript,
   readout,
@@ -57,10 +68,10 @@ export const KICKOFF = [
 export const DISCOVERY = [
   intro,
   whynow,
-  company,
-  goals,
-  marketing,
-  competitors,
+  dCompany,
+  dGoals,
+  dMarketing,
+  dCompetitors,
   services,
   locations,
   transcript,
