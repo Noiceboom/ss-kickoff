@@ -8,7 +8,7 @@
 // the copy; the grid on its own is just names.
 
 import { sectionHeadFor, skipRow, field, rowGroup, statusFor, filled } from "../ui.js";
-import { isSkipped, slot, getRows } from "../state.js";
+import { isSkipped, slot, getRows, getPageNote } from "../state.js";
 import { sayer } from "../modes.js";
 
 const ID = "competitors";
@@ -58,6 +58,13 @@ export const COPY = {
 // Only what this screen still renders. Leaving the removed fields in here
 // meant a filled-in roster could never read as done.
 const CORE = ["rows"];
+
+/** A row with nothing typed in it is not a competitor. */
+function named(rows) {
+  return (Array.isArray(rows) ? rows : []).filter(
+    (r) => r && Object.keys(r).some((k) => typeof r[k] === "string" && r[k].trim())
+  );
+}
 
 const THREAT = [
   { value: "", label: "—" },
@@ -118,7 +125,13 @@ export default {
     );
   },
 
-  status(ctx) { return statusFor(ctx.state.m[ID], CORE); },
+  status(ctx) {
+    const s = ctx.state.m[ID] || {};
+    // statusFor sees a non-empty array and calls it answered — so adding a
+    // row and typing nothing used to complete the screen.
+    if (!named(s.rows).length) return filled(getPageNote(ctx.state, ID)) ? "partial" : "empty";
+    return "done";
+  },
 
   summary(ctx) {
     const s = ctx.state.m[ID] || {};

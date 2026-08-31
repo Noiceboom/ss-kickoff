@@ -1143,9 +1143,17 @@ function migrateBilling(state) {
   state.mig.billing = true;
   const m = state.m.company;
   if (!m || m.billingSame === "yes" || m.billingSame === "no") return;
+
+  // Only write when there is something to preserve. Absent already reads
+  // as "same as the point of contact", so stamping "yes" onto every
+  // migrated session would invent an answer nobody gave — and ship it in
+  // the export, in both documents, including the one that has never had a
+  // billing question on it.
+  if (m.billingSame === true) { m.billingSame = "yes"; return; }
   const captured = ["billingName", "billingEmail", "billingPhone"]
     .some((k) => typeof m[k] === "string" && m[k].trim());
-  m.billingSame = m.billingSame === true ? "yes" : (captured ? "no" : "yes");
+  if (captured) m.billingSame = "no";
+  else delete m.billingSame;
 }
 
 function migrate(state) {

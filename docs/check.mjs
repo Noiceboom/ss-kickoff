@@ -2386,8 +2386,38 @@ for (const m of MODULES) {
     // "partial" for ever.
     const filledCp = S.fresh();
     filledCp.m.competitors = { rows: [{ name: "Roto-Rooter", why: "Owns the map pack" }] };
-    const st = MODULES.find((m) => m.id === "competitors").status(ctxFor(bfp, filledCp));
+    const cpMod = MODULES.find((m) => m.id === "competitors");
+    const st = cpMod.status(ctxFor(bfp, filledCp));
     if (st !== "done") fail(`competitors reads "${st}" with a roster filled in — it can never complete`);
+
+    // …and a row nobody typed in is not a competitor. statusFor sees a
+    // non-empty array and calls it answered, so pressing Add once used to
+    // complete the screen.
+    for (const rows of [[{}], [{ name: "   " }], [{}, {}]]) {
+      const blank = S.fresh();
+      blank.m.competitors = { rows };
+      const got = cpMod.status(ctxFor(bfp, blank));
+      if (got === "done") fail(`competitors reads "done" with ${rows.length} empty row(s)`);
+    }
+  }
+
+  // A migration must not invent an answer. Absent already means "same as
+  // the point of contact", so stamping a value onto every legacy session
+  // would ship a billing answer nobody gave — in both documents.
+  {
+    const legacy = (m) => S.validate({
+      v: 2, mode: "kickoff", step: "company", order: {}, skipped: [], notes: {}, m: { company: m },
+    });
+    const untouched = legacy({ businessName: "Acme" }).m.company;
+    if ("billingSame" in untouched) {
+      fail(`the billing migration invented "${untouched.billingSame}" on a session that never answered it`);
+    }
+    if (legacy({ businessName: "Acme", billingEmail: "ap@acme.com" }).m.company.billingSame !== "no") {
+      fail("a legacy session with a billing contact lost it to the new default");
+    }
+    if (legacy({ businessName: "Acme", billingSame: true }).m.company.billingSame !== "yes") {
+      fail("a legacy ticked billing toggle did not carry across");
+    }
   }
 
   // Everything asked has to reach the readout, or it exists on screen and
