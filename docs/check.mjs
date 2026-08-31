@@ -87,7 +87,16 @@ function stripComments(src) {
   for (const line of src.split("\n")) {
     const t = line.trim();
     if (inBlock) { if (t.endsWith("*/") || t === "*/") inBlock = false; continue; }
-    if (/^\/\*/.test(t)) { if (!/\*\//.test(t)) inBlock = true; continue; }
+    if (/^\/\*/.test(t)) {
+      const close = t.indexOf("*/");
+      if (close < 0) { inBlock = true; continue; }
+      // `/* why */ const kept = 1;` — the comment owns the start of the
+      // line, not the line. Dropping the whole thing deleted real code
+      // from what every source-grepping check then looked at.
+      const rest = t.slice(close + 2).trim();
+      if (rest) out.push(rest);
+      continue;
+    }
     if (/^\/\//.test(t) || /^\*/.test(t)) continue;
     out.push(line);
   }
@@ -2959,21 +2968,20 @@ for (const m of MODULES) {
     // The document's own vocabulary is legitimate: the client's name, the
     // services, the cities, the states. That is what makes "Lee's Summit"
     // and "Benjamin Franklin Plumbing" fine without naming them here.
-    const vocab = new Set();
-    const learn = (v) => {
-      if (typeof v !== "string") return;
-      for (const w of v.split(/[^A-Za-z]+/)) if (w) vocab.add(w.toLowerCase());
-    };
-    learn((doc.client || {}).name); learn((doc.client || {}).market);
-    learn((doc.client || {}).trade); learn((doc.client || {}).website); learn(doc.slug);
-    for (const kind of ["services", "locations"]) {
-      for (const it of Array.isArray(doc[kind]) ? doc[kind] : []) {
-        if (!it) continue;
-        learn(it.name); learn(it.id); learn(it.state);
-        for (const sub of Array.isArray(it.subs) ? it.subs : []) learn(sub);
-      }
-    }
-    const unknown = (w) => !vocab.has(String(w).toLowerCase());
+    // There is deliberately NO vocabulary allowlist.
+    //
+    // One was written: learn the client name, services, sub-services and
+    // cities, and treat those words as legitimate. It closed the "Lee's
+    // Summit" false positive and opened a hole — every word it learned came
+    // from the same unvetted file, so a contact name sitting in a location
+    // name whitelisted itself and then waved through "Jared's point" in a
+    // note. Verified: planted in a location name, a sub-service, a service
+    // name or the market, the guard went quiet.
+    //
+    // The rules below are precise enough not to need it. A possessive only
+    // counts when a lowercase noun follows, which is what separates
+    // "Jared's point" from "Lee's Summit" — the case the allowlist was
+    // introduced for in the first place.
 
     for (const [at, text] of strings) {
       const say = (what) => fail(
@@ -2987,8 +2995,8 @@ for (const m of MODULES) {
       // point". A place's is followed by another capital — "Lee's Summit",
       // "St John's Wood" — and those are cities, not contacts.
       let m = new RegExp("\\b([A-Z][a-z]{2,})'s\\s+[a-z]").exec(text);
-      if (m && unknown(m[1])) hit = `"${m[1]}" as a possessive`;
-      if (!hit && (m = new RegExp("\\b([A-Z][a-z]{2,}) (?:" + ATTRIB + ")\\b").exec(text)) && unknown(m[1])) {
+      if (m) hit = `"${m[1]}" as a possessive`;
+      if (!hit && (m = new RegExp("\\b([A-Z][a-z]{2,}) (?:" + ATTRIB + ")\\b").exec(text))) {
         hit = `"${m[1]}" quoted or paraphrased`;
       }
       // Deliberately NOT case-insensitive. The /i flag also relaxed
@@ -2997,7 +3005,7 @@ for (const m of MODULES) {
       // doing the actual work.
       const LEAD = "(?:" + LEAD_IN + "|" + LEAD_IN.replace(/(^|\|)([a-z])/g,
         (_, sep, c) => sep + c.toUpperCase()) + ")";
-      if (!hit && (m = new RegExp("\\b" + LEAD + " ([A-Z][a-z]{2,})\\b").exec(text)) && unknown(m[1])) {
+      if (!hit && (m = new RegExp("\\b" + LEAD + " ([A-Z][a-z]{2,})\\b").exec(text))) {
         hit = `"${m[1]}" as someone to contact`;
       }
       if (hit) say("what looks like a person — " + hit);
