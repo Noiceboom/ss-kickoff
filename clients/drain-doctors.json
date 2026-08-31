@@ -1,0 +1,164 @@
+{
+  "slug": "drain-doctors",
+  "client": {
+    "name": "Drain Doctors Plumbing",
+    "market": "San Luis Obispo",
+    "website": "https://draindoctorsplumbing.com",
+    "trade": "Plumbing"
+  },
+  "source": {
+    "scrapedAt": "2026-08-31",
+    "from": "page-sitemap.xml — 7 service pages, 10 city pages under /service-areas/san-luis-obispo-county-ca/ — plus services named on the kickoff call",
+    "method": "manual"
+  },
+  "services": [
+    {
+      "id": "emergency",
+      "name": "Emergency Repairs",
+      "subs": [],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "drains",
+      "name": "Drain Cleaning",
+      "subs": [],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "water-heaters",
+      "name": "Water Heater Services",
+      "subs": [
+        "Water Heater Installation",
+        "Water Heater Repair"
+      ],
+      "hasPage": true,
+      "verify": "Three water-heater pages are live — /services/water-heater-services-san-luis-obispo-ca/, /water-heater-repair-san-luis-obispo-ca/ and /water-heater-install/. Confirm which one is canonical."
+    },
+    {
+      "id": "piping-repiping",
+      "name": "Pipe Repair & Replacement",
+      "subs": [
+        "Galvanized Pipe Replacement"
+      ],
+      "hasPage": true,
+      "verify": "Galvanized replacement read off Jared's point about 1950s–70s homes failing — confirm they quote whole-house repipes."
+    },
+    {
+      "id": "leak-detection",
+      "name": "Leak Detection",
+      "subs": [],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "fixture-installation",
+      "name": "Fixture Installation",
+      "subs": [
+        "Low-Flow Fixture Upgrades"
+      ],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "sewers",
+      "name": "Sewer & Main Line",
+      "subs": [
+        "Main Line Clog"
+      ],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "toilets",
+      "name": "Toilets",
+      "subs": [
+        "Clogged Toilet"
+      ],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "camera-inspection",
+      "name": "Sewer Camera Inspection",
+      "subs": [
+        "Sewer Lateral Inspection"
+      ],
+      "hasPage": false,
+      "verify": "Confirm scope — Jared described SLO's point-of-sale sewer lateral inspection, which the city part-rebates, as the promo he'd build first."
+    }
+  ],
+  "locations": [
+    {
+      "id": "san-luis-obispo",
+      "name": "San Luis Obispo",
+      "state": "CA",
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "arroyo-grande",
+      "name": "Arroyo Grande",
+      "state": "CA",
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "nipomo",
+      "name": "Nipomo",
+      "state": "CA",
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "paso-robles",
+      "name": "Paso Robles",
+      "state": "CA",
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "templeton",
+      "name": "Templeton",
+      "state": "CA",
+      "hasPage": true,
+      "verify": "Jared said \"either Templeton or Atascadero\" for the northern priority and never picked — confirm which leads."
+    },
+    {
+      "id": "atascadero",
+      "name": "Atascadero",
+      "state": "CA",
+      "hasPage": true,
+      "verify": "Jared said \"either Templeton or Atascadero\" for the northern priority and never picked — confirm which leads."
+    },
+    {
+      "id": "pismo-beach",
+      "name": "Pismo Beach",
+      "state": "CA",
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "morro-bay",
+      "name": "Morro Bay",
+      "state": "CA",
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "avila-beach",
+      "name": "Avila Beach",
+      "state": "CA",
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "cayucos",
+      "name": "Cayucos",
+      "state": "CA",
+      "hasPage": true,
+      "verify": null
+    }
+  ]
+}

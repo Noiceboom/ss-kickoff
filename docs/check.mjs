@@ -2675,6 +2675,38 @@ for (const m of MODULES) {
     }
   }
 
+  // The kickoff deliberately keeps the BARE slug, so every file already
+  // stored under it — logos, brand guides — stays reachable. That is only
+  // safe while the transcript is the one screen with an upload that both
+  // documents have. Put an upload on any other shared screen and the
+  // kickoff's bare key space starts colliding with pre-b52 files again.
+  {
+    const uploads = new Set();
+    for (const m of ALL_MODULES) {
+      let html = "";
+      try {
+        html = m.render({
+          state: S.fresh(DISCOVERY.indexOf(m) > -1 && MODULES.indexOf(m) < 0 ? "discovery" : "kickoff"),
+          client: bfp, transient: {}, slug: "bfp-kc", mismatch: [],
+          modules: MODULES.indexOf(m) > -1 ? MODULES : DISCOVERY, num: "01",
+          mode: MODULES.indexOf(m) > -1 ? "kickoff" : "discovery",
+        });
+      } catch (e) { continue; }
+      if (/data-putfile="/.test(html)) uploads.add(m.id);
+    }
+    const shared = DISCOVERY.filter((m) => MODULES.indexOf(m) > -1).map((m) => m.id);
+    const sharedUploads = shared.filter((id) => uploads.has(id));
+    const unexpected = sharedUploads.filter((id) => id !== "transcript");
+    if (unexpected.length) {
+      fail(`"${unexpected.join(", ")}" is in both documents and takes uploads — the kickoff's ` +
+        "bare file scope now collides with it; scope both documents or move the upload");
+    }
+    if (!uploads.has("brand")) fail("fixture assumption broken: brand no longer takes an upload");
+    if (DISCOVERY.some((m) => m.id === "brand")) {
+      fail("brand is on the sales call and takes uploads — its files would share the kickoff's keys");
+    }
+  }
+
   // and NO fallback from a scoped slug to the bare one: it could not tell
   // "never uploaded" from "just deleted", so deleting the sales call's
   // recording handed back the kickoff's.
