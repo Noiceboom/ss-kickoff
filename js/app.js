@@ -640,7 +640,7 @@ document.addEventListener("click", (e) => {
 
   if ((el = t.closest("[data-getfile]"))) {
     const [, key] = el.getAttribute("data-getfile").split("|");
-    assets.download(R.slug, key).then((ok) => { if (!ok) toast("That file isn't on this machine"); });
+    assets.download(assetScope(), key).then((ok) => { if (!ok) toast("That file isn't on this machine"); });
     return;
   }
 
@@ -945,7 +945,7 @@ async function refreshPreviews() {
     const stamp = meta.name + "|" + meta.size + "|" + meta.at;
     if (t[urlKey + "For"] === stamp) continue;
     if (t[urlKey]) URL.revokeObjectURL(t[urlKey]);
-    const hit = await assets.objectUrl(R.slug, field);
+    const hit = await assets.objectUrl(assetScope(), field);
     if (hit) { t[urlKey] = hit.url; t[urlKey + "For"] = stamp; changed = true; }
   }
   if (changed) render();
@@ -962,7 +962,7 @@ async function putFile(input) {
     let parsed = null;
     if (mod === "transcript") parsed = await parseTranscriptFile(key, file);
 
-    const meta = await assets.put(R.slug, key, file);
+    const meta = await assets.put(assetScope(), key, file);
     S.setField(R.state, mod, key, meta);
     if (parsed) for (const [k, v] of Object.entries(parsed.write)) S.setField(R.state, mod, k, v);
 
@@ -1079,9 +1079,27 @@ const FILE_LEAVES_BEHIND = {
   "transcript|extractFile": ["extract", "approved", "applied"],
 };
 
+/**
+ * Which document's files these are.
+ *
+ * Browser storage is scoped to an ORIGIN, and both documents live on one.
+ * The file store keyed on the client slug alone, so the kickoff call's
+ * recording and the sales call's recording for one client were the same
+ * record: uploading the second silently replaced the first, while the
+ * first document went on showing a file attached and offering to download
+ * it. Only the transcript screen is in both documents, so only its files
+ * were ever at risk — but that is the pair you would least want swapped.
+ *
+ * The kickoff keeps the bare slug so every file already stored stays where
+ * it is; discovery is the one that moves.
+ */
+function assetScope() {
+  return R.mode === DISCOVERY ? DISCOVERY + ":" + R.slug : R.slug;
+}
+
 async function dropFile(name) {
   const [mod, key] = name.split("|");
-  await assets.remove(R.slug, key);
+  await assets.remove(assetScope(), key);
   S.setField(R.state, mod, key, "");
   for (const also of FILE_LEAVES_BEHIND[name] || []) S.setField(R.state, mod, also, "");
   const t = R.transient.brand;

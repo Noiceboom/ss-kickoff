@@ -2653,6 +2653,37 @@ for (const m of MODULES) {
   }
 }
 
+/* ── the two documents must not share a file ───────────── */
+{
+  // Browser storage is scoped to an ORIGIN and both documents live on one,
+  // so a store keyed on the client slug alone made the kickoff call's
+  // recording and the sales call's recording the same record. Verified in
+  // a browser: uploading the second replaced the first while the first
+  // document went on offering to download it.
+  const src = readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+  const fn = (src.match(/function assetScope\(\)[\s\S]*?\n\}/) || [""])[0];
+  if (!fn) fail("app.js has no assetScope() — both documents write the same file records");
+  else if (!/DISCOVERY/.test(fn) || !/R\.slug/.test(fn)) {
+    fail("assetScope() does not separate the two documents");
+  }
+  for (const call of ["assets.put(", "assets.remove(", "assets.download(", "assets.objectUrl("]) {
+    const at = src.indexOf(call);
+    if (at < 0) continue;
+    const args = src.slice(at + call.length, at + call.length + 20);
+    if (/^R\.slug/.test(args)) {
+      fail(`${call} still passes the bare slug, so that file is shared between both documents`);
+    }
+  }
+
+  // and NO fallback from a scoped slug to the bare one: it could not tell
+  // "never uploaded" from "just deleted", so deleting the sales call's
+  // recording handed back the kickoff's.
+  const store = readFileSync(new URL("../js/assets.js", import.meta.url), "utf8");
+  if (/unscoped\(/.test(store)) {
+    fail("assets.js falls back to the unscoped key — deleting one document's file reveals the other's");
+  }
+}
+
 /* ── a renamed file key must stay readable ─────────────── */
 {
   // b44 and b45 stored the read-out's bytes under "extract"; b46 renamed

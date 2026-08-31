@@ -54,6 +54,14 @@ function tx(mode, fn) {
 
 function key(slug, name) { return String(slug || "template") + ":" + name; }
 
+// NOTE: there is deliberately no fallback from a scoped slug to the bare
+// one. Files stored before the sales call had its own scope are therefore
+// unreachable from it, and the screen says so plainly. The fallback was
+// written and then removed: it could not tell "never uploaded" from "just
+// deleted", so deleting the sales call's recording made the KICKOFF's
+// recording appear in its place. A loud miss and a re-upload beats being
+// handed the wrong call.
+
 /**
  * Names this store has been asked for under a different name before.
  *

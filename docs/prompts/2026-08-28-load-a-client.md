@@ -95,6 +95,37 @@ answers worth pre-loading; do not invent one to look thorough.
 
 ---
 
+## This repository is public
+
+`github.com/Noiceboom/ss-kickoff` is public, and GitHub Pages serves
+everything in it. `clients/bfp-kc.json` answers a plain `curl` with a 200
+today. Anything you commit is world-readable, immediately, with no login.
+
+That is fine for a client file: name, website, trade, the services and
+cities off their own site. It is all already published by the client.
+Check that assumption holds for this one before you commit — an unlaunched
+site, a rebrand, or a market they have not announced is not yours to put
+online.
+
+**It is not fine for a payload.** Revenue, close rates, budgets, contact
+names, phone numbers and email addresses are the client's confidential
+business. Committing that to `clients/` publishes their financials at a
+guessable URL.
+
+So a payload never enters the repository:
+
+- Write it somewhere outside the working tree — Sam's Desktop, or the
+  scratchpad — and hand him the path.
+- He loads it through the import on the intro screen. It goes into his
+  browser, not into git.
+- If you must stage it inside the tree to test, add the filename to
+  `.gitignore` FIRST, and check `git status` shows it ignored before you
+  commit anything at all.
+- Never `git add -A` while such a file exists untracked.
+
+Same rule for a transcript, a read-out, or anything else with a real
+person's contact details in it.
+
 ## The rules that will bite you
 
 1. **Ids are permanent.** They key notes, priorities and rank order. An id
@@ -153,8 +184,24 @@ Only after telling him what it costs.
    with an underscore 404 in production.
 3. Nothing in the code assumes a repo name; asset paths resolve from
    `import.meta.url`, so `/discovery/` and the city data keep working.
-4. Write down, in that repo's README, the build it was forked at and the
+4. **Change the storage keys, or the fork will eat the master's sessions.**
+   Browser storage is scoped to an ORIGIN, not to a path, and every repo on
+   this account is served from the same one — `noiceboom.github.io`. So
+   `/ss-kickoff/` and `/ss-kickoff-acme/` share localStorage and IndexedDB
+   exactly. Today both would write `ss-kickoff:acme` and read each other's
+   work back, and each would think the other's autosave was its own.
+
+   In the fork, before it is served to anyone:
+   - `KEY_PREFIX` in `js/state.js` — currently `"ss-kickoff:"`
+   - `DB_NAME` in `js/assets.js` — currently `"ss-kickoff-assets"`
+
+   Give both a suffix naming the fork. Then open the master and the fork
+   side by side on the same slug, type something different into each, and
+   reload both: each must still show its own answer. Do not skip that —
+   it is the failure this step exists to prevent, and it is invisible until
+   somebody loses a call's worth of work.
+5. Write down, in that repo's README, the build it was forked at and the
    fact that it no longer receives fixes. Someone will need to know why it
    behaves differently in six months.
-5. Tell Sam the two URLs and which one is which. Two documents that look
+6. Tell Sam the two URLs and which one is which. Two documents that look
    identical and behave differently is its own kind of bug.
