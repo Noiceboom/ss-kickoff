@@ -2895,6 +2895,48 @@ for (const m of MODULES) {
   }
 }
 
+/* ── client files are published; keep people out of them ── */
+{
+  // This repository is public and GitHub Pages serves clients/ verbatim —
+  // a plain curl gets a 200. A `verify` note is free text written while
+  // reading someone's website or sitting on a call, which is exactly where
+  // "Jared said …" ends up. That happened, and it was live before anyone
+  // noticed.
+  //
+  // What a note is FOR is what to confirm. Who said it adds nothing to
+  // that and publishes a real person.
+  const PERSONAL = [
+    [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/, "an email address"],
+    [/\(?\d{3}\)?[ .-]?\d{3}[ .-]?\d{4}/, "a phone number"],
+    [/\b[A-Z][a-z]+'s\b(?! Summit)/, "a person's name in the possessive"],
+    [/\b[A-Z][a-z]+ (said|told|mentioned|described|wants|asked)\b/, "someone quoted by name"],
+    [/\btold (me|us)\b/, "something said to someone"],
+  ];
+  for (const file of readdirSync(path.join(ROOT, "clients")).filter((f) => f.endsWith(".json"))) {
+    let doc;
+    try { doc = JSON.parse(readFileSync(path.join(ROOT, "clients", file), "utf8")); }
+    catch (e) { fail(`clients/${file} is not valid JSON — it will 404 into the template silently`); continue; }
+
+    const texts = [];
+    const push = (where, v) => { if (typeof v === "string" && v.trim()) texts.push([where, v]); };
+    push("source.from", (doc.source || {}).from);
+    for (const kind of ["services", "locations"]) {
+      for (const it of Array.isArray(doc[kind]) ? doc[kind] : []) {
+        push(`${kind}/${it && it.id}`, it && it.verify);
+        push(`${kind}/${it && it.id} name`, it && it.name);
+      }
+    }
+    for (const [where, text] of texts) {
+      for (const [re, what] of PERSONAL) {
+        if (re.test(text)) {
+          fail(`clients/${file} ${where} contains ${what} — this repo is public: "${text.slice(0, 70)}"`);
+          break;
+        }
+      }
+    }
+  }
+}
+
 /* ── a client with no scrape keeps its own identity ────── */
 {
   // loadClient() falls back to clients/template.json for anyone without a
