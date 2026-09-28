@@ -428,15 +428,38 @@ export default {
     const rows = [];
     const put = (k, val) => { if (filled(val)) rows.push([k, val]); };
 
+    // In the order the screen asks it, with the figures the screen works
+    // out. Those derived lines — the gap, the leads it takes, what a lead
+    // is worth, what one may cost — were shown on screen and reached no
+    // readout, and they are the numbers most worth carrying out of the call.
+    const n = (k) => { const v = Number(String(s[k] == null ? "" : s[k]).replace(/[^0-9.]/g, "")); return isFinite(v) && v > 0 ? v : null; };
+    const revNow = n("revNow"), revTarget = n("revTarget"), ticket = n("avgTicket"), rate = n("closeRate");
+    const leadsTarget = n("leadsTarget"), adSpend = n("adSpend");
+
     put("Revenue / mo", span("revNow", "revTarget", money));
-    put("Response time", filled(s.speedToLead) ? s.speedToLead + " min" : "");
-    put("Appointment booking rate", pct(s.apptRate));
-    put("Review rate", pct(s.reviewRate));
-    put("Ad spend / mo", money(s.adSpend));
     put("Leads / mo", span("leadsNow", "leadsTarget", (x) => String(x)));
     put("Average ticket", filled(s.avgTicket) ? money(s.avgTicket) : "");
+    if (revNow && revTarget && revTarget > revNow) {
+      put("Gap to goal", money(revTarget - revNow) + " / mo (+" + Math.round(((revTarget - revNow) / revNow) * 100) + "%)");
+    }
+    if (revTarget && ticket && rate) {
+      put("Leads needed at goal", Math.round((revTarget / ticket) / (rate / 100)).toLocaleString("en-US") + " / mo at this ticket and booking rate");
+    }
+
+    put("Response time", filled(s.speedToLead) ? s.speedToLead + " min" : "");
+    put("Appointment booking rate", pct(s.apptRate));
     put("Sales booking rate", filled(s.closeRate) ? pct(s.closeRate) : "");
+    put("Review rate", pct(s.reviewRate));
+    if (ticket && rate) put("A lead is worth", money(Math.round(ticket * (rate / 100))));
+
     put("Marketing budget", filled(s.budget) ? money(s.budget) + " / mo" : "");
+    put("Ad spend", filled(s.adSpend) ? money(s.adSpend) + " / mo" : "");
+    if (adSpend && leadsTarget) {
+      const cpl = adSpend / leadsTarget;
+      const worth = ticket && rate ? ticket * (rate / 100) : null;
+      put("Cost per lead at goal", money(Math.round(cpl)) +
+        (worth ? " — " + (cpl >= worth ? "more than a lead returns" : "about " + Math.round(worth / cpl) + "x return") : ""));
+    }
     put("Budget movable", label(BUDGET_FLEX, s.budgetFlex));
     put("Horizon", s.horizon);
     put("Matters most", label(PRIORITIES, s.priority));
@@ -446,6 +469,21 @@ export default {
     put("Winning in 90 days", s.win90);
 
     const open = [];
+    // Two goals that cannot both be true. The screen works out the leads a
+    // revenue target needs; when the leads target they gave is well short of
+    // it, one of the two numbers is wrong, and that is worth knowing before
+    // anything is priced against either.
+    if (revTarget && ticket && rate && leadsTarget) {
+      const needed = Math.round((revTarget / ticket) / (rate / 100));
+      if (needed > leadsTarget * 1.25) {
+        open.push({
+          what: "The two goals disagree",
+          detail: "A " + money(revTarget) + " month needs about " + needed.toLocaleString("en-US") +
+            " leads at their ticket and booking rate; their leads goal is " + leadsTarget.toLocaleString("en-US") +
+            ". Either the revenue goal, the ticket, or the booking rate is off.",
+        });
+      }
+    }
     if (filled(s.revTarget) && !filled(s.budget)) {
       open.push({ what: "Marketing budget", detail: "They named a target but no budget — nothing can be scoped against that",
         ask: "Confirm the monthly marketing budget you're comfortable with." });

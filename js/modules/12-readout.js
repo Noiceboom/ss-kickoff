@@ -7,7 +7,7 @@
 
 import { esc, ICON, sectionHeadFor, filled } from "../ui.js";
 import { isSkipped, getPageNote, statusWithNote, slot } from "../state.js";
-import { buildPayload, buildCsv as machineCsv } from "../export.js";
+import { buildPayload } from "../export.js";
 import { BUILD } from "../build.js";
 import { sayer, DISCOVERY } from "../modes.js";
 
@@ -109,18 +109,23 @@ function unknowns(ctx) {
   return out;
 }
 
-function unknownsBlock(ctx) {
+/** Discovery's "before this can be priced" list, as data. */
+function unknownList(ctx) {
+  if (ctx.mode !== DISCOVERY) return [];
   const list = unknowns(ctx);
   const svc = (ctx.state.m.services || {}).prio;
   const loc = (ctx.state.m.locations || {}).prio;
-  const extra = [];
   if (!svc || !Object.keys(svc).length) {
-    extra.push({ what: "No service is prioritised", why: "Nothing to lead the first month with" });
+    list.push({ what: "No service is prioritised", why: "Nothing to lead the first month with" });
   }
   if (!loc || !Object.keys(loc).length) {
-    extra.push({ what: "No city is prioritised", why: "Nothing to lead the first month with" });
+    list.push({ what: "No city is prioritised", why: "Nothing to lead the first month with" });
   }
-  const all = list.concat(extra);
+  return list;
+}
+
+function unknownsBlock(ctx) {
+  const all = unknownList(ctx);
 
   if (!all.length) {
     return '<div class="card"><div class="mlabel">Before this can be priced</div>' +
@@ -199,6 +204,7 @@ function rankedList(list, limit) {
 }
 
 function table(t) {
+  t = trimTable(t);
   if (!t || !t.body || !t.body.length) return "";
   return '<div style="overflow-x:auto;margin-top:14px"><table style="width:100%;border-collapse:collapse;font-size:14px">' +
     "<thead><tr>" + t.head.map((h) =>
@@ -389,13 +395,26 @@ function clientDoc(ctx, parts) {
       "</div>" +
     "</div>";
 
-  const orders =
-    (r.services || r.locations)
-      ? '<div class="sumcols">' +
-          (r.services ? '<div class="card"><div class="mlabel">Full service order</div>' + rankedList(r.services) + "</div>" : "") +
-          (r.locations ? '<div class="card"><div class="mlabel">Full city order</div>' + rankedList(r.locations) + "</div>" : "") +
-        "</div>"
+  // Everything they said they do, not just what got a priority. The order
+  // lists are build order and deliberately omit anything unranked — a rank
+  // beside a decision nobody made reads as agreed — so without this a
+  // service they told us about and we never ordered appeared nowhere in the
+  // document they receive.
+  const scope = (key) => {
+    const u = ((parts.find((p) => p.mod.id === key) || {}).sum || {}).unranked;
+    return u && u.items && u.items.length
+      ? '<div style="margin-top:18px"><div class="mlabel" style="color:var(--muted)">Also in scope — order to be agreed</div>' +
+        '<div style="margin-top:8px;font-size:15px;line-height:1.6">' + esc(u.items.join(" · ")) + "</div></div>"
       : "";
+  };
+  const orderCard = (key, list, label) => {
+    const tail = scope(key);
+    if (!list && !tail) return "";
+    return '<div class="card"><div class="mlabel">' + label + "</div>" + (list ? rankedList(list) : "") + tail + "</div>";
+  };
+  const svcCard = orderCard("services", r.services, "Full service order");
+  const locCard = orderCard("locations", r.locations, "Full city order");
+  const orders = svcCard || locCard ? '<div class="sumcols">' + svcCard + locCard + "</div>" : "";
 
   return (
     cover(ctx) +
@@ -418,31 +437,94 @@ function recapView(ctx, parts) {
   );
 }
 
+/* ── the one walk every internal output renders from ────── */
+//
+// The internal brief on screen, the brief as text and the Markdown file
+// used to be written separately, each walking the screens its own way —
+// and each dropped something different. The text version lost table
+// headers; only the screen version had discovery's "before this can be
+// priced" list; nothing rendered a note typed against a single service.
+// They all read this now, in this order, so what one shows the others
+// show.
+//
+// Nothing here is filtered for the client. The client document and the
+// recap are built separately, from rows and tables only — `internal`,
+// `itemNotes` and page notes are what they never touch.
+
+function model(ctx, parts) {
+  const c = ctx.client.client || {};
+  const sections = [];
+  for (const p of parts) {
+    const sum = p.sum || {};
+    const internal = sum.internal || {};
+    const ranked = isRanked(p.mod.id);
+    const sec = {
+      id: p.mod.id,
+      nav: p.mod.nav,
+      skipped: p.skipped,
+      rows: Array.isArray(sum.rows) ? sum.rows : [],
+      // A ranked screen's own table only restates its list; its internal
+      // table is the full picture — every selected item, ranked or not,
+      // with its sub-services and notes.
+      table: ranked ? (internal.table || null) : (sum.table || null),
+      internalRows: ranked ? [] : (Array.isArray(internal.rows) ? internal.rows : []),
+      internalTable: ranked ? null : (internal.table || null),
+      itemNotes: Array.isArray(internal.notes) ? internal.notes : [],
+      note: p.note || "",
+    };
+    const empty = !sec.rows.length && !sec.table && !sec.internalRows.length &&
+      !sec.internalTable && !sec.itemNotes.length && !sec.note;
+    if (empty && !sec.skipped) continue;
+    sections.push(sec);
+  }
+  return {
+    title: c.name || "Kickoff",
+    market: c.market || "",
+    website: c.website || "",
+    date: new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
+    discovery: ctx.mode === DISCOVERY,
+    ranks: ranksFor(parts),
+    unranked: {
+      services: ((parts.find((p) => p.mod.id === "services") || {}).sum || {}).unranked || null,
+      locations: ((parts.find((p) => p.mod.id === "locations") || {}).sum || {}).unranked || null,
+    },
+    open: openItems(ctx, parts),
+    unknowns: unknownList(ctx),
+    sections,
+  };
+}
+
 /* ── tab: internal brief ──────────────────────────────── */
 
 function briefView(ctx, parts) {
-  const r = ranksFor(parts);
-  const open = openItems(ctx, parts);
-
-  const detail = parts
-    .filter((p) => p.sum && (p.sum.rows || p.sum.table))
-    .map((p) =>
-      '<div class="card"><div class="mlabel">' + esc(p.mod.nav) + "</div>" +
-      dl(p.sum.rows) + (isRanked(p.mod.id) ? "" : table(p.sum.table)) + "</div>"
-    ).join("");
+  const M = model(ctx, parts);
 
   const priorities =
-    (r.services || r.locations)
+    (M.ranks.services || M.ranks.locations)
       ? '<div class="card"><div class="mlabel">Build order</div><div class="sumcols" style="margin-top:8px">' +
-          (r.services ? "<div><h3>Services</h3>" + rankedList(r.services) + "</div>" : "") +
-          (r.locations ? "<div><h3>Cities</h3>" + rankedList(r.locations) + "</div>" : "") +
+          (M.ranks.services ? "<div><h3>Services</h3>" + rankedList(M.ranks.services) + "</div>" : "") +
+          (M.ranks.locations ? "<div><h3>Cities</h3>" + rankedList(M.ranks.locations) + "</div>" : "") +
         "</div></div>"
       : "";
+
+  const detail = M.sections.filter((x) => !x.skipped).map((x) =>
+    '<div class="card"><div class="mlabel">' + esc(x.nav) + "</div>" +
+      dl(x.rows) + table(x.table) +
+      (x.internalRows.length || x.internalTable
+        ? '<div class="mlabel" style="margin-top:22px;color:var(--muted)">Internal</div>' +
+          dl(x.internalRows) + table(x.internalTable)
+        : "") +
+      (x.itemNotes.length
+        ? '<div class="mlabel" style="margin-top:22px;color:var(--muted)">Notes against items</div>' +
+          dl(x.itemNotes)
+        : "") +
+    "</div>"
+  ).join("");
 
   // In discovery this tab is the one thing on the machine that must not
   // be read by the person on the other end of the call, so it says so at
   // the top of itself rather than relying on the tab label alone.
-  const guard = ctx.mode === DISCOVERY
+  const guard = M.discovery
     ? '<div class="warn">' + ICON.lock +
         "<div><strong>Don&rsquo;t open this while you&rsquo;re sharing your screen.</strong><br>" +
         "Your own notes, the gaps in what they told you, and what is still missing before this " +
@@ -450,8 +532,8 @@ function briefView(ctx, parts) {
         "</div></div>"
     : "";
 
-  return guard + openBlock(open, "Open items") +
-    (ctx.mode === DISCOVERY ? unknownsBlock(ctx) : "") +
+  return guard + openBlock(M.open, "Open items") +
+    (M.discovery ? unknownsBlock(ctx) : "") +
     notesBlock(parts) + priorities + detail;
 }
 
@@ -484,61 +566,121 @@ function payload(ctx, parts) {
   return buildPayload({ ...ctx, openItems: openItems(ctx, parts) }, parts, BUILD);
 }
 
-function buildJson(ctx, parts) {
-  const out = {
-    client: ctx.client.client,
-    slug: ctx.client.slug,
-    capturedAt: new Date().toISOString().slice(0, 10),
-    sections: {},
-    openItems: openItems(ctx, parts).map((o) => ({ what: o.what, detail: o.detail, kind: o.kind })),
-  };
-  for (const p of parts) {
-    if (p.skipped) {
-      out.sections[p.mod.id] = p.note ? { skipped: true, note: p.note } : { skipped: true };
-      continue;
-    }
-    if (!p.sum && !p.note) continue;
-    const s = {};
-    if (p.note) s.note = p.note;
-    // p.sum is null on a screen that carries only a note — guard every read.
-    if (p.sum && p.sum.rows) s.fields = Object.fromEntries(p.sum.rows);
-    if (p.sum && p.sum.list) s.ranked = p.sum.list.items.map((i) => ({ rank: i.n, name: i.name, detail: i.meta }));
-    if (p.sum && p.sum.table) s.table = { columns: p.sum.table.head, rows: p.sum.table.body };
-    out.sections[p.mod.id] = s;
-  }
-  return out;
+
+
+/**
+ * Render the model into lines. One function, two formatters — plain text
+ * and Markdown — so the two can never disagree about what is in them.
+ */
+const FMT = {
+  text: {
+    title: (t) => [t.toUpperCase()],
+    h: (t) => ["", t.toUpperCase()],
+    sub: (t) => ["  " + t],
+    kv: (k, v) => ["  " + k + ": " + v],
+    item: (t) => ["  - " + t],
+    ask: (t) => ["      Ask the client: " + t],
+    num: (n, t) => ["  " + n + ". " + t],
+    from: (src, t) => ["  - [" + src + "] " + t],
+    para: (t) => String(t).split("\n").map((l) => "    " + l),
+    table: (head, body) => {
+      // Headers included. The old text brief printed each row joined with
+      // pipes and no header, so a column of "high" or "yes" meant nothing.
+      const w = head.map((h, i) => Math.max(String(h).length, ...body.map((r) => String(r[i] == null ? "" : r[i]).length)));
+      const line = (r) => "  " + r.map((c, i) => String(c == null ? "" : c).padEnd(Math.min(w[i], 48))).join("  ").trimEnd();
+      return [line(head), "  " + w.map((n) => "-".repeat(Math.min(n, 48))).join("  ")].concat(body.map(line));
+    },
+  },
+  md: {
+    title: (t) => ["# " + t],
+    h: (t) => ["", "## " + t],
+    sub: (t) => ["", "**" + t + "**"],
+    ask: (t) => ["  - *Ask the client:* " + mdEsc(t)],
+    num: (n, t) => [n + ". " + mdEsc(t)],
+    from: (src, t) => ["- **" + mdEsc(src) + "** — " + mdEsc(t)],
+    kv: (k, v) => ["- **" + mdEsc(k) + ":** " + mdEsc(v)],
+    item: (t) => ["- " + mdEsc(t)],
+    para: (t) => [""].concat(String(t).split("\n").map((l) => "> " + mdEsc(l))),
+    table: (head, body) => [""]
+      .concat(["| " + head.map(mdCell).join(" | ") + " |", "|" + head.map(() => " --- ").join("|") + "|"])
+      .concat(body.map((r) => "| " + head.map((_, i) => mdCell(r[i])).join(" | ") + " |")),
+  },
+};
+function mdEsc(v) {
+  // Only what changes Markdown's meaning mid-line. Escaping brackets and
+  // underscores everywhere made the raw file — which is how most people
+  // will read or paste it — full of backslashes.
+  return String(v == null ? "" : v).replace(/([\\`*<>])/g, "\\$1").replace(/\[([^\]]*)\]\(/g, "\\[$1\\](");
+}
+function mdCell(v) { return mdEsc(v).replace(/\|/g, "\\|").replace(/\n/g, " "); }
+
+/** Drop columns that are empty in every row. */
+function trimTable(t) {
+  if (!t || !t.body || !t.body.length) return t;
+  const keep = t.head.map((_, i) => t.body.some((r) => String(r[i] == null ? "" : r[i]).trim() !== ""));
+  if (keep.every(Boolean)) return t;
+  return { head: t.head.filter((_, i) => keep[i]), body: t.body.map((r) => r.filter((_, i) => keep[i])) };
 }
 
-function csvCell(v) { return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; }
+function renderInternal(M, f) {
+  let L = [];
+  const add = (xs) => { L = L.concat(xs); };
 
-function buildCsv(ctx, parts) {
-  const lines = [["section", "field_or_col", "value", "extra"].map(csvCell).join(",")];
-  const push = (a, b, c, d) => lines.push([a, b, c, d].map(csvCell).join(","));
+  add(f.title(M.title + (M.market ? " — " + M.market : "")));
+  add(f.kv(M.discovery ? "Document" : "Document", M.discovery ? "Discovery call — internal" : "Kickoff — internal brief"));
+  add(f.kv("Date", M.date));
+  if (M.website) add(f.kv("Website", M.website));
 
-  push("client", "name", ctx.client.client.name, ctx.client.client.market);
-
-  for (const p of parts) {
-    const sec = p.mod.nav;
-    if (p.skipped) {
-      push(sec, "_status", "skipped", "");
-      if (p.note) push(sec, "note", p.note, "");
-      continue;
-    }
-    if (p.note) push(sec, "note", p.note, "");
-    if (!p.sum) continue;
-    if (p.sum.rows) for (const [k, v] of p.sum.rows) push(sec, k, v, "");
-    if (p.sum.list) for (const it of p.sum.list.items) push(sec, "rank " + it.n, it.name, it.meta || "");
-    if (p.sum.table) {
-      for (const row of p.sum.table.body) {
-        push(sec, p.sum.table.head[0] + ": " + row[0], row.slice(1).join(" | "), "");
-      }
+  if (M.open.length) {
+    add(f.h("Open items"));
+    for (const o of M.open) {
+      add(o.from ? f.from(o.from, o.what + " — " + o.detail) : f.item(o.what + " — " + o.detail));
+      if (o.ask) add(f.ask(o.ask));
     }
   }
-  for (const o of openItems(ctx, parts)) push("Open items", o.what, o.detail, o.kind);
-  return lines.join("\r\n");
+  if (M.unknowns.length) {
+    add(f.h("Before this can be priced"));
+    for (const u of M.unknowns) add(f.item(u.what + " — " + u.why));
+  }
+
+  const noted = M.sections.filter((x) => x.note);
+  if (noted.length) {
+    add(f.h("Notes from the call"));
+    for (const x of noted) { add(f.sub(x.nav + (x.skipped ? " (didn't cover)" : ""))); add(f.para(x.note)); }
+  }
+
+  for (const [key, label] of [["services", "Services in build order"], ["locations", "Cities in build order"]]) {
+    const list = M.ranks[key];
+    if (list && list.items.length) {
+      add(f.h(label));
+      for (const i of list.items) add(f.num(i.n, i.name + (i.meta ? " (" + i.meta + ")" : "")));
+    }
+  }
+
+  for (const x of M.sections) {
+    if (x.skipped) { add(f.h(x.nav)); add(f.item("Didn't cover this on the call")); continue; }
+    add(f.h(x.nav));
+    for (const [k, v] of x.rows) add(f.kv(k, v));
+    const tb = trimTable(x.table);
+    if (tb && tb.body.length) add(f.table(tb.head, tb.body));
+    if (x.internalRows.length || (x.internalTable && x.internalTable.body.length)) {
+      add(f.sub("Internal"));
+      for (const [k, v] of x.internalRows) add(f.kv(k, v));
+      const it = trimTable(x.internalTable);
+      if (it && it.body.length) add(f.table(it.head, it.body));
+    }
+    if (x.itemNotes.length) {
+      add(f.sub("Notes against items"));
+      for (const [k, v] of x.itemNotes) add(f.kv(k, v));
+    }
+  }
+  return L.join("\n").replace(/\n{3,}/g, "\n\n") + "\n";
 }
+
+function buildMarkdown(ctx, parts) { return renderInternal(model(ctx, parts), FMT.md); }
 
 function buildText(ctx, parts, mode) {
+  if (mode === "brief") return renderInternal(model(ctx, parts), FMT.text);
   const L = [];
   const c = ctx.client.client;
   const r = ranksFor(parts);
@@ -631,7 +773,7 @@ export default {
         '<button class="btn ghost" data-action="' + (tab === "brief" ? "brief" : "recap") + '">Copy ' +
           (tab === "brief" ? "brief" : "recap") + " as text</button>" +
         '<button class="btn ghost" data-action="json">Download JSON</button>' +
-        '<button class="btn ghost" data-action="csv">Download CSV</button>' +
+        '<button class="btn ghost" data-action="md">Download Markdown</button>' +
         '<button class="btn dark" data-action="print">' + ICON.doc + " Save " +
           (ctx.mode === DISCOVERY ? "the" : "client") + " PDF</button>" +
         '<button class="btn ghost" data-action="clear" style="margin-left:auto;color:var(--risk)">Clear this kickoff</button>' +
@@ -659,7 +801,10 @@ export default {
       recap: () => buildText(ctx, parts, "recap"),
       brief: () => buildText(ctx, parts, "brief"),
       json: () => JSON.stringify(payload(ctx, parts), null, 2),
-      csv: () => machineCsv(payload(ctx, parts)),
+      // The complete internal readout — everything on every screen, notes
+      // and all. Replaces the CSV, which carried the same facts in a shape
+      // nobody could read and nothing downstream was built to parse.
+      md: () => buildMarkdown(ctx, parts),
     };
   },
 };

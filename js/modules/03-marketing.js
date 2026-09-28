@@ -281,6 +281,7 @@ export default {
     const rows = [];
     const put = (label, val) => { if (filled(val)) rows.push([label, val]); };
 
+    put("Run by", { inhouse: "All in-house", agency: "An agency", freelancer: "A freelancer" }[s.runBy] || s.runBy || "");
     put("Incumbent agency", s.agency);
     put("Contract ends", s.contractEnd);
     put("Notice period", s.notice);

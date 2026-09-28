@@ -303,7 +303,6 @@ export default {
       put("Recorded", sum.date);
       put("Length", sum.durationMin ? sum.durationMin + " min" : "");
       put("Speakers", (sum.speakers || []).map((x) => x.name).join(", "));
-      put("Talk share", (sum.talkShare || []).map((x) => x.name + " " + x.pct + "%").join(" · "));
     }
 
     const open = [];
@@ -320,6 +319,32 @@ export default {
       for (const u of ex.unclear) open.push({ what: "Unanswered on the call", detail: u });
     }
 
-    return { rows, open };
+    // Internal only — the client document renders rows and tables verbatim.
+    // Talk share is a note about how the call went, quotes are verbatim and
+    // stay internal until ticked, and "mentioned but never ticked" is a
+    // to-do for whoever picks up the work.
+    const internal = { rows: [], table: null };
+    if (sum && sum.talkShare && sum.talkShare.length) {
+      internal.rows.push(["Talk share", sum.talkShare.map((x) => x.name + " " + x.pct + "%").join(" · ")]);
+    }
+    if (ex) {
+      const ok = Array.isArray(s.approved) ? s.approved : [];
+      const applied = Array.isArray(s.applied) ? s.applied : [];
+      if (ex.mentionedServices.length) internal.rows.push(["Services mentioned, not ticked", ex.mentionedServices.join(", ")]);
+      if (ex.mentionedCities.length) internal.rows.push(["Cities mentioned, not ticked", ex.mentionedCities.join(", ")]);
+      const unused = ex.proposals.filter((p) => applied.indexOf(p.mod + "." + p.key) < 0);
+      if (unused.length) {
+        internal.rows.push(["Heard but not used", unused.map((p) => p.mod + "." + p.key + " = " + p.value).join(" · ")]);
+      }
+      if (ex.quotes.length) {
+        internal.table = {
+          head: ["quote", "who", "at", "about", "in the client document"],
+          body: ex.quotes.map((q) => [q.text, q.speaker || "", q.at || "", q.module || "",
+            ok.indexOf(q.id) > -1 ? "yes" : "no"]),
+        };
+      }
+    }
+    if (!internal.rows.length && !internal.table) return { rows, open };
+    return { rows, open, internal };
   },
 };

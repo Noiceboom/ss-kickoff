@@ -82,8 +82,10 @@ const COLS = [
 ];
 
 const threatLabel = (v) => {
+  // An answer this list doesn't recognise — a legacy value, or one that
+  // arrived in an import — is shown as it was given rather than erased.
   const hit = THREAT.find((t) => t.value === v);
-  return hit && hit.value ? hit.label : "";
+  return hit ? (hit.value ? hit.label : "") : (v || "");
 };
 
 export default {

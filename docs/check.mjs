@@ -1020,7 +1020,7 @@ for (const m of MODULES) {
     st.notes["services:drains"] = "Highest ticket work";
 
     const api = readout.exports(ctxFor(bfp, st));
-    for (const name of ["recap", "brief", "json", "csv"]) {
+    for (const name of ["recap", "brief", "json", "md"]) {
       if (typeof api[name] !== "function") { fail(`exports().${name} missing`); continue; }
       let out;
       try { out = api[name](); }
@@ -1148,6 +1148,52 @@ for (const m of MODULES) {
           "locations.items[]": { id: "string", name: "string", state: "string", source: "string",
                 foundOnSite: "boolean", selected: "boolean", excluded: "boolean",
                 priority: "string|null", rank: "number|null", hasPage: "boolean" },
+          "channels[]": { id: "string", label: "string", category: "string", known: "boolean",
+                rating: "string|null", monthlyLeads: "string|null", note: "string" },
+          "access": { leadsie: "object", accounts: "array<object>", other: "array<object>" },
+          "access.leadsie": { url: "string", status: "string|null", who: "string" },
+          "access.accounts[]": { key: "string", label: "string", core: "boolean",
+                inPlay: "boolean", status: "string|null" },
+          "access.other[]": { label: "string", status: "string|null" },
+          "recording": { file: "object|null", call: "object|null", readout: "object|null",
+                quotes: "array<object>", applied: "array<string>", unused: "array<object>",
+                mentionedServices: "array<string>", mentionedCities: "array<string>",
+                unclear: "array<string>" },
+          "recording.file": { name: "string", size: "number" },
+          "recording.call": { title: "string", date: "string", durationMin: "number",
+                turns: "number", speakers: "array<object>", talkShare: "array<object>",
+                lastAt: "string" },
+          "recording.call.speakers[]": { name: "string", turns: "number" },
+          "recording.call.talkShare[]": { name: "string", pct: "number" },
+          "recording.readout": { title: "string", date: "string", durationMin: "number",
+                participants: "array<string>" },
+          "recording.quotes[]": { speaker: "string", at: "string", text: "string",
+                module: "string", approved: "boolean" },
+          "recording.unused[]": { module: "string", key: "string", value: "string" },
+          "openItems[]": { section: "string", what: "string", detail: "string",
+                ask: "string|null", kind: "string" },
+        },
+        "ss-kickoff/6": {
+          // map<T> — dynamic keys (module ids), every value of type T.
+          // array<T> — every element of type T. Both are unchecked without
+          // the parameter: `skipped: "array"` passes on an array of objects.
+          "": { schema: "string", mode: "string", build: "string", capturedAt: "string", client: "object",
+                progress: "map<string>", skipped: "array<string>", fields: "map<object>",
+                services: "object", locations: "object", channels: "array<object>",
+                access: "object", notes: "map<string>", recording: "object|null",
+                openItems: "array<object>",
+                display: "map<object>" },
+          "client": { slug: "string", name: "string", market: "string", website: "string", trade: "string" },
+          "services": { trades: "array<string>", items: "array<object>" },
+          "services.items[]": { id: "string", name: "string", trade: "string", source: "string",
+                foundOnSite: "boolean", selected: "boolean", priority: "string|null",
+                rank: "number|null", hasPage: "boolean", subs: "array<object>",
+                aliases: "array<string>", note: "string" },
+          "services.items[].subs[]": { name: "string", selected: "boolean" },
+          "locations": { baseAddress: "string", radiusMiles: "number", items: "array<object>" },
+          "locations.items[]": { id: "string", name: "string", state: "string", source: "string",
+                foundOnSite: "boolean", selected: "boolean", excluded: "boolean",
+                priority: "string|null", rank: "number|null", hasPage: "boolean", note: "string" },
           "channels[]": { id: "string", label: "string", category: "string", known: "boolean",
                 rating: "string|null", monthlyLeads: "string|null", note: "string" },
           "access": { leadsie: "object", accounts: "array<object>", other: "array<object>" },
@@ -1346,25 +1392,30 @@ for (const m of MODULES) {
       const hit = jo.channels.find((c) => c.id === "some-new-channel");
       if (!hit) fail("a selected channel outside the built-in list was dropped from the export");
       else if (hit.known !== false) fail("an unknown channel was not flagged as unknown");
-      const oddCsv = readout.exports(ctxFor(bfp, oddball)).csv();
-      if (!/"channel","marketing","some-new-channel","known","false"/.test(oddCsv)) {
-        fail("the CSV gives no way to tell an unknown channel from a known one");
+      // The Markdown readout has to name it too — an unknown channel is
+      // still a channel they run.
+      const oddMd = readout.exports(ctxFor(bfp, oddball)).md();
+      if (oddMd.indexOf("some-new-channel") === -1) {
+        fail("the Markdown readout dropped a channel outside the built-in list");
       }
 
-      // rows must survive the CSV as records, not as "[object Object]"
+      // rows must reach the Markdown as rows, not as "[object Object]"
       const comp = S.fresh();
-      comp.m.competitors = { rows: [{ name: "Roto-Rooter", why: "Owns the map pack" }] };
-      const compCsv = readout.exports(ctxFor(bfp, comp)).csv();
-      if (/\[object Object\]/.test(compCsv)) fail("the CSV stringified a structured value");
-      if (compCsv.indexOf("Roto-Rooter") === -1) fail("the CSV dropped a competitor the client named");
-
-      const csv = api.csv();
-      if (!csv.includes("the guy who shows up")) fail("CSV export dropped a page note");
-      if (csv.split('"').length % 2 !== 1) fail("CSV export has unbalanced quoting");
-      if (!/^"entity","section","id","field","value"/.test(csv)) {
-        fail("CSV export lost its addressable header");
+      comp.m.competitors = { rows: [{ name: "Roto-Rooter", why: "Owns the map pack", threat: "biggest" }] };
+      const compMd = readout.exports(ctxFor(bfp, comp)).md();
+      if (/\[object Object\]/.test(compMd)) fail("the Markdown stringified a structured value");
+      for (const want of ["Roto-Rooter", "Owns the map pack", "Biggest threat"]) {
+        if (compMd.indexOf(want) === -1) fail(`the Markdown dropped "${want}" from the competitor roster`);
       }
-      if (!csv.includes('"service","services"')) fail("CSV export carried no service rows");
+
+      const md = api.md();
+      if (!md.includes("the guy who shows up")) fail("the Markdown dropped a page note");
+      if (!/^# /.test(md)) fail("the Markdown has no title");
+      if (!/\n## Services\b/.test(md)) fail("the Markdown has no Services section");
+      // a table has to be a real Markdown table: header, divider, rows
+      if (!/\n\| [^\n]+ \|\n\|( --- \|)+\n\| /.test(md)) {
+        fail("the Markdown's tables are not well-formed");
+      }
     } catch (e) {
       fail(`export assertions threw — ${e.message}`);
     }
@@ -2842,10 +2893,9 @@ for (const m of MODULES) {
     }, new Set(MODULES.map((m) => m.id))),
     approved: ["q0"], applied: [],
   };
-  const csv = MODULES.find((m) => m.id === "readout").exports(ctxFor(bfp, st)).csv();
-  if (csv.indexOf("Angi is killing us") === -1) fail("the CSV dropped the recording's quotes");
-  if (!/"quote","transcript"/.test(csv)) fail("the CSV has no addressable quote rows");
-  if (csv.indexOf("no close rate") === -1) fail("the CSV dropped what the call left unanswered");
+  const md = MODULES.find((m) => m.id === "readout").exports(ctxFor(bfp, st)).md();
+  if (md.indexOf("Angi is killing us") === -1) fail("the Markdown dropped the recording's quotes");
+  if (md.indexOf("no close rate") === -1) fail("the Markdown dropped what the call left unanswered");
 }
 
 /* ── the two transcript readers refuse what they can't read ── */
@@ -3290,6 +3340,52 @@ for (const m of MODULES) {
   const img = (csp.match(/img-src ([^;]+)/) || [])[1] || "";
   // logo and brand-guide previews are object URLs off IndexedDB
   if (!/\bblob:/.test(img)) fail(`img-src is "${img.trim()}" — blob: previews will be blocked`);
+}
+
+/* ── the readout carries everything, and leaks nothing ─── */
+{
+  // Every screen filled with a traceable answer, each one followed into
+  // every output: the internal brief on screen, the client PDF, the brief
+  // as text, the Markdown and the JSON. Choices are checked by changing
+  // them and seeing each output change. Notes, unapproved quotes and the
+  // recording's internal to-do list must NOT reach the client PDF.
+  //
+  // This exists because the readout was written as five separate
+  // renderers that each walked the screens their own way, and each dropped
+  // something different. `node docs/readout-audit.mjs` prints the table.
+  const { auditReadout } = await import(url("docs/readout-audit.mjs"));
+  for (const mode of ["kickoff", "discovery"]) {
+    let r;
+    try { r = auditReadout(mode); }
+    catch (e) { fail(`the ${mode} readout audit threw — ${e.message}`); continue; }
+    if (r.count < 100) fail(`the ${mode} readout audit traced only ${r.count} answers — it is not reaching the screens`);
+    for (const g of r.gaps) fail(`${mode} readout: ${g}`);
+    for (const l of r.leaks) fail(`${mode} readout LEAK: ${l}`);
+  }
+}
+
+/* ── the client document names everything in scope ────── */
+{
+  // Its order lists are build order and leave out anything unranked, on
+  // purpose. "Also in scope" is what stops a service they told us about
+  // from appearing nowhere in the document they receive. The readout audit
+  // cannot see this block go missing — the same names also reach the
+  // document through a row — so it is pinned on its own.
+  const st = S.fresh();
+  st.m.services = { trades: ["plumbing"] };
+  const on = S.serviceUniverse(st, bfp, [TRADES_MOD.getTrade("plumbing")]).filter((x) => x.on);
+  S.setPriority(st, [on[0].id], "high");
+  const readout = MODULES.find((m) => m.id === "readout");
+  const html = readout.render({ ...ctxFor(bfp, st), num: "09", transient: {} });
+  const doc = html.slice(html.indexOf('<div class="printdoc">'));
+  const scopeAt = doc.indexOf("Also in scope");
+  if (scopeAt < 0) fail("the client document has no \"Also in scope\" block for unranked services");
+  else {
+    const last = on.filter((x) => !x.prio && x.id !== on[0].id).pop();
+    if (last && doc.indexOf(last.name, scopeAt) < 0) {
+      fail(`"Also in scope" does not name ${last.name}, the last unranked service`);
+    }
+  }
 }
 
 /* ── report ───────────────────────────────────────────── */

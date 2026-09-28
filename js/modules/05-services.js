@@ -347,22 +347,53 @@ export default {
       .map((x) => x.name + " — " + x.subs.filter((s) => !s.on).map((s) => s.name).join(", "));
     if (droppedSubs.length) rows.push(["Sub-services dropped", droppedSubs.join(" · ")]);
 
+    // Every selected service that has no priority yet, by name, uncapped.
+    // This used to exist only inside an open item trimmed to six names and
+    // an ellipsis, so a client with ten unranked services lost four of
+    // them from every readout.
+    if (b[""].length) rows.push(["Selected, not yet prioritised", b[""].map((x) => x.name).join(", ")]);
+    const added = selected.filter((x) => x.source === "added");
+    if (added.length) rows.push(["Added on the call", added.map((x) => x.name).join(", ")]);
+
     const open = [];
     if (!trades.length) open.push({ what: "Industry", detail: "No trade picked — the service list is whatever the scrape found" });
     if (b[""].length) {
       open.push({
         what: "Services with no priority",
-        detail: b[""].length + " selected but unranked: " + b[""].slice(0, 6).map((x) => x.name).join(", ") +
-          (b[""].length > 6 ? "…" : ""),
+        detail: b[""].length + " selected but unranked: " + b[""].map((x) => x.name).join(", "),
       });
     }
     if (!b.high.length && ordered.length) {
       open.push({ what: "Nothing marked High", detail: "Nobody said what gets built first" });
     }
 
+    // Internal only. The readout's client document renders a screen's rows
+    // and tables verbatim, so anything in there is something the client
+    // reads. A note typed against a service is Sam's shorthand, not theirs.
+    const unranked = selected.filter((x) => !x.prio);
+    const noteOf = (x) => [x.id].concat(x.aliases || [])
+      .map((id) => getNote(ctx.state, ID, id)).find((n) => n && n.trim()) || "";
+    const internal = {
+      table: {
+        head: ["rank", "service", "priority", "sub-services kept", "sub-services dropped", "on their site", "note"],
+        body: ordered.concat(unranked).map((it) => [
+          ordered.indexOf(it) > -1 ? String(ordered.indexOf(it) + 1) : "",
+          it.name,
+          it.prio || "not yet",
+          it.subs.filter((s) => s.on).map((s) => s.name).join("; "),
+          it.subs.filter((s) => !s.on).map((s) => s.name).join("; "),
+          it.source === "both" || it.source === "scrape" ? "yes" : (it.source === "added" ? "added on call" : "no"),
+          noteOf(it),
+        ]),
+      },
+      notes: selected.filter((x) => noteOf(x)).map((x) => [x.name, noteOf(x)]),
+    };
+
     return {
       rows,
       open,
+      internal,
+      unranked: { title: "Also in scope", items: unranked.map((x) => x.name) },
       list: {
         title: "Services in build order",
         items: ordered.map((it, i) => ({

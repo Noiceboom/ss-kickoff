@@ -254,6 +254,35 @@ not cosmetic.
 | 05 | `services` | Services | Industry picker, **multi-select** (16 trades) — plenty of companies run two; the trade's full taxonomy merged with the scrape, which arrives pre-ticked; High/Med/Low per service; sub-service chips; per-item notes; **build order assembled from the priority bands on the same screen**, draggable within each band |
 | 07 | `locations` | Cities | Radius search off a base city against a bundled Census dataset; pick + High/Med/Low; **do-not-market exclusions** as a first-class state; build order on the same screen, draggable within a band |
 | 09 | `brand` | Brand | Logo status **+ file upload**, brand guide **+ upload**, colors, fonts, photo library; six **bipolar tone scales**; words to use and never use. Uploads go to IndexedDB — state carries metadata only, never bytes |
+### The readout is one walk
+
+The readout used to be five renderers — the client document, the internal
+brief on screen, the brief as text, the CSV and the payload's `display` —
+each walking the screens its own way, and each dropped something
+different. The text brief lost table headers; only the on-screen brief had
+discovery's "before this can be priced" list; a note typed against a single
+service or city reached none of them, including the JSON.
+
+The internal outputs now render from one `model()`, and text and Markdown
+come out of one renderer with two formatters, so their content is identical
+by construction. A screen's summary has two channels:
+
+- `rows` / `table` — client-safe. The client document prints these verbatim.
+- `internal` — rows, a table and `notes` against individual items. The
+  internal outputs render it; the client document never reads it.
+
+That split is what lets the internal readout carry everything — Sam's notes,
+unapproved quotes, talk share, what was mentioned but never ticked —
+without any of it reaching the client.
+
+`docs/readout-audit.mjs` fills every screen with a traceable answer and
+follows each one into every output; `docs/check.mjs` fails on any gap and on
+anything internal reaching the client PDF. `node docs/readout-audit.mjs`
+prints the table.
+
+The CSV download was replaced with Markdown: the complete internal readout,
+readable raw and when rendered.
+
 ### The recording
 
 The page cannot read a transcript for meaning. It is static files with

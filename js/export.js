@@ -42,7 +42,9 @@ import { CORE_ACCOUNTS, EXTRA_ACCOUNTS, LEADSIE_URL } from "./modules/11-access.
 //   /4  b38  `mode` — which of the two documents produced this. The
 //            importer keys on it, and a discovery payload replayed as a
 //            kickoff one would otherwise be indistinguishable.
-export const SCHEMA = "ss-kickoff/5";
+//   /6  b54  every service and city carries `note` — what was typed
+//            against that item on the call. It reached nothing before.
+export const SCHEMA = "ss-kickoff/6";
 
 /**
  * Bookkeeping keys that are represented properly elsewhere in the payload.
@@ -111,6 +113,11 @@ function servicesBlock(ctx) {
         typeof sub === "string" ? { name: sub, selected: true } : { name: sub.name, selected: sub.on !== false }
       ),
       aliases: it.aliases || [],
+      // A note typed against this service on the call. Resolved across
+      // aliases, because a row merged from another trade can carry its
+      // note under the id it had there.
+      note: [it.id].concat(it.aliases || []).map((id) => S.getNote(ctx.state, "services", id))
+        .find((n) => n && n.trim()) || "",
     })),
   };
 }
@@ -135,6 +142,7 @@ function locationsBlock(ctx) {
       priority: it.prio || null,
       rank: rank(it.id),
       hasPage: !!it.hasPage,
+      note: S.getNote(ctx.state, "locations", it.id) || "",
     })),
   };
 }
@@ -248,6 +256,15 @@ export function buildPayload(ctx, parts, build) {
     const d = {};
     if (p.sum.rows && p.sum.rows.length) d.fields = Object.fromEntries(p.sum.rows);
     if (p.sum.table) d.table = { columns: p.sum.table.head, rows: p.sum.table.body };
+    // The internal detail — full service and city tables, quotes with their
+    // approval, notes against items. `display` is the human-readable copy
+    // the OS keeps, and it was the least complete of all of them.
+    const inn = p.sum.internal;
+    if (inn) {
+      if (inn.rows && inn.rows.length) d.internal = Object.fromEntries(inn.rows);
+      if (inn.table && inn.table.body.length) d.internalTable = { columns: inn.table.head, rows: inn.table.body };
+      if (inn.notes && inn.notes.length) d.itemNotes = Object.fromEntries(inn.notes);
+    }
     if (Object.keys(d).length) display[p.mod.id] = d;
   }
 
@@ -287,145 +304,4 @@ export function buildPayload(ctx, parts, build) {
     })),
     display: display,
   };
-}
-
-/* ── CSV ──────────────────────────────────────────────── */
-
-function cell(v) {
-  return '"' + String(v === null || v === undefined ? "" : v).replace(/"/g, '""') + '"';
-}
-
-/**
- * Flatten one field into rows.
- *
- * Some screens store rows, not strings — the competitors list is an array
- * of {name, why} objects. String()ing that gives "[object Object]", which
- * silently destroys everything the client said on the call. Each record
- * gets its own addressable rows instead.
- */
-function putValue(put, mod, key, v) {
-  if (v === null || v === undefined || v === "") return;
-
-  if (Array.isArray(v)) {
-    const structured = v.some((x) => x && typeof x === "object");
-    if (!structured) { put("field", mod, "", key, v.join("; ")); return; }
-    v.forEach((row, i) => {
-      if (!row || typeof row !== "object") { put("row", mod, key + "[" + i + "]", key, row); return; }
-      for (const [col, val] of Object.entries(row)) {
-        if (val === null || val === undefined || val === "") continue;
-        put("row", mod, key + "[" + i + "]", col, Array.isArray(val) ? val.join("; ") : val);
-      }
-    });
-    return;
-  }
-
-  if (typeof v === "object") {
-    for (const [col, val] of Object.entries(v)) {
-      if (val === null || val === undefined || val === "") continue;
-      put("field", mod, key, col, Array.isArray(val) ? val.join("; ") : val);
-    }
-    return;
-  }
-
-  put("field", mod, "", key, v);
-}
-
-/**
- * Long format — one fact per row — because a single CSV has to carry
- * services, cities, channels, accounts and loose fields at once, and
- * those have nothing like the same columns. `entity` and `id` make every
- * row addressable without the importer having to guess from position.
- */
-export function buildCsv(payload) {
-  const lines = [["entity", "section", "id", "field", "value"].map(cell).join(",")];
-  const put = (e, sec, id, field, value) => {
-    if (value === "" || value === null || value === undefined) return;
-    lines.push([e, sec, id, field, value].map(cell).join(","));
-  };
-
-  put("meta", "", "", "schema", payload.schema);
-  put("meta", "", "", "build", payload.build);
-  put("meta", "", "", "capturedAt", payload.capturedAt);
-  for (const [k, v] of Object.entries(payload.client)) put("client", "", payload.client.slug, k, v);
-
-  for (const [mod, f] of Object.entries(payload.fields)) {
-    for (const [k, v] of Object.entries(f)) putValue(put, mod, k, v);
-  }
-
-  for (const t of payload.services.trades) put("trade", "services", t, "active", "true");
-  for (const it of payload.services.items) {
-    if (!it.selected && !it.priority) continue;
-    put("service", "services", it.id, "name", it.name);
-    put("service", "services", it.id, "trade", it.trade);
-    put("service", "services", it.id, "selected", String(it.selected));
-    put("service", "services", it.id, "priority", it.priority);
-    put("service", "services", it.id, "rank", it.rank);
-    put("service", "services", it.id, "source", it.source);
-    put("service", "services", it.id, "foundOnSite", String(it.foundOnSite));
-    put("service", "services", it.id, "subs", it.subs.filter((x) => x.selected).map((x) => x.name).join("; "));
-    put("service", "services", it.id, "subsDropped",
-      it.subs.filter((x) => !x.selected).map((x) => x.name).join("; "));
-  }
-
-  put("field", "locations", "", "baseAddress", payload.locations.baseAddress);
-  put("field", "locations", "", "radiusMiles", payload.locations.radiusMiles);
-  for (const it of payload.locations.items) {
-    if (!it.selected && !it.excluded) continue;
-    put("city", "locations", it.id, "name", it.name);
-    put("city", "locations", it.id, "state", it.state);
-    put("city", "locations", it.id, "selected", String(it.selected));
-    put("city", "locations", it.id, "excluded", String(it.excluded));
-    put("city", "locations", it.id, "priority", it.priority);
-    put("city", "locations", it.id, "rank", it.rank);
-    put("city", "locations", it.id, "source", it.source);
-    put("city", "locations", it.id, "foundOnSite", String(it.foundOnSite));
-  }
-
-  for (const ch of payload.channels) {
-    put("channel", "marketing", ch.id, "label", ch.label);
-    // a channel the built-in list doesn't know — the JSON says so, and a
-    // CSV consumer has no other way to tell
-    put("channel", "marketing", ch.id, "known", String(ch.known));
-    put("channel", "marketing", ch.id, "rating", ch.rating);
-    put("channel", "marketing", ch.id, "monthlyLeads", ch.monthlyLeads);
-    put("channel", "marketing", ch.id, "note", ch.note);
-  }
-
-  put("field", "access", "", "leadsieStatus", payload.access.leadsie.status);
-  put("field", "access", "", "leadsieWho", payload.access.leadsie.who);
-  for (const a of payload.access.accounts) {
-    put("account", "access", a.key, "label", a.label);
-    put("account", "access", a.key, "status", a.status);
-    put("account", "access", a.key, "core", String(a.core));
-  }
-  for (const a of payload.access.other) put("account", "access", "", a.label, a.status);
-
-  const rec = payload.recording;
-  if (rec) {
-    if (rec.file) put("field", "transcript", "", "file", rec.file.name);
-    for (const [k, v] of Object.entries(rec.call || {})) {
-      if (v === null || typeof v === "object") continue;
-      put("field", "transcript", "", k, v);
-    }
-    rec.quotes.forEach((q, i) => {
-      put("quote", "transcript", "q" + i, "text", q.text);
-      put("quote", "transcript", "q" + i, "speaker", q.speaker);
-      put("quote", "transcript", "q" + i, "at", q.at);
-      put("quote", "transcript", "q" + i, "about", q.module);
-      put("quote", "transcript", "q" + i, "approved", String(q.approved));
-    });
-    rec.unused.forEach((u, i) => put("heardNotUsed", u.module, "u" + i, u.key, u.value));
-    for (const x of rec.unclear) put("unclear", "transcript", "", "detail", x);
-    if (rec.mentionedServices.length) put("field", "transcript", "", "servicesMentioned", rec.mentionedServices.join("; "));
-    if (rec.mentionedCities.length) put("field", "transcript", "", "citiesMentioned", rec.mentionedCities.join("; "));
-  }
-
-  for (const [mod, note] of Object.entries(payload.notes)) put("note", mod, "", "note", note);
-  for (const [mod, st] of Object.entries(payload.progress)) put("progress", mod, "", "status", st);
-  for (const o of payload.openItems) {
-    put("openItem", o.section, "", o.what, o.detail);
-    if (o.ask) put("ask", o.section, "", o.what, o.ask);
-  }
-
-  return lines.join("\r\n");
 }

@@ -72,7 +72,8 @@ const STATUS_OPTIONS = [{ value: "", label: "—" }].concat(STATUSES);
 
 function statusLabel(v) {
   const hit = STATUSES.filter((s) => s.value === v)[0];
-  return hit ? hit.label : "";
+  // Shown as given if this build doesn't recognise it, rather than erased.
+  return hit ? hit.label : (v || "");
 }
 
 /** Extras the call actually put in play. */

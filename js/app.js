@@ -1351,7 +1351,7 @@ function doAction(name) {
   if (name === "recap" && api) { copy(api.recap(), "Client recap copied"); return; }
   if (name === "brief" && api) { copy(api.brief(), "Internal brief copied"); return; }
   if (name === "json" && api) { download(baseName() + ".json", api.json(), "application/json"); toast("JSON downloaded"); return; }
-  if (name === "csv" && api) { download(baseName() + ".csv", "\ufeff" + api.csv(), "text/csv;charset=utf-8"); toast("CSV downloaded"); return; }
+  if (name === "md" && api) { download(baseName() + ".md", api.md(), "text/markdown;charset=utf-8"); toast("Markdown downloaded"); return; }
   if (name === "print") { window.print(); return; }
   if (name === "clear") {
     const what = R.mode === DISCOVERY ? "discovery call" : "kickoff";

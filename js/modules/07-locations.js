@@ -352,7 +352,15 @@ export default {
     if (b.med.length) rows.push(["Medium priority", b.med.map((x) => x.name).join(", ")]);
     if (b.low.length) rows.push(["Low priority", b.low.map((x) => x.name).join(", ")]);
     if (dropped.length) rows.push(["Not now", dropped.map((x) => x.name).join(", ")]);
-    if (barred.length) rows.push(["DO NOT MARKET", barred.map((x) => x.name + (x.state ? ", " + x.state : "")).join(", ")]);
+    if (barred.length) rows.push(["DO NOT MARKET", barred.map((x) => x.name + (x.state ? ", " + x.state : "")).join(" · ")]);
+    // Uncapped, for the same reason as services: the only place these
+    // were named was an open item trimmed to six and an ellipsis.
+    const unranked = selected.filter((x) => !x.prio);
+    if (unranked.length) {
+      rows.push(["Selected, not yet prioritised", unranked.map((x) => x.name + (x.state ? ", " + x.state : "")).join(" · ")]);
+    }
+    const added = selected.filter((x) => x.source === "added" || x.source === "radius");
+    if (added.length) rows.push(["Added on the call", added.map((x) => x.name + (x.state ? ", " + x.state : "")).join(" · ")]);
 
     const open = [];
     const unresolved = selected.filter((x) => x.verify);
@@ -362,8 +370,7 @@ export default {
     if (b[""].length) {
       open.push({
         what: "Cities with no priority",
-        detail: b[""].length + " selected but unranked: " + b[""].slice(0, 6).map((x) => x.name).join(", ") +
-          (b[""].length > 6 ? "…" : ""),
+        detail: b[""].length + " selected but unranked: " + b[""].map((x) => x.name).join(", "),
       });
     }
     if (!b.high.length && ordered.length) {
@@ -377,9 +384,29 @@ export default {
       });
     }
 
+    const noteOf = (x) => getNote(ctx.state, ID, x.id) || "";
+    const unrankedAll = selected.filter((x) => !x.prio);
+    const internal = {
+      table: {
+        head: ["rank", "city", "state", "priority", "miles", "population", "page", "source", "note"],
+        body: ordered.concat(unrankedAll).map((it) => [
+          ordered.indexOf(it) > -1 ? String(ordered.indexOf(it) + 1) : "",
+          it.name, it.state || "", it.prio || "not yet",
+          it.miles == null ? "" : String(it.miles), it.pop ? String(it.pop) : "",
+          it.hasPage ? "has page" : "needs page", it.source || "", noteOf(it),
+        ]).concat(barred.map((it) => [
+          "", it.name, it.state || "", "DO NOT MARKET",
+          it.miles == null ? "" : String(it.miles), it.pop ? String(it.pop) : "", "", it.source || "", noteOf(it),
+        ])),
+      },
+      notes: all.filter((x) => noteOf(x).trim()).map((x) => [x.name + (x.state ? ", " + x.state : ""), noteOf(x)]),
+    };
+
     return {
       rows,
       open,
+      internal,
+      unranked: { title: "Also in scope", items: unrankedAll.map((x) => x.name + (x.state ? ", " + x.state : "")) },
       list: {
         title: "Cities in build order",
         items: ordered.map((it, i) => ({

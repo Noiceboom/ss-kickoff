@@ -294,7 +294,7 @@ export default {
     put("Website", s.website);
     put("Founded", s.founded);
     put("Point of contact", who(s.contactName, s.contactEmail, s.contactPhone, s.contactRole));
-    put("Reach them by", s.contactPref);
+    put("Reach them by", { text: "Text", call: "Call", email: "Email", slack: "Slack / Teams" }[s.contactPref] || s.contactPref);
     put("After-hours cover", { human: "A person", ai: "AI answering", service: "Answering service", voicemail: "Voicemail" }[s.afterHoursWho] || "");
     put("Billing contact", billingSameOf(s)
       ? "Same as point of contact" + (s.contactName ? " (" + s.contactName + ")" : "")
@@ -304,7 +304,7 @@ export default {
     for (const r of (Array.isArray(s.people) ? s.people : [])) {
       if (!r || !(r.name || r.email)) continue;
       const who = [r.role, r.email, r.phone].filter(Boolean).join(" · ");
-      rows.push([r.name || "Also", who]);
+      rows.push(["Other contact", [r.name, who].filter(Boolean).join(" · ")]);
     }
     put("Main business phone", s.phone);
     put("Address", s.serviceAreaBiz ? (addr ? addr + " (hidden on GBP)" : "Service-area business") : addr);
