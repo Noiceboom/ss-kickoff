@@ -1,0 +1,572 @@
+{
+  "slug": "farrell-brothers",
+  "client": {
+    "name": "Farrell Brothers",
+    "market": "Albany",
+    "website": "https://farrellbrothers.com",
+    "trade": "Plumbing"
+  },
+  "source": {
+    "scrapedAt": "2026-09-28",
+    "from": "No website yet (domain redirects to BFP Albany). Services from the sales calls; cities from their service-area list",
+    "method": "manual"
+  },
+  "services": [
+    {
+      "id": "commercial-plumbing",
+      "name": "Commercial Plumbing",
+      "subs": [
+        "Commercial Plumbing Repair",
+        "Commercial Plumbing Installation"
+      ],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "commercial-heating",
+      "name": "Commercial Heating",
+      "subs": [
+        "Commercial Boilers",
+        "Commercial Furnaces"
+      ],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "commercial-hvac",
+      "name": "Commercial HVAC",
+      "subs": [
+        "Rooftop Units",
+        "Commercial AC Repair",
+        "Commercial AC Installation"
+      ],
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "commercial-emergency",
+      "name": "24/7 Emergency Commercial Service",
+      "subs": [],
+      "hasPage": false,
+      "verify": "Only commercial plumbing and heating came up on the sales calls — check they offer this"
+    },
+    {
+      "id": "commercial-drains-sewers",
+      "name": "Commercial Drains & Sewers",
+      "subs": [
+        "Commercial Drain Cleaning",
+        "Hydro Jetting",
+        "Sewer Camera Inspection",
+        "Sewer Line Repair"
+      ],
+      "hasPage": false,
+      "verify": "Only commercial plumbing and heating came up on the sales calls — check they offer this"
+    },
+    {
+      "id": "commercial-water-heaters",
+      "name": "Commercial Water Heaters",
+      "subs": [],
+      "hasPage": false,
+      "verify": "Only commercial plumbing and heating came up on the sales calls — check they offer this"
+    },
+    {
+      "id": "backflow-testing",
+      "name": "Backflow Testing & Certification",
+      "subs": [],
+      "hasPage": false,
+      "verify": "Only commercial plumbing and heating came up on the sales calls — check they offer this"
+    },
+    {
+      "id": "commercial-gas-lines",
+      "name": "Commercial Gas Lines",
+      "subs": [],
+      "hasPage": false,
+      "verify": "Only commercial plumbing and heating came up on the sales calls — check they offer this"
+    },
+    {
+      "id": "commercial-maintenance",
+      "name": "Commercial Maintenance Agreements",
+      "subs": [],
+      "hasPage": false,
+      "verify": "Only commercial plumbing and heating came up on the sales calls — check they offer this"
+    },
+    {
+      "id": "new-construction",
+      "name": "New Construction & Tenant Fit-Out",
+      "subs": [],
+      "hasPage": false,
+      "verify": "Only commercial plumbing and heating came up on the sales calls — check they offer this"
+    }
+  ],
+  "locations": [
+    {
+      "id": "albany",
+      "name": "Albany",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "altamont",
+      "name": "Altamont",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "amsterdam",
+      "name": "Amsterdam",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "averill-park",
+      "name": "Averill Park",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "ballston-lake",
+      "name": "Ballston Lake",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "ballston-spa",
+      "name": "Ballston Spa",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "berne",
+      "name": "Berne",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "burnt-hills",
+      "name": "Burnt Hills",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "castleton-on-hudson",
+      "name": "Castleton On Hudson",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "chatham",
+      "name": "Chatham",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "clifton-park",
+      "name": "Clifton Park",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "cobleskill",
+      "name": "Cobleskill",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "coeymans",
+      "name": "Coeymans",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "cohoes",
+      "name": "Cohoes",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "corinth",
+      "name": "Corinth",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "cropseyville",
+      "name": "Cropseyville",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "delanson",
+      "name": "Delanson",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "delmar",
+      "name": "Delmar",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "east-berne",
+      "name": "East Berne",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "east-chatham",
+      "name": "East Chatham",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "east-greenbush",
+      "name": "East Greenbush",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "east-nassau",
+      "name": "East Nassau",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "east-schodack",
+      "name": "East Schodack",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "feura-bush",
+      "name": "Feura Bush",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "galway",
+      "name": "Galway",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "gansevoort",
+      "name": "Gansevoort",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "ghent",
+      "name": "Ghent",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "gilboa",
+      "name": "Gilboa",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "glenmont",
+      "name": "Glenmont",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "greenfield-center",
+      "name": "Greenfield Center",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "guilderland",
+      "name": "Guilderland",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "hoosick-falls",
+      "name": "Hoosick Falls",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "hudson",
+      "name": "Hudson",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "jefferson",
+      "name": "Jefferson",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "kinderhook",
+      "name": "Kinderhook",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "latham",
+      "name": "Latham",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "mechanicville",
+      "name": "Mechanicville",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "melrose",
+      "name": "Melrose",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "middle-grove",
+      "name": "Middle Grove",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "nassau",
+      "name": "Nassau",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "niverville",
+      "name": "Niverville",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "north-chatham",
+      "name": "North Chatham",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "old-chatham",
+      "name": "Old Chatham",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "poestenkill",
+      "name": "Poestenkill",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "ravena",
+      "name": "Ravena",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "rensselaer",
+      "name": "Rensselaer",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "rensselaerville",
+      "name": "Rensselaerville",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "rexford",
+      "name": "Rexford",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "rock-city-falls",
+      "name": "Rock City Falls",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "sand-lake",
+      "name": "Sand Lake",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "saratoga-springs",
+      "name": "Saratoga Springs",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "schaghticoke",
+      "name": "Schaghticoke",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "schenectady",
+      "name": "Schenectady",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "schodack-landing",
+      "name": "Schodack Landing",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "selkirk",
+      "name": "Selkirk",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "slingerlands",
+      "name": "Slingerlands",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "sloansville",
+      "name": "Sloansville",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "stephentown",
+      "name": "Stephentown",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "stillwater",
+      "name": "Stillwater",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "stuyvesant",
+      "name": "Stuyvesant",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "troy",
+      "name": "Troy",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "valatie",
+      "name": "Valatie",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "voorheesville",
+      "name": "Voorheesville",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "waterford",
+      "name": "Waterford",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "watervliet",
+      "name": "Watervliet",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "west-sand-lake",
+      "name": "West Sand Lake",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "wynantskill",
+      "name": "Wynantskill",
+      "state": "NY",
+      "hasPage": false,
+      "verify": null
+    }
+  ]
+}
