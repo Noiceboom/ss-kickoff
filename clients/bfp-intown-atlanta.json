@@ -1,0 +1,387 @@
+{
+  "slug": "bfp-intown-atlanta",
+  "client": {
+    "name": "Benjamin Franklin Plumbing of Intown Atlanta",
+    "market": "Atlanta",
+    "website": "https://www.benjaminfranklinplumbing.com/intown-atlanta/",
+    "trade": "Plumbing"
+  },
+  "source": {
+    "scrapedAt": "2026-10-01",
+    "from": "Intown Atlanta services menu. Cities from the Intown and North Atlanta location pages",
+    "method": "manual"
+  },
+  "services": [
+    {
+      "id": "emergency",
+      "name": "Emergency Plumbing",
+      "subs": [],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "drains",
+      "name": "Drains",
+      "subs": [
+        "Drain Cleaning",
+        "Drain Installation",
+        "Hydrojetting"
+      ],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "water-heaters",
+      "name": "Water Heaters",
+      "subs": [
+        "Tankless Water Heaters",
+        "Water Heater Installation",
+        "Water Heater Repair"
+      ],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "sewers",
+      "name": "Sewers",
+      "subs": [
+        "Sewer Line Repair",
+        "Sewer Line Replacement and Installation",
+        "Trenchless Sewers"
+      ],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "leak-detection",
+      "name": "Leak Detection",
+      "subs": [
+        "Leak Repair",
+        "Pool Leak Detection",
+        "Slab Leaks"
+      ],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "piping-repiping",
+      "name": "Piping & Repiping",
+      "subs": [
+        "Frozen Pipes",
+        "Leaking Pipes",
+        "Pipe Repair"
+      ],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "plumbing-repairs",
+      "name": "Plumbing Repairs",
+      "subs": [
+        "Plumbing Installation",
+        "Plumbing Inspection & Diagnosis"
+      ],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "toilets",
+      "name": "Toilets",
+      "subs": [
+        "Toilet Repair",
+        "Toilet Installation"
+      ],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "sinks",
+      "name": "Sinks",
+      "subs": [
+        "Sink Installation",
+        "Sink Repair"
+      ],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "faucets",
+      "name": "Faucets",
+      "subs": [],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "showers",
+      "name": "Showers",
+      "subs": [
+        "Shower Installation",
+        "Shower Repair"
+      ],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "bathtubs",
+      "name": "Bathtubs",
+      "subs": [],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "garbage-disposals",
+      "name": "Garbage Disposals",
+      "subs": [
+        "Garbage Disposal Installation",
+        "Garbage Disposal Repair"
+      ],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "pumps",
+      "name": "Pumps",
+      "subs": [
+        "Sump Pumps",
+        "Pool Pump Plumbers",
+        "Well Pump Services",
+        "Water Pumps"
+      ],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "water-lines",
+      "name": "Water Lines",
+      "subs": [],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "water-treatment",
+      "name": "Water Treatment",
+      "subs": [],
+      "hasPage": true,
+      "verify": null
+    },
+    {
+      "id": "outdoor-plumbing",
+      "name": "Outdoor Plumbing",
+      "subs": [],
+      "hasPage": true,
+      "verify": "Outdoor plumbing, yes — irrigation and sprinklers, no. Scorpion's LSA put them in an irrigation bucket and it drove junk leads"
+    },
+    {
+      "id": "commercial",
+      "name": "Commercial Plumbing",
+      "subs": [],
+      "hasPage": true,
+      "verify": "On the Intown site. Confirm they want commercial work marketed"
+    }
+  ],
+  "locations": [
+    {
+      "id": "buckhead",
+      "name": "Buckhead",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "ansley-park",
+      "name": "Ansley Park",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "midtown",
+      "name": "Midtown",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "virginia-highland",
+      "name": "Virginia-Highland",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "morningside-lenox-park",
+      "name": "Morningside-Lenox Park",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "poncey-highland",
+      "name": "Poncey-Highland",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "inman-park",
+      "name": "Inman Park",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "candler-park",
+      "name": "Candler Park",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "lake-claire",
+      "name": "Lake Claire",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "kirkwood",
+      "name": "Kirkwood",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "east-lake",
+      "name": "East Lake",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "druid-hills",
+      "name": "Druid Hills",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "north-druid-hills",
+      "name": "North Druid Hills",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "toco-hills",
+      "name": "Toco Hills",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "decatur",
+      "name": "Decatur",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "oakhurst",
+      "name": "Oakhurst",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "avondale-estates",
+      "name": "Avondale Estates",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "scottdale",
+      "name": "Scottdale",
+      "state": "GA",
+      "hasPage": false,
+      "verify": null
+    },
+    {
+      "id": "dunwoody",
+      "name": "Dunwoody",
+      "state": "GA",
+      "hasPage": false,
+      "verify": "Listed by BFP North Atlanta, a separate location. Confirm it falls inside the 12 purchased ZIPs before advertising here"
+    },
+    {
+      "id": "chamblee",
+      "name": "Chamblee",
+      "state": "GA",
+      "hasPage": false,
+      "verify": "Listed by BFP North Atlanta, a separate location. Confirm it falls inside the 12 purchased ZIPs before advertising here"
+    },
+    {
+      "id": "brookhaven",
+      "name": "Brookhaven",
+      "state": "GA",
+      "hasPage": false,
+      "verify": "Listed by BFP North Atlanta, a separate location. Confirm it falls inside the 12 purchased ZIPs before advertising here"
+    },
+    {
+      "id": "norcross",
+      "name": "Norcross",
+      "state": "GA",
+      "hasPage": false,
+      "verify": "Listed by BFP North Atlanta, a separate location. Confirm it falls inside the 12 purchased ZIPs before advertising here"
+    },
+    {
+      "id": "duluth",
+      "name": "Duluth",
+      "state": "GA",
+      "hasPage": false,
+      "verify": "Listed by BFP North Atlanta, a separate location. Confirm it falls inside the 12 purchased ZIPs before advertising here"
+    },
+    {
+      "id": "peachtree-corners",
+      "name": "Peachtree Corners",
+      "state": "GA",
+      "hasPage": false,
+      "verify": "Listed by BFP North Atlanta, a separate location. Confirm it falls inside the 12 purchased ZIPs before advertising here"
+    },
+    {
+      "id": "east-johns-creek",
+      "name": "East Johns Creek",
+      "state": "GA",
+      "hasPage": false,
+      "verify": "Listed by BFP North Atlanta, a separate location. Confirm it falls inside the 12 purchased ZIPs before advertising here"
+    },
+    {
+      "id": "buford",
+      "name": "Buford",
+      "state": "GA",
+      "hasPage": false,
+      "verify": "Listed by BFP North Atlanta, a separate location. Confirm it falls inside the 12 purchased ZIPs before advertising here"
+    },
+    {
+      "id": "suwanee",
+      "name": "Suwanee",
+      "state": "GA",
+      "hasPage": false,
+      "verify": "Listed by BFP North Atlanta, a separate location. Confirm it falls inside the 12 purchased ZIPs before advertising here"
+    },
+    {
+      "id": "sugar-hill",
+      "name": "Sugar Hill",
+      "state": "GA",
+      "hasPage": false,
+      "verify": "Listed by BFP North Atlanta, a separate location. Confirm it falls inside the 12 purchased ZIPs before advertising here"
+    },
+    {
+      "id": "rest-haven",
+      "name": "Rest Haven",
+      "state": "GA",
+      "hasPage": false,
+      "verify": "Listed by BFP North Atlanta, a separate location. Confirm it falls inside the 12 purchased ZIPs before advertising here"
+    }
+  ]
+}
