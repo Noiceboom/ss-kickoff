@@ -4,8 +4,40 @@
 
 import { esc, ICON } from "../ui.js";
 import { sayer, DISCOVERY } from "../modes.js";
+import { getField } from "../state.js";
 
 const ID = "intro";
+
+/* ── what we provide ─────────────────────────────────── */
+//
+// Not client data — what Service Scalers does. Every bucket starts
+// included; the AM switches off what this client didn't buy before the
+// call. Stored as `noPaid` and friends so an untouched doc reads as
+// everything included, and an old saved session needs no migration.
+
+export const OFFER = [
+  { key: "noPaid", name: "Paid", tag: "ready to call right now",
+    blurb: "Ads at the top of Google the moment someone searches for a service you sell, in a city you serve.",
+    items: [
+      ["Google Ads", "Search campaigns built on the services and cities we rank today."],
+      ["Local Services Ads", "The Google Guaranteed spot above the ads. Pay per lead, not per click."],
+      ["Meta", "Facebook and Instagram for offers, seasonal pushes and retargeting."],
+    ] },
+  { key: "noOrganic", name: "Organic", tag: "found without paying per click",
+    blurb: "Rankings that keep compounding: the map pack and the results under the ads.",
+    items: [
+      ["SEO", "Service and city pages, technical fixes and content that ranks."],
+      ["Google Business Profile", "Categories, services, photos, posts and reviews to win the map pack."],
+      ["AEO", "Show up when people ask AI for a pro: Google's AI Overviews, ChatGPT and the rest."],
+    ] },
+  { key: "noWebsite", name: "Website", tag: "turn the click into a call",
+    blurb: "Paid and organic both send people somewhere. This is where a visitor decides to call.",
+    items: [
+      ["Website", "Service and city pages built to turn a visit into a call."],
+      ["Designs", "Page designs in your brand, signed off before anything is built."],
+      ["Hosting", "Fast, secure hosting we look after, so the site stays up."],
+    ] },
+];
 
 /* ── copy ─────────────────────────────────────────────── */
 //
@@ -39,6 +71,11 @@ export const COPY = {
   gapLine: {
     kickoff: "of their %TOTAL% cities are listed with no page behind them. That's the gap we're ordering today &mdash; <strong style=\"color:var(--char)\">which city gets a real page first, and which service it leads with.</strong>",
     discovery: "of your %TOTAL% cities are listed with no page behind them &mdash; named on the site, with nothing for someone searching in that city to actually land on. <strong style=\"color:var(--char)\">That gap is most of what we&rsquo;d be talking about.</strong>",
+  },
+  offerLabel: { kickoff: "What we're providing", discovery: "What we provide" },
+  offerAside: {
+    kickoff: "The services and cities we put in order today decide what each of these works on first.",
+    discovery: "Which of these fits the business is part of what we're working out today.",
   },
   closer: {
     kickoff: "Never type a password or API key into this doc.",
@@ -106,6 +143,7 @@ export default {
         "<h1>" + t("headline") + "</h1>" +
         '<p class="lede">We\'re running ' + who + " " + t("lede") + "</p>" +
       '</div><img class="sam" src="assets/mini-sam.svg" alt=""></div>' +
+      offerSection(ctx, t) +
       handoffCard(ctx) +
       scraped +
       '<div class="card"><div class="mlabel">' + t("agendaLabel") + "</div>" +
@@ -119,8 +157,56 @@ export default {
   },
 
   status() { return "done"; },
-  summary() { return null; },
+
+  summary(ctx) {
+    const on = OFFER.filter((b) => !getField(ctx.state, ID, b.key, false));
+    const off = OFFER.filter((b) => getField(ctx.state, ID, b.key, false));
+    const rows = [["What we're providing", on.length ? on.map((b) => b.name).join(", ") : "Nothing selected"]];
+    if (off.length) rows.push(["Not included", off.map((b) => b.name).join(", ")]);
+    return { rows };
+  },
 };
+
+/**
+ * The three buckets. Each card's switch is the existing `data-toggle`
+ * mechanism, so it saves, exports and survives the handoff like any field.
+ */
+function offerSection(ctx, t) {
+  const cards = OFFER.map((b, i) => {
+    const off = !!getField(ctx.state, ID, b.key, false);
+    const items = b.items.map(([name, what]) =>
+      '<li class="' + (off ? "off" : "") + '">' + (off ? OFF_MARK : ON_MARK) +
+        '<div><div class="n">' + esc(name) + '</div><div class="w">' + esc(what) + "</div></div></li>"
+    ).join("");
+    return (
+      '<div class="offer' + (off ? " off" : "") + '">' +
+        '<div class="offtop">' +
+          '<span class="num">0' + (i + 1) + "</span>" +
+          '<button type="button" class="offsw" data-toggle="' + ID + "|" + b.key + '" aria-pressed="' + !off + '"' +
+            ' aria-label="' + esc(b.name) + (off ? " is not included. Include it" : " is included. Mark it not included") + '">' +
+            (off ? "Not included" : ICON.check + " Included") +
+          "</button>" +
+        "</div>" +
+        "<h3>" + esc(b.name) + "</h3>" +
+        '<div class="volt tag">' + esc(b.tag) + "</div>" +
+        '<p class="blurb">' + esc(b.blurb) + "</p>" +
+        '<ul class="offlist">' + items + "</ul>" +
+      "</div>"
+    );
+  }).join("");
+
+  return (
+    '<div class="offhead">' +
+      '<div><div class="mlabel">' + t("offerLabel") + "</div>" +
+        '<h2>Three ways we <span class="volt">bring in the calls</span></h2></div>' +
+      '<p class="aside">' + t("offerAside") + "</p>" +
+    "</div>" +
+    '<div class="offgrid">' + cards + "</div>"
+  );
+}
+
+const ON_MARK = '<svg class="mk" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="var(--orange)"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const OFF_MARK = '<svg class="mk" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10.5" fill="none" stroke="var(--faint)" stroke-width="1.6"/><path d="M8 12h8" stroke="var(--faint)" stroke-width="2" stroke-linecap="round"/></svg>';
 
 /**
  * The way a sales call becomes a kickoff.
