@@ -123,6 +123,8 @@ export default {
     const cp = channelPlan(ctx);
     if (cp.target) {
       for (const r of cp.rows) out[ID + ":chg_" + r.id] = change(r.need - r.now);
+      const u = cp.rows.find((r) => r.fixed);
+      if (u) out[ID + ":needU"] = cnt(u.need);
       out[ID + ":chTotal"] = cnt(cp.planned);
       out[ID + ":chChg"] = change(cp.planned - cp.totalNow);
       out[ID + ":chGap"] = gapLine(cp);
@@ -259,8 +261,9 @@ const EXTRA_LABELS = { aeo: "AI search (AEO)", untracked: "Not tracked by channe
  *
  * The starting "needed" holds their own channels flat and splits the gap
  * evenly across ours. It is deliberately independent of any edits, so a
- * number typed on screen never silently moves another; "still to find"
- * shows whatever the edits leave over.
+ * number typed on screen never moves another named channel. Whatever the
+ * edits leave short of the goal lands on "Not tracked by channel", so the
+ * total never drops below what the goal needs.
  */
 function channelPlan(ctx) {
   const m = ctx.state.m.marketing || {};
@@ -285,10 +288,13 @@ function channelPlan(ctx) {
   }));
   const tracked = rows.reduce((a, r) => a + r.now, 0);
   const untracked = Math.max(0, n(g.leadsNow) - tracked);
-  if (untracked) rows.push({ id: "untracked", label: EXTRA_LABELS.untracked, ours: false, running: true, now: untracked, fixed: true });
   const totalNow = tracked + untracked;
 
   const target = numbers(ctx).win.leads || n(g.leadsTarget);
+  // With a goal, the untracked row always shows: it's where a shortfall goes.
+  if (untracked || (target && rows.length)) {
+    rows.push({ id: "untracked", label: EXTRA_LABELS.untracked, ours: false, running: true, now: untracked, fixed: true });
+  }
   const gap = Math.max(0, target - totalNow);
   const share = rows.filter((r) => r.ours);
   rows.forEach((r) => { r.base = r.now; });
@@ -304,11 +310,22 @@ function channelPlan(ctx) {
     if (r.edited) edited = true;
     r.need = r.edited ? n(s[k]) : r.base;
   }
+  let short = 0;
+  const fixed = rows.find((r) => r.fixed);
+  if (fixed && target) {
+    const named = rows.reduce((a, r) => a + (r.fixed ? 0 : r.need), 0);
+    fixed.need = Math.max(fixed.now, target - named);
+    short = fixed.need - fixed.now;
+  }
   const planned = rows.reduce((a, r) => a + r.need, 0);
-  return { rows, totalNow, target, planned, edited, ours: share.length };
+  return { rows, totalNow, target, planned, edited, short, ours: share.length };
 }
 
 function gapLine(cp) {
+  if (cp.short > 0) {
+    return "<strong>" + cnt(cp.short) + " leads</strong> a month aren&rsquo;t on a channel yet, so they sit under " +
+      "&ldquo;" + EXTRA_LABELS.untracked + "&rdquo;.";
+  }
   const left = cp.target - cp.planned;
   if (left > 0) return "Still <strong>" + cnt(left) + " leads</strong> a month to find &mdash; put them on a channel.";
   if (left < 0) return "That plans <strong>" + cnt(-left) + " more</strong> than the " + cnt(cp.target) + " a month the goal needs.";
@@ -328,7 +345,7 @@ function channelCard(ctx) {
       '<th scope="row">' + esc(r.label) + tag(r) + "</th>" +
       "<td>" + cnt(r.now) + "</td>" +
       (cp.target
-        ? "<td>" + (r.fixed ? cnt(r.need)
+        ? "<td>" + (r.fixed ? live("needU", cnt(r.need))
             : '<input type="text" inputmode="numeric" class="nsin" data-f="' + ID + "|need_" + esc(r.id) +
                 '" value="' + r.need + '" aria-label="Leads needed from ' + esc(r.label) + '">') + "</td>" +
           '<td class="chg">' + live("chg_" + r.id, change(r.need - r.now)) + "</td>"
