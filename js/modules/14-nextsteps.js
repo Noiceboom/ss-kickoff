@@ -19,6 +19,7 @@ import {
 } from "../ui.js";
 import { slot, getRows, getField, isSkipped } from "../state.js";
 import { OFFER } from "./00-intro.js";
+import { bookRate } from "./02-goals.js";
 
 const ID = "nextsteps";
 
@@ -175,7 +176,7 @@ export default {
  * so the three can never disagree.
  *
  * Everything on the left is Goals as typed: revenue now, the goal, and
- * today's leads, booking rate, close rate and average order. Today's
+ * today's leads, appointments, close rate and average order. Today's
  * funnel is those KPIs multiplied out; when that product doesn't land
  * within 10% of the revenue on Goals, `mismatch` says so rather than the
  * screen quietly picking one of the two.
@@ -190,11 +191,15 @@ function numbers(ctx) {
   const s = ctx.state.m[ID] || {};
   const n = (v) => Number(String(v == null ? "" : v).replace(/[^0-9.]/g, "")) || 0;
 
+  // Booked is the appointment count from Goals when they gave one, and the
+  // booking rate is then what that count works out to; otherwise booked
+  // comes from the booking-rate slider.
+  const appts = n(g.apptsNow);
   const now = {
-    leads: n(g.leadsNow), appt: n(g.apptRate), close: n(g.closeRate), ticket: n(g.avgTicket),
+    leads: n(g.leadsNow), appt: Math.round(bookRate(g) || 0), close: n(g.closeRate), ticket: n(g.avgTicket),
   };
-  now.booked = now.leads && now.appt ? Math.round(now.leads * now.appt / 100) : 0;
-  now.jobs = now.close ? Math.round((now.appt ? now.booked : now.leads) * now.close / 100) : 0;
+  now.booked = appts || (now.leads && now.appt ? Math.round(now.leads * now.appt / 100) : 0);
+  now.jobs = now.close ? Math.round((now.booked || now.leads) * now.close / 100) : 0;
   now.rev = now.jobs && now.ticket ? now.jobs * now.ticket : 0;
 
   const goal = n(g.revTarget);

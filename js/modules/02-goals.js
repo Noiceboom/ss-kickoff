@@ -61,13 +61,17 @@ export const COPY = {
     discovery: "Calls and forms from everywhere, not just paid.",
     same: true,
   },
+  apptsNow: {
+    kickoff: "Appointments actually booked and run, not leads. The step between the phone ringing and the close.",
+    discovery: "Appointments actually booked and run, not leads. A rough number is fine.",
+  },
   avgTicket: {
     kickoff: "What a closed job is worth. This sets what we can afford to pay for a lead.",
     discovery: "What a closed job is worth to you, on average.",
   },
   closeRate: {
-    kickoff: "Of the leads that come in, how many turn into paid work. If they don't know, that itself is a finding.",
-    discovery: "Of the leads that come in, how many turn into paid work. A rough number is fine.",
+    kickoff: "Of the appointments they run, how many turn into paid work. If they don't know, that itself is a finding.",
+    discovery: "Of the appointments you run, how many turn into paid work. A rough number is fine.",
   },
 
   targetLabel: { kickoff: "Where they want to be", discovery: "Where you want to be" },
@@ -191,6 +195,32 @@ function num(s, key) {
   return isFinite(n) ? n : null;
 }
 
+/**
+ * Leads → appointments → closed jobs → revenue. Close rate is a share of
+ * appointments, so every "what a lead is worth" and "leads it takes" runs
+ * through the booking rate too. Next steps reads the same two functions,
+ * which is what keeps its funnel and this screen in agreement.
+ *
+ * Booking rate comes from the counts when both are given (what actually
+ * happened), else the booking-rate slider. With neither, close rate is
+ * applied to leads directly, which is how this screen used to read it.
+ */
+export function bookRate(s) {
+  const leads = num(s, "leadsNow");
+  const appts = num(s, "apptsNow");
+  if (leads && appts) return (appts / leads) * 100;
+  return num(s, "apptRate");
+}
+
+/** Revenue one lead is worth on average, or null without a ticket and close rate. */
+export function leadWorth(s) {
+  const ticket = num(s, "avgTicket");
+  const close = num(s, "closeRate");
+  if (!ticket || !close) return null;
+  const book = bookRate(s);
+  return ticket * (close / 100) * (book ? book / 100 : 1);
+}
+
 /* ── module ───────────────────────────────────────────── */
 
 export default {
@@ -236,6 +266,9 @@ export default {
           }) +
           slider(ID, "leadsTarget", "Leads per month, goal", v("leadsTarget"), {
             ...SCALE.leads, start: 250,
+          }) +
+          slider(ID, "apptsNow", "Appointments per month", v("apptsNow"), {
+            ...SCALE.leads, start: 60, help: t("apptsNow"),
           }) +
           slider(ID, "avgTicket", "Average ticket", v("avgTicket"), {
             ...SCALE.ticket, start: 900, help: t("avgTicket"),
@@ -349,15 +382,28 @@ export default {
     if (revNow && ticket) {
       const jobs = Math.round(revNow / ticket);
       let line = "That's about <strong>" + jobs.toLocaleString("en-US") + " closed jobs</strong> a month.";
-      if (leadsNow && rate) {
-        const implied = Math.round(leadsNow * (rate / 100));
+      const appts = num(s, "apptsNow");
+      const book = bookRate(s);
+      const base = appts || (leadsNow ? leadsNow * (book ? book / 100 : 1) : 0);
+      if (base && rate) {
+        const implied = Math.round(base * (rate / 100));
         const off = implied ? Math.abs(implied - jobs) / jobs : 1;
+        const from = appts || book ? "appointment" : "lead";
         line += off > 0.35
-          ? ' Their lead and close numbers imply <strong>' + implied.toLocaleString("en-US") +
+          ? " Their " + from + " and close numbers imply <strong>" + implied.toLocaleString("en-US") +
             "</strong> — worth asking which figure is the shaky one."
-          : " Their lead volume and close rate line up with that.";
+          : " Their " + from + " numbers and close rate line up with that.";
       }
       out["goals:today"] = line;
+    }
+    const apptsNow = num(s, "apptsNow");
+    if (leadsNow && apptsNow) {
+      const r = Math.round((apptsNow / leadsNow) * 100);
+      const typed = num(s, "apptRate");
+      out["goals:today"] = (out["goals:today"] ? out["goals:today"] + " " : "") +
+        apptsNow.toLocaleString("en-US") + " appointments from " + leadsNow.toLocaleString("en-US") +
+        " leads is a <strong>" + r + "% booking rate</strong>" +
+        (typed && Math.abs(typed - r) > 10 ? " &mdash; the booking-rate slider below says " + typed + "%." : ".");
     }
 
     // the gap — what the target actually costs in leads
@@ -365,9 +411,10 @@ export default {
       const lift = Math.round(((revTarget - revNow) / revNow) * 100);
       let line = "That's <strong>+" + lift + "%</strong> on today, or " +
         "<strong>" + money(revTarget - revNow) + "</strong> more a month.";
-      if (ticket && rate) {
-        const leadsNeeded = Math.round((revTarget / ticket) / (rate / 100));
-        line += " At their ticket and close rate that needs about <strong>" +
+      const worth = leadWorth(s);
+      if (worth) {
+        const leadsNeeded = Math.round(revTarget / worth);
+        line += " At their ticket, booking and close rates that needs about <strong>" +
           leadsNeeded.toLocaleString("en-US") + " leads a month</strong>";
         line += leadsNow ? " — up from " + leadsNow.toLocaleString("en-US") + "." : ".";
       }
@@ -387,9 +434,9 @@ export default {
       const cpl = adSpend / leadsTarget;
       let line = "That's <strong>" + money(Math.round(cpl)) +
         "</strong> a lead to hit " + leadsTarget.toLocaleString("en-US") + " at that spend.";
-      if (ticket && rate) {
+      const worth = leadWorth(s);
+      if (worth) {
         // What a lead is worth, so the cost has something to be judged against.
-        const worth = ticket * (rate / 100);
         line += " A lead is worth about <strong>" + money(Math.round(worth)) + "</strong> at their " +
           "ticket and booking rate" +
           (cpl >= worth
@@ -438,25 +485,27 @@ export default {
 
     put("Revenue / mo", span("revNow", "revTarget", money));
     put("Leads / mo", span("leadsNow", "leadsTarget", (x) => String(x)));
+    put("Appointments / mo", filled(s.apptsNow) ? String(s.apptsNow) : "");
     put("Average ticket", filled(s.avgTicket) ? money(s.avgTicket) : "");
     if (revNow && revTarget && revTarget > revNow) {
       put("Gap to goal", money(revTarget - revNow) + " / mo (+" + Math.round(((revTarget - revNow) / revNow) * 100) + "%)");
     }
-    if (revTarget && ticket && rate) {
-      put("Leads needed at goal", Math.round((revTarget / ticket) / (rate / 100)).toLocaleString("en-US") + " / mo at this ticket and booking rate");
+    const worthS = leadWorth(s);
+    if (revTarget && worthS) {
+      put("Leads needed at goal", Math.round(revTarget / worthS).toLocaleString("en-US") + " / mo at this ticket, booking and close rate");
     }
 
     put("Response time", filled(s.speedToLead) ? s.speedToLead + " min" : "");
     put("Appointment booking rate", pct(s.apptRate));
     put("Sales booking rate", filled(s.closeRate) ? pct(s.closeRate) : "");
     put("Review rate", pct(s.reviewRate));
-    if (ticket && rate) put("A lead is worth", money(Math.round(ticket * (rate / 100))));
+    if (worthS) put("A lead is worth", money(Math.round(worthS)));
 
     put("Marketing budget", filled(s.budget) ? money(s.budget) + " / mo" : "");
     put("Ad spend", filled(s.adSpend) ? money(s.adSpend) + " / mo" : "");
     if (adSpend && leadsTarget) {
       const cpl = adSpend / leadsTarget;
-      const worth = ticket && rate ? ticket * (rate / 100) : null;
+      const worth = worthS;
       put("Cost per lead at goal", money(Math.round(cpl)) +
         (worth ? " — " + (cpl >= worth ? "more than a lead returns" : "about " + Math.round(worth / cpl) + "x return") : ""));
     }
@@ -473,8 +522,8 @@ export default {
     // revenue target needs; when the leads target they gave is well short of
     // it, one of the two numbers is wrong, and that is worth knowing before
     // anything is priced against either.
-    if (revTarget && ticket && rate && leadsTarget) {
-      const needed = Math.round((revTarget / ticket) / (rate / 100));
+    if (revTarget && worthS && leadsTarget) {
+      const needed = Math.round(revTarget / worthS);
       if (needed > leadsTarget * 1.25) {
         open.push({
           what: "The two goals disagree",
