@@ -115,7 +115,7 @@ export default {
       ? esc(c.name) + (c.market ? " &mdash; " + esc(c.market) : "")
       : "this client";
 
-    const agenda = modules.slice(1, -1).map((m, i) =>
+    const agenda = modules.filter((m) => !m.embedIn).slice(1, -1).map((m, i) =>
       '<li><span class="k">' + (i + 1) + '</span><span class="v">' + esc(m.nav) + "</span></li>"
     ).join("");
 

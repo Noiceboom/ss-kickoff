@@ -269,6 +269,8 @@ function loose(s) {
 export default {
   id: ID,
   nav: "Recording",
+  // Drawn at the top of the readout, not as a screen of its own.
+  embedIn: "readout",
   title: "What was actually said",
   lede: COPY.lede.kickoff,
   discovery: { lede: COPY.lede.discovery },
@@ -278,8 +280,12 @@ export default {
   render(ctx) {
     const s = slot(ctx.state, ID);
     const t = sayer(COPY, ctx.mode);
+    const lede = ctx.mode === DISCOVERY ? COPY.lede.discovery : COPY.lede.kickoff;
     return (
-      sectionHead(ctx.num, this.title, ctx.mode === DISCOVERY ? COPY.lede.discovery : COPY.lede.kickoff) +
+      (ctx.embedded
+        ? '<div class="embedhead"><div class="mlabel">After the call</div><h3>' + esc(this.title) + "</h3>" +
+            '<p class="lede">' + esc(lede) + "</p></div>"
+        : sectionHead(ctx.num, this.title, lede)) +
       skipRow(ID, isSkipped(ctx.state, ID)) +
       recCard(ctx, s, t) +
       promptCard(ctx, s) +

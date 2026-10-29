@@ -71,10 +71,20 @@ function useMode(mode) {
 /** This screen's label, in the words this document uses for it. */
 function navOf(m) { return variant(m, R.mode, "nav"); }
 
-function moduleAt(id) { return byId.get(id) || MODULES[0]; }
+// A module with `embedIn` is drawn inside another screen rather than as a
+// step of its own: it keeps its id, its state and its place in the
+// registry (so exports, imports and the readout are unchanged), but it
+// gets no pill, no number and no Back/Next stop. Asking for it lands on
+// the screen that hosts it.
+function steps() { return MODULES.filter((m) => !m.embedIn); }
+function moduleAt(id) {
+  const m = byId.get(id);
+  if (m && m.embedIn && byId.has(m.embedIn)) return byId.get(m.embedIn);
+  return m || MODULES[0];
+}
 /** Two-digit screen number, derived from position in the registry. */
 function pad(i) { return (i < 10 ? "0" : "") + i; }
-function indexOf(id) { const i = MODULES.findIndex((m) => m.id === id); return i < 0 ? 0 : i; }
+function indexOf(id) { const i = steps().findIndex((m) => m.id === id); return i < 0 ? 0 : i; }
 
 function ctx(num) {
   return {
@@ -234,15 +244,16 @@ function statusOf(m) {
 function renderPills() {
   const cur = R.state.step;
   const el = document.getElementById("pills");
-  el.innerHTML = MODULES.map((m, i) => {
+  el.innerHTML = steps().map((m, i) => {
     const st = statusOf(m);
     return '<button class="pill' + (m.id === cur ? " on" : "") + '" data-st="' + st +
       '" data-go="' + esc(m.id) + '"><b>' + (i < 10 ? "0" : "") + i + "</b>" +
       esc(navOf(m)) + '<span class="dot"></span></button>';
   }).join("");
 
-  const done = MODULES.filter((m) => { const s = statusOf(m); return s === "done" || s === "skipped"; }).length;
-  const pct = Math.round((done / (MODULES.length - 1)) * 100);
+  const visible = steps();
+  const done = visible.filter((m) => { const s = statusOf(m); return s === "done" || s === "skipped"; }).length;
+  const pct = Math.round((done / (visible.length - 1)) * 100);
   document.getElementById("pfill").style.width = Math.min(100, pct) + "%";
   document.getElementById("ppct").textContent = Math.min(100, pct) + "%";
 
@@ -289,6 +300,8 @@ function restoreFocus(f) {
 function render() {
   const f = captureFocus();
   const m = moduleAt(R.state.step);
+  // a session saved on a screen that is now embedded reopens on its host
+  R.state.step = m.id;
   const i = indexOf(m.id);
   const skipped = !!(m.skippable && S.isSkipped(R.state, m.id));
   const mount = document.getElementById("mount");
@@ -365,8 +378,9 @@ function mismatchBanner() {
 }
 
 function navFor(i) {
-  const prev = i > 0 ? MODULES[i - 1] : null;
-  const next = i < MODULES.length - 1 ? MODULES[i + 1] : null;
+  const list = steps();
+  const prev = i > 0 ? list[i - 1] : null;
+  const next = i < list.length - 1 ? list[i + 1] : null;
   let h = '<div class="navrow">';
   if (prev) h += '<button class="btn ghost" data-go="' + esc(prev.id) + '">Back</button>';
   if (next) h += '<button class="btn" data-go="' + esc(next.id) + '">' + esc(navOf(next)) + " " + ICON.next + "</button>";
@@ -376,7 +390,7 @@ function navFor(i) {
 function goto(id) {
   if (!byId.has(id)) return;
   flushSave();
-  R.state.step = id;
+  R.state.step = moduleAt(id).id;
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
   queueSave();

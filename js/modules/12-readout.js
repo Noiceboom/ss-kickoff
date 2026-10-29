@@ -779,9 +779,20 @@ export default {
         '<button class="btn ghost" data-action="clear" style="margin-left:auto;color:var(--risk)">Clear this kickoff</button>' +
       "</div>";
 
+    // Screens that live on this one (the recording). Screen-only like the
+    // rest, so none of it reaches the printed document.
+    const embedded = ctx.modules.filter((m) => m.embedIn === ID).map((m) => {
+      try {
+        return '<div class="embedded">' + m.render({ ...ctx, embedded: true }) + "</div>";
+      } catch (e) {
+        if (window.console) console.error("[module:" + m.id + "]", e);
+        return "";
+      }
+    }).join("");
+
     return (
       '<div class="screenonly">' +
-        sectionHeadFor(this, ctx) + tabs + view + actions +
+        sectionHeadFor(this, ctx) + embedded + tabs + view + actions +
       "</div>" +
       // Rendered on every tab and hidden on screen. Print then emits the
       // client document no matter which tab is open — the old behaviour
