@@ -9,18 +9,22 @@
 // Most of it is read from other screens rather than asked again — the
 // revenue numbers and funnel from Goals, the plan from the intro cards,
 // what we need from them from every screen's open items. The only new
-// answers are the goal-row rates and the next meeting.
+// answers are the goal-row rates, plus any edits to the plan and asks.
 //
 // Kickoff only. A sales call ends on a proposal, not a plan.
 
-import { sectionHeadFor, field, rowGroup, filled, money, esc, ICON } from "../ui.js";
-import { slot, getRows, getField, isSkipped } from "../state.js";
+import { sectionHeadFor, rowGroup, warnBox, filled, money, esc, ICON } from "../ui.js";
+import { getRows, getField, isSkipped } from "../state.js";
 import { OFFER } from "./00-intro.js";
 import { bookRate } from "./02-goals.js";
 
 const ID = "nextsteps";
 
 const ASKS_SHOWN = 5;
+
+const CALENDAR = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/>' +
+  '<path d="M16 2v4M8 2v4M3 10h18"/></svg>';
 
 const ASK_COLS = [
   { key: "ask", label: "What we need", type: "longtext", placeholder: "Send us your logo and a few job photos" },
@@ -76,8 +80,6 @@ export default {
   },
 
   render(ctx) {
-    const s = slot(ctx.state, ID);
-    const v = (k) => (s[k] !== undefined ? s[k] : "");
     const edited = getRows(ctx.state, ID, "plan");
 
     return (
@@ -98,17 +100,11 @@ export default {
         asksFromThem(ctx) +
       "</div>" +
 
-      '<div class="card">' +
-        '<div class="mlabel">When we talk next</div>' +
-        '<div class="fields" style="margin-top:16px">' +
-          field(ID, "meetDate", "Date", v("meetDate"), { type: "date" }) +
-          field(ID, "meetTime", "Time", v("meetTime"), { type: "time" }) +
-          field(ID, "meetHow", "Where", v("meetHow"), { placeholder: "Zoom, link in the invite" }) +
-          field(ID, "meetFor", "What it's for", v("meetFor"), {
-            wide: true, placeholder: "Walk through everything we built before it goes live",
-          }) +
-        "</div>" +
-      "</div>" +
+      // A prompt, not a form: the meeting gets booked in the calendar
+      // while everyone is still on the call.
+      warnBox("<strong>Let&rsquo;s get our next meeting scheduled.</strong><br>" +
+        "Pick a time now, while everyone&rsquo;s still here, and the invite goes out with the follow-up email.",
+        CALENDAR) +
 
       closer(ctx)
     );
@@ -125,17 +121,13 @@ export default {
   },
 
   status(ctx) {
-    return filled((ctx.state.m[ID] || {}).meetDate) ? "done" : "empty";
+    // Nothing here is a question: the screen is ready the moment it opens.
+    return "done";
   },
 
   summary(ctx) {
-    const s = ctx.state.m[ID] || {};
     const rows = [];
     const put = (k, val) => { if (filled(val)) rows.push([k, val]); };
-
-    put("Next meeting", [prettyDate(s.meetDate), prettyTime(s.meetTime)].filter(Boolean).join(", "));
-    put("Where", s.meetHow);
-    put("What it's for", s.meetFor);
 
     const { win, goal } = numbers(ctx);
     if (win.leads) {
@@ -146,14 +138,9 @@ export default {
     const asks = editedAsks(ctx);
     if (asks.length) put("What we need from you", asks.map((a, i) => (i + 1) + ". " + a).join("  "));
 
-    const open = [];
-    if (!filled(s.meetDate)) {
-      open.push({ what: "No next meeting booked", detail: "The call ended without a date for the next one." });
-    }
-
     const plan = planFor(ctx).rows;
     return {
-      rows, open,
+      rows,
       table: { head: ["step", "what happens", "from you"], body: plan.map((r, i) => [String(i + 1), r.what || "", r.you || ""]) },
     };
   },
@@ -378,24 +365,8 @@ function closer(ctx) {
   return (
     '<div class="nsbye">' +
       "<h2>Have an <span class=\"volt\">amazing day.</span></h2>" +
-      "<p>We&rsquo;ll follow up by email with everything from today: the plan, the next two weeks and the invite" +
+      "<p>We&rsquo;ll follow up by email with everything from today: the plan, what happens next and the meeting invite" +
         (to ? " &mdash; it goes to " + to : "") + ".</p>" +
     "</div>"
   );
-}
-
-/* ── formatting ───────────────────────────────────────── */
-
-function prettyDate(iso) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
-  if (!m) return String(iso || "");
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-}
-
-function prettyTime(hm) {
-  const m = /^(\d{2}):(\d{2})$/.exec(String(hm || ""));
-  if (!m) return String(hm || "");
-  const h = Number(m[1]);
-  return (h % 12 || 12) + ":" + m[2] + (h < 12 ? " am" : " pm");
 }
