@@ -118,7 +118,7 @@ h3{margin:0;font-family:"OSCondensed",sans-serif;font-weight:800;font-size:19px;
 .f > label{font-family:"OSCondensed",sans-serif;font-weight:800;font-size:12px;letter-spacing:1.3px;
   text-transform:uppercase;color:var(--char);margin-bottom:7px}
 .f .help{font-size:13px;color:var(--muted);margin-top:6px;line-height:1.45}
-.f input[type=text],.f input[type=tel],.f input[type=email],.f input[type=number],.f textarea,.f select{
+.f input[type=text],.f input[type=tel],.f input[type=email],.f input[type=number],.f input[type=date],.f input[type=time],.f textarea,.f select{
   width:100%;border:1px solid var(--char);border-radius:12px;background:var(--body);padding:12px 14px;
   font-size:15px;transition:border-color 150ms var(--ease),background 150ms var(--ease)}
 .f input:focus,.f textarea:focus,.f select:focus{background:var(--light);box-shadow:var(--sh-sm)}
@@ -488,6 +488,58 @@ pre.raw{background:var(--char);color:var(--cream);border-radius:14px;padding:20p
 @keyframes sway{0%{transform:rotate(-6deg)}50%{transform:rotate(-1deg)}100%{transform:rotate(-6deg)}}
 .hero{display:grid;grid-template-columns:1fr auto;gap:30px;align-items:end;padding:8px 0 34px}
 .section{padding:40px 0 0}
+/* next steps */
+.nshero{padding:34px 36px}
+.nsrev{display:grid;grid-template-columns:1fr auto 1fr;gap:24px;align-items:end}
+.nsbig{font-family:"OSCondensed",sans-serif;font-weight:800;font-size:clamp(40px,6vw,64px);line-height:1;
+  letter-spacing:.3px;margin-top:8px;color:var(--cream)}
+.nsbig.gold{color:var(--gold)}
+.nsbig .per{font-size:.4em;color:#8d9490;margin-left:4px}
+.nsarrow{color:var(--orange);padding-bottom:14px}
+.nsarrow svg{width:30px;height:30px}
+.nsgap{margin-top:18px;padding-top:16px;border-top:1px solid #3a4143;font-size:15px;color:#c9c3b4}
+.nsgap .cond{color:var(--orange);font-size:19px;text-transform:uppercase}
+.nsfun{margin-top:22px;padding-top:20px;border-top:1px solid #3a4143}
+.nssteps{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1.2fr);
+  align-items:start;gap:10px 14px;margin-top:14px}
+.nsfun.win{margin-top:24px}
+.nsfun.win .mlabel{color:var(--gold)}
+.nsstep{min-width:0}
+.nsstep .v{font-family:"OSCondensed",sans-serif;font-weight:800;font-size:34px;line-height:1;color:var(--cream);min-height:34px}
+.nsstep:last-child .v{color:var(--gold)}
+.nsstep .l{font-family:"OSCondensed",sans-serif;font-weight:800;font-size:11px;letter-spacing:1.4px;
+  text-transform:uppercase;color:#8d9490;margin-top:6px}
+.nsstep .s{font-size:12px;color:#a3aaa6;margin-top:2px}
+.nsop{font-family:"OSCondensed",sans-serif;font-weight:800;font-size:26px;line-height:34px;color:var(--orange)}
+/* The goal row's inputs read as the numbers themselves: no box, just a
+   dashed underline that says "you can change this". */
+.nsrate{display:inline-flex;align-items:baseline;gap:0;white-space:nowrap;cursor:text}
+.nsorder{display:inline-flex;align-items:baseline;cursor:text;font-family:"OSCondensed",sans-serif;
+  font-weight:800;font-size:34px;line-height:1;color:var(--cream)}
+.nsrate input,.nsorder input{background:transparent;border:0;border-bottom:1.5px dashed #6f7775;border-radius:0;
+  padding:0;margin:0;color:var(--cream);field-sizing:content;transition:border-color 150ms var(--ease)}
+.nsrate input{font-family:inherit;font-size:12px;font-weight:700;width:2.6ch;min-width:1.6ch}
+.nsorder input{font:inherit;width:4.4ch;min-width:2ch}
+.nsrate input:hover,.nsorder input:hover{border-bottom-color:#a3aaa6}
+.nsrate input:focus,.nsorder input:focus{border-bottom:1.5px solid var(--gold);outline:none}
+.nsoff{margin-top:14px;padding:10px 14px;border:1px solid rgba(221,180,88,.5);border-radius:12px;
+  background:rgba(221,180,88,.08);font-size:13.5px;color:#e6d6ae;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.nsoff .btn{color:var(--cream);border-color:#5a6264}
+.nsreset{background:none;border:0;padding:0;margin-left:6px;color:var(--gold);font:inherit;text-decoration:underline;
+  text-underline-offset:3px;cursor:pointer}
+.nshint{margin-top:6px;font-size:12px;color:#8d9490}
+.nsneed{margin-top:18px;font-size:16px;color:#c9c3b4}
+.nsneed strong{color:var(--orange);font-family:"OSCondensed",sans-serif;font-weight:800;font-size:19px;
+  letter-spacing:.3px;text-transform:uppercase}
+.nsrun{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:14px}
+.nsbucket{border:1px solid var(--char);border-radius:14px;padding:12px 14px;box-shadow:var(--sh-sm);background:var(--body)}
+.nsbucket .n{font-family:"OSCondensed",sans-serif;font-weight:800;font-size:18px;letter-spacing:.5px;text-transform:uppercase}
+.nsbucket .w{font-size:13px;color:var(--muted);margin-top:2px}
+.nsbye{text-align:center;padding:30px 0 10px}
+.nsbye h2{font-size:clamp(34px,5vw,54px)}
+.nsbye h2 .volt{font-size:1.12em}
+.nsbye p{margin:14px auto 0;max-width:560px;font-size:16px;color:var(--green-text)}
+
 /* intro: what we're providing */
 .offhead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:6px 0 18px;flex-wrap:wrap}
 .offhead h2 .volt{font-size:1.1em}
@@ -526,7 +578,9 @@ pre.raw{background:var(--char);color:var(--cream);border-radius:14px;padding:20p
 
 @media (max-width:760px){
   .hero{grid-template-columns:1fr}.sam{display:none}
-  .offgrid{grid-template-columns:1fr}.offhead .aside{text-align:left}
+  .offgrid{grid-template-columns:1fr}
+  .nsrev{grid-template-columns:1fr;gap:18px}.nsarrow{display:none}
+  .nssteps{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 16px}.nssteps .nsop{display:none}.offhead .aside{text-align:left}
   .card{padding:22px 20px;border-radius:20px}
   .dark{padding:24px 22px;border-radius:20px}
   .pos{width:30px;font-size:21px}.arrows{display:none}

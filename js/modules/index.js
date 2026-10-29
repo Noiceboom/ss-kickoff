@@ -37,6 +37,7 @@ import conversions from "./10-conversions.js";
 import brand from "./09-brand.js";
 import profiles from "./13-profiles.js";
 import access from "./11-access.js";
+import nextsteps from "./14-nextsteps.js";
 import readout from "./12-readout.js";
 
 export const KICKOFF = [
@@ -51,6 +52,7 @@ export const KICKOFF = [
   brand,
   profiles,
   access,
+  nextsteps,
   transcript,
   readout,
 ];

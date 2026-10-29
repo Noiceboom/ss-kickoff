@@ -733,6 +733,26 @@ document.addEventListener("click", (e) => {
     render(); queueSave(); return;
   }
 
+  // Several answers back to empty at once, e.g. overrides returning to
+  // whatever another screen says.
+  if ((el = t.closest("[data-clear]"))) {
+    const [mod, keys] = el.getAttribute("data-clear").split("|");
+    for (const k of keys.split(",")) S.setField(R.state, mod, k, "");
+    render(); queueSave(); return;
+  }
+
+  // A module's default rows, copied in only when there are none — so a
+  // stray click can never overwrite rows someone has already edited.
+  if ((el = t.closest("[data-seedrows]"))) {
+    const [mod, key] = el.getAttribute("data-seedrows").split("|");
+    const owner = byId.get(mod);
+    const seed = owner && owner.seeds && owner.seeds[key];
+    if (seed && !S.getRows(R.state, mod, key).length) {
+      S.ensure(R.state, mod)[key] = seed.map((r) => ({ ...r }));
+    }
+    render(); queueSave(); return;
+  }
+
   if ((el = t.closest("[data-delrow]"))) {
     const [mod, key, idx] = el.getAttribute("data-delrow").split("|");
     const rows = S.getRows(R.state, mod, key).slice();

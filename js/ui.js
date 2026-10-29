@@ -114,7 +114,8 @@ export function field(mod, key, label, value, opts) {
       '<div class="pre' + (sfx ? " sfx" : "") + '"><span class="sym">' + sym + "</span>" +
       '<input type="text" inputmode="decimal" data-f="' + name + '" value="' + esc(value) + '"' + ph + "></div>";
   } else {
-    const it = type === "number" ? "number" : type === "email" ? "email" : type === "phone" ? "tel" : "text";
+    const it = type === "number" ? "number" : type === "email" ? "email" : type === "phone" ? "tel"
+      : type === "date" ? "date" : type === "time" ? "time" : "text";
     input = '<input type="' + it + '" data-f="' + name + '" value="' + esc(value) + '"' + ph + ">";
   }
 
