@@ -12,7 +12,7 @@
 // never do.
 
 import {
-  sectionHeadFor, skipRow, field, chipGroup, slider, derived,
+  sectionHeadFor, skipRow, field, chipGroup, slider, derived, warnBox,
   statusFor, filled, money, pct,
 } from "../ui.js";
 import { isSkipped, slot } from "../state.js";
@@ -221,6 +221,72 @@ export function leadWorth(s) {
   return ticket * (close / 100) * (book ? book / 100 : 1);
 }
 
+/** How far two figures can drift apart before the check calls it out. */
+const MISS = 0.2;
+
+/**
+ * Numbers on this screen that can't all be true at once. Each one is a
+ * sentence the AM can read straight to the client, naming the figures
+ * that disagree so the conversation goes to the shaky one.
+ */
+function mathChecks(s) {
+  const f = (v) => Math.round(v).toLocaleString("en-US");
+  const far = (a, b) => Math.abs(a - b) / Math.max(a, b) > MISS;
+  const revNow = num(s, "revNow");
+  const revTarget = num(s, "revTarget");
+  const leadsNow = num(s, "leadsNow");
+  const leadsTarget = num(s, "leadsTarget");
+  const appts = num(s, "apptsNow");
+  const ticket = num(s, "avgTicket");
+  const close = num(s, "closeRate");
+  const typed = num(s, "apptRate");
+  const out = [];
+
+  if (leadsNow && appts && appts > leadsNow) {
+    out.push(f(appts) + " appointments from " + f(leadsNow) + " leads can&rsquo;t happen. One of the two is off.");
+  } else if (leadsNow && appts && typed && Math.abs(typed - (appts / leadsNow) * 100) > 10) {
+    out.push(f(appts) + " appointments from " + f(leadsNow) + " leads is a " + f((appts / leadsNow) * 100) +
+      "% booking rate, but the booking-rate slider says " + f(typed) + "%. The counts win.");
+  }
+
+  const book = bookRate(s);
+  const booked = appts || (leadsNow && book ? leadsNow * (book / 100) : 0);
+  if (revNow && ticket && close && booked) {
+    const jobs = booked * (close / 100);
+    const made = jobs * ticket;
+    if (far(made, revNow)) {
+      out.push("Today doesn&rsquo;t add up: " + (leadsNow ? f(leadsNow) + " leads &rarr; " : "") +
+        f(booked) + " appointments &rarr; " + f(jobs) + " jobs at " + money(ticket) + " is " +
+        money(Math.round(made)) + " a month, not " + money(revNow) +
+        ". Check revenue, leads, appointments, close rate and ticket.");
+    }
+  }
+
+  const worth = leadWorth(s);
+  if (revTarget && leadsTarget && worth) {
+    const brings = leadsTarget * worth;
+    if (far(brings, revTarget)) {
+      out.push("The goals don&rsquo;t match: " + f(leadsTarget) + " leads a month at today&rsquo;s rates brings about " +
+        money(Math.round(brings)) + ", not " + money(revTarget) + ". That revenue takes about " +
+        f(revTarget / worth) + " leads, or a better booking rate, close rate or ticket.");
+    }
+  }
+
+  if (revNow && revTarget && revTarget <= revNow) {
+    out.push("The revenue goal is at or below today&rsquo;s " + money(revNow) + ". Worth checking that&rsquo;s deliberate.");
+  }
+  if (leadsNow && leadsTarget && leadsTarget < leadsNow && (!revTarget || !revNow || revTarget > revNow)) {
+    out.push("The leads goal (" + f(leadsTarget) + ") is below today&rsquo;s " + f(leadsNow) + " while revenue is meant to grow.");
+  }
+
+  const budget = num(s, "budget");
+  const adSpend = num(s, "adSpend");
+  if (budget && adSpend && adSpend > budget) {
+    out.push("Ad spend (" + money(adSpend) + ") is more than the whole marketing budget (" + money(budget) + ").");
+  }
+  return out;
+}
+
 /* ── module ───────────────────────────────────────────── */
 
 export default {
@@ -277,6 +343,7 @@ export default {
         derived("goals:today") +
         derived("goals:gap") +
       "</div>" +
+      '<div class="mathcheck" data-derived="goals:check"></div>' +
 
       '<div class="card">' +
         '<div class="mlabel">What happens to a lead</div>' +
@@ -389,10 +456,7 @@ export default {
         const implied = Math.round(base * (rate / 100));
         const off = implied ? Math.abs(implied - jobs) / jobs : 1;
         const from = appts || book ? "appointment" : "lead";
-        line += off > 0.35
-          ? " Their " + from + " and close numbers imply <strong>" + implied.toLocaleString("en-US") +
-            "</strong> — worth asking which figure is the shaky one."
-          : " Their " + from + " numbers and close rate line up with that.";
+        if (off <= MISS) line += " Their " + from + " numbers and close rate line up with that.";
       }
       out["goals:today"] = line;
     }
@@ -402,8 +466,7 @@ export default {
       const typed = num(s, "apptRate");
       out["goals:today"] = (out["goals:today"] ? out["goals:today"] + " " : "") +
         apptsNow.toLocaleString("en-US") + " appointments from " + leadsNow.toLocaleString("en-US") +
-        " leads is a <strong>" + r + "% booking rate</strong>" +
-        (typed && Math.abs(typed - r) > 10 ? " &mdash; the booking-rate slider below says " + typed + "%." : ".");
+        " leads is a <strong>" + r + "% booking rate</strong>.";
     }
 
     // the gap — what the target actually costs in leads
@@ -423,8 +486,6 @@ export default {
           "%</strong> of the target; owners who grow past $5M typically run 6–10%.";
       }
       out["goals:gap"] = line;
-    } else if (revNow && revTarget && revTarget <= revNow) {
-      out["goals:gap"] = "Target is at or below today's revenue — worth checking that's deliberate.";
     }
 
     // what a lead is allowed to cost, if the goal is to be hit on that spend
@@ -446,6 +507,12 @@ export default {
       out["goals:cpl"] = line;
     } else if (adSpend && !leadsTarget) {
       out["goals:cpl"] = "Set a leads goal and this works out what a lead is allowed to cost.";
+    }
+
+    const checks = mathChecks(s);
+    if (checks.length) {
+      out["goals:check"] = warnBox("<strong>The math isn&rsquo;t mathing</strong>" +
+        '<ul class="mclist">' + checks.map((c) => "<li>" + c + "</li>").join("") + "</ul>");
     }
 
     return out;

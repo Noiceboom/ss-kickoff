@@ -605,6 +605,10 @@ pre.raw{background:var(--char);color:var(--cream);border-radius:14px;padding:20p
   border-radius:14px;padding:15px 18px;margin-bottom:24px;font-size:14.5px;line-height:1.5;color:var(--char)}
 .warn svg{flex:none;margin-top:2px;color:var(--warn)}
 .warn strong{font-family:"OSCondensed",sans-serif;font-weight:800;letter-spacing:.5px;text-transform:uppercase}
+.mathcheck:empty{display:none}
+.mathcheck .warn{margin:0 0 24px}
+.mclist{margin:6px 0 0;padding-left:18px}
+.mclist li{margin-top:4px}
 
 @media (max-width:760px){
   .hero{grid-template-columns:1fr}.sam{display:none}
