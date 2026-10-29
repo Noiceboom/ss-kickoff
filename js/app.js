@@ -315,11 +315,24 @@ function render() {
     if (window.console) console.error("[module:" + m.id + "]", e);
   }
 
+  // Screens embedded in this one, each with its own note, under the host.
+  // A host that wants them somewhere else (the readout) draws them itself.
+  const guests = m.placesGuests ? "" : MODULES.filter((g) => g.embedIn === m.id).map((g) => {
+    try {
+      return '<div class="embedded">' + g.render({ ...ctx(), embedded: true }) +
+        (takesNote(g) ? noteFor(g) : "") + "</div>";
+    } catch (e) {
+      if (window.console) console.error("[module:" + g.id + "]", e);
+      return "";
+    }
+  }).join("");
+
   mount.className = "section" + (skipped ? " skipped" : "");
   mount.innerHTML =
     banner() +
     '<div class="body">' + body + "</div>" +
     (takesNote(m) ? noteFor(m) : "") +
+    guests +
     navFor(i);
 
   renderPills();

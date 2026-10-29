@@ -33,7 +33,6 @@ import services from "./05-services.js";
 import whynow from "./06-whynow.js";
 import locations from "./07-locations.js";
 import transcript from "./08-transcript.js";
-import conversions from "./10-conversions.js";
 import brand from "./09-brand.js";
 import profiles from "./13-profiles.js";
 import access from "./11-access.js";
@@ -48,7 +47,6 @@ export const KICKOFF = [
   competitors,
   services,
   locations,
-  conversions,
   brand,
   profiles,
   access,

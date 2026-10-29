@@ -2527,18 +2527,15 @@ for (const m of MODULES) {
     if (co.indexOf("Office manager") === -1) fail("an extra contact reaches the readout with no role");
   }
 
-  // The two new screens are kickoff-only
+  // Profiles is kickoff-only. Conversions was taken off the kickoff on
+  // 2026-10-29 (rarely used on calls); js/modules/10-conversions.js is in
+  // git history if it is ever wanted back.
   const discIds = new Set(DISCOVERY.map((m) => m.id));
-  for (const id of ["conversions", "profiles"]) {
-    if (!MODULES.some((m) => m.id === id)) fail(`the kickoff has no "${id}" screen`);
-    if (discIds.has(id)) fail(`"${id}" is on the sales call — it is post-sale detail`);
-  }
-  const cv = kick("conversions");
-  for (const k of ["phoneSetup", "formTo", "counts", "doesNotCount", "numbers"]) {
-    if (!cv.keys.has(k)) fail(`conversions is missing "${k}"`);
-  }
+  if (!MODULES.some((m) => m.id === "profiles")) fail('the kickoff has no "profiles" screen');
+  if (discIds.has("profiles")) fail('"profiles" is on the sales call — it is post-sale detail');
+  if (MODULES.some((m) => m.id === "conversions")) fail('"conversions" is back on the kickoff — it was removed on purpose');
   const pr = kick("profiles");
-  for (const k of ["gbp", "facebook", "instagram", "other"]) {
+  for (const k of ["gbp", "gbpMore", "facebook", "instagram", "other"]) {
     if (!pr.keys.has(k)) fail(`profiles is missing "${k}"`);
   }
 }

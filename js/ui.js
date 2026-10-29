@@ -54,7 +54,14 @@ export function sectionHead(num, title, lede) {
  * without every module growing a conditional.
  */
 export function sectionHeadFor(mod, ctx) {
-  return sectionHead(ctx.num, variant(mod, ctx.mode, "title"), variant(mod, ctx.mode, "lede"));
+  const title = variant(mod, ctx.mode, "title");
+  const lede = variant(mod, ctx.mode, "lede");
+  // Drawn inside another screen (see `embedIn`): a sub-heading, no number.
+  if (ctx.embedded) {
+    return '<div class="embedhead"><div class="mlabel">' + esc(mod.nav) + "</div><h3>" + esc(title) + "</h3>" +
+      (lede ? '<p class="lede">' + esc(lede) + "</p>" : "") + "</div>";
+  }
+  return sectionHead(ctx.num, title, lede);
 }
 
 export function skipRow(moduleId, skipped) {

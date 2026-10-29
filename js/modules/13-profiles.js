@@ -9,7 +9,8 @@
 // work just as often: nobody can find the Facebook page, and three people
 // spend a morning looking for it.
 //
-// Kickoff only.
+// Kickoff only. One profile field for the main listing, plus rows for
+// any other locations — a multi-location shop has one listing each.
 
 import {
   sectionHeadFor, skipRow, field, rowGroup, statusFor, filled, esc,
@@ -64,6 +65,22 @@ export default {
       "</div>" +
 
       '<div class="card">' +
+        '<div class="mlabel">More Google Business Profiles</div>' +
+        '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
+          "Other locations, or a second listing for the same business." +
+        "</div>" +
+        '<div style="margin-top:18px">' +
+          rowGroup(ID, "gbpMore", [
+            { key: "what", label: "Location", placeholder: "North shop" },
+            { key: "url", label: "Link", placeholder: "https://maps.app.goo.gl/…" },
+          ], getRows(ctx.state, ID, "gbpMore"), {
+            addLabel: "Add a profile",
+            empty: "Just the one so far.",
+          }) +
+        "</div>" +
+      "</div>" +
+
+      '<div class="card">' +
         '<div class="mlabel">Anything else</div>' +
         '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
           "A trade association listing, a franchise page, the directory somebody paid for in 2019." +
@@ -89,12 +106,14 @@ export default {
 
     const rows = [];
     for (const l of LINKS) if (filled(s[l.key])) rows.push([l.label, s[l.key]]);
+    const more = (Array.isArray(s.gbpMore) ? s.gbpMore : []).filter((r) => r && (r.what || r.url));
+    for (const r of more) rows.push(["Google Business Profile" + (r.what ? " (" + r.what + ")" : ""), r.url || ""]);
     for (const r of (Array.isArray(s.other) ? s.other : [])) {
       if (r && (r.what || r.url)) rows.push([r.what || "Other", r.url || ""]);
     }
 
     const open = [];
-    if (!filled(s.gbp)) {
+    if (!filled(s.gbp) && !more.some((r) => filled(r.url))) {
       open.push({
         what: "No Google Business Profile link",
         detail: "The single highest-leverage listing for a home-services business, and we can't see it.",

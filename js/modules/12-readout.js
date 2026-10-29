@@ -753,6 +753,9 @@ export default {
     lede: COPY.lede.discovery,
   },
 
+  // the recording goes at the top of the screen-only block, not under the page
+  placesGuests: true,
+
   render(ctx) {
     const parts = collect(ctx);
     const tab = (ctx.transient[ID] && ctx.transient[ID].tab) || "recap";

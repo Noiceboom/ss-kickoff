@@ -91,6 +91,8 @@ const threatLabel = (v) => {
 export default {
   id: ID,
   nav: "Competitors",
+  // Drawn at the bottom of Marketing now, not as a screen of its own.
+  embedIn: "marketing",
   title: "Who keeps taking the jobs you wanted?",
   lede: COPY.lede.kickoff,
   skippable: true,
