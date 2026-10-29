@@ -17,6 +17,7 @@ import { sectionHeadFor, rowGroup, warnBox, filled, money, esc, ICON } from "../
 import { getRows, getField, isSkipped } from "../state.js";
 import { OFFER } from "./00-intro.js";
 import { bookRate } from "./02-goals.js";
+import { BY_ID } from "../channels.js";
 
 const ID = "nextsteps";
 
@@ -85,6 +86,7 @@ export default {
     return (
       sectionHeadFor(this, ctx) +
       gapCard(ctx) +
+      channelCard(ctx) +
 
       '<div class="card">' +
         '<div class="mlabel">What to expect next</div>' +
@@ -112,12 +114,20 @@ export default {
 
   derive(ctx) {
     const { win, goal } = numbers(ctx);
-    return {
+    const out = {
       [ID + ":wLeads"]: fmt(win.leads),
       [ID + ":wBooked"]: fmt(win.booked),
       [ID + ":wJobs"]: fmt(win.jobs),
       [ID + ":wNeed"]: needLine(win, goal),
     };
+    const cp = channelPlan(ctx);
+    if (cp.target) {
+      for (const r of cp.rows) out[ID + ":chg_" + r.id] = change(r.need - r.now);
+      out[ID + ":chTotal"] = cnt(cp.planned);
+      out[ID + ":chChg"] = change(cp.planned - cp.totalNow);
+      out[ID + ":chGap"] = gapLine(cp);
+    }
+    return out;
   },
 
   status(ctx) {
@@ -133,6 +143,11 @@ export default {
     if (win.leads) {
       put("To hit the goal", fmt(win.leads) + " leads a month for " + money(goal) + " a month, at " +
         (win.appt ? win.appt + "% booking, " : "") + win.close + "% close and a " + money(win.ticket) + " average order");
+    }
+    const cp = channelPlan(ctx);
+    if (cp.rows.length) {
+      put("Leads by channel, now → needed", cp.rows.map((r) =>
+        r.label + " " + cnt(r.now) + (cp.target ? " → " + cnt(r.need) : "")).join("; "));
     }
 
     const asks = editedAsks(ctx);
@@ -216,6 +231,141 @@ function numbers(ctx) {
 }
 
 const fmt = (x) => (x ? Number(x).toLocaleString("en-US") : "&mdash;");
+const cnt = (x) => Number(x || 0).toLocaleString("en-US");
+const change = (d) => (d > 0 ? "+" + cnt(d) : d < 0 ? "&minus;" + cnt(-d) : "&mdash;");
+
+/* ── what it's going to take ──────────────────────────── */
+
+// What each line on the intro cards brings in as a lead channel, by the
+// id Marketing now uses for it. Website, Designs and Hosting aren't lead
+// channels; AEO has no Marketing-now tile, so it gets an id of its own.
+const OURS = {
+  "Google Ads": "google-ads",
+  "Local Services Ads": "local-services-ads-lsa",
+  "Meta": "meta-facebook-instagram",
+  "SEO": "seo",
+  "Google Business Profile": "google-business-profile-maps",
+  "AEO": "aeo",
+};
+const EXTRA_LABELS = { aeo: "AI search (AEO)", untracked: "Not tracked by channel" };
+
+/**
+ * Leads by channel: today, from Marketing now, and what each needs to
+ * bring for the goal row's lead number.
+ *
+ * Rows are the channels we're running (from the intro cards) and every
+ * channel they run today. Leads Goals counts that no channel accounts
+ * for get a row of their own, so the totals match Goals.
+ *
+ * The starting "needed" holds their own channels flat and splits the gap
+ * evenly across ours. It is deliberately independent of any edits, so a
+ * number typed on screen never silently moves another; "still to find"
+ * shows whatever the edits leave over.
+ */
+function channelPlan(ctx) {
+  const m = ctx.state.m.marketing || {};
+  const s = ctx.state.m[ID] || {};
+  const g = ctx.state.m.goals || {};
+  const n = (v) => Number(String(v == null ? "" : v).replace(/[^0-9.]/g, "")) || 0;
+
+  const ours = [];
+  for (const b of OFFER) {
+    if (getField(ctx.state, "intro", b.key, false)) continue;
+    for (const it of b.items) { const id = OURS[it[0]]; if (id && ours.indexOf(id) < 0) ours.push(id); }
+  }
+  const running = (Array.isArray(m.chan) ? m.chan : []).filter((id) => BY_ID.has(id));
+  const ids = ours.concat(running.filter((id) => ours.indexOf(id) < 0));
+
+  const rows = ids.map((id) => ({
+    id,
+    label: BY_ID.has(id) ? BY_ID.get(id).label : EXTRA_LABELS[id] || id,
+    ours: ours.indexOf(id) > -1,
+    running: running.indexOf(id) > -1,
+    now: n(m["vol_" + id]),
+  }));
+  const tracked = rows.reduce((a, r) => a + r.now, 0);
+  const untracked = Math.max(0, n(g.leadsNow) - tracked);
+  if (untracked) rows.push({ id: "untracked", label: EXTRA_LABELS.untracked, ours: false, running: true, now: untracked, fixed: true });
+  const totalNow = tracked + untracked;
+
+  const target = numbers(ctx).win.leads || n(g.leadsTarget);
+  const gap = Math.max(0, target - totalNow);
+  const share = rows.filter((r) => r.ours);
+  rows.forEach((r) => { r.base = r.now; });
+  if (share.length && gap) {
+    const each = Math.floor(gap / share.length);
+    let extra = gap - each * share.length;
+    for (const r of share) { r.base = r.now + each + (extra > 0 ? 1 : 0); extra--; }
+  }
+  let edited = false;
+  for (const r of rows) {
+    const k = "need_" + r.id;
+    r.edited = !r.fixed && filled(s[k]);
+    if (r.edited) edited = true;
+    r.need = r.edited ? n(s[k]) : r.base;
+  }
+  const planned = rows.reduce((a, r) => a + r.need, 0);
+  return { rows, totalNow, target, planned, edited, ours: share.length };
+}
+
+function gapLine(cp) {
+  const left = cp.target - cp.planned;
+  if (left > 0) return "Still <strong>" + cnt(left) + " leads</strong> a month to find &mdash; put them on a channel.";
+  if (left < 0) return "That plans <strong>" + cnt(-left) + " more</strong> than the " + cnt(cp.target) + " a month the goal needs.";
+  return "That adds up to the <strong>" + cnt(cp.target) + " leads</strong> a month the goal needs.";
+}
+
+function channelCard(ctx) {
+  const cp = channelPlan(ctx);
+  if (!cp.rows.length) return "";
+  const live = (k, v) => '<span data-derived="' + ID + ":" + k + '">' + v + "</span>";
+  const tag = (r) => r.ours
+    ? '<span class="nstag' + (r.running ? "" : " new") + '">' + (r.running ? "Ours" : "New") + "</span>"
+    : "";
+
+  const body = cp.rows.map((r) =>
+    "<tr>" +
+      '<th scope="row">' + esc(r.label) + tag(r) + "</th>" +
+      "<td>" + cnt(r.now) + "</td>" +
+      (cp.target
+        ? "<td>" + (r.fixed ? cnt(r.need)
+            : '<input type="text" inputmode="numeric" class="nsin" data-f="' + ID + "|need_" + esc(r.id) +
+                '" value="' + r.need + '" aria-label="Leads needed from ' + esc(r.label) + '">') + "</td>" +
+          '<td class="chg">' + live("chg_" + r.id, change(r.need - r.now)) + "</td>"
+        : "") +
+    "</tr>"
+  ).join("");
+
+  return (
+    '<div class="card">' +
+      '<div class="mlabel">What it&rsquo;s going to take</div>' +
+      '<p style="margin:8px 0 0;font-size:15px;color:var(--green-text)">' +
+        "Where the leads come from today, and where they need to come from to hit the goal." +
+      "</p>" +
+      '<div style="overflow-x:auto;margin-top:16px"><table class="nschan">' +
+        "<thead><tr><th>Channel</th><th>Leads now</th>" +
+          (cp.target ? "<th>Leads needed</th><th>Change</th>" : "") + "</tr></thead>" +
+        "<tbody>" + body + "</tbody>" +
+        '<tfoot><tr><th scope="row">Total a month</th><td>' + cnt(cp.totalNow) + "</td>" +
+          (cp.target ? "<td>" + live("chTotal", cnt(cp.planned)) + '</td><td class="chg">' +
+            live("chChg", change(cp.planned - cp.totalNow)) + "</td>" : "") +
+        "</tr></tfoot>" +
+      "</table></div>" +
+      (cp.target
+        ? '<div class="nschgap">' + live("chGap", gapLine(cp)) + "</div>" +
+          '<div class="nshint" style="color:var(--muted)">' +
+            (cp.ours ? "Starts with their own channels flat and the gap spread across ours. " : "") +
+            "Change any number." +
+            (cp.edited
+              ? ' <button class="nsreset dark-on-light" data-clear="' + ID + "|" +
+                  cp.rows.filter((r) => r.edited).map((r) => "need_" + r.id).join(",") +
+                  '">Back to the starting split</button>'
+              : "") +
+          "</div>"
+        : '<div class="nshint" style="color:var(--muted);margin-top:12px">Set the goal and the funnel on Goals to see the leads each channel needs to bring.</div>') +
+    "</div>"
+  );
+}
 
 function needLine(win, goal) {
   if (!win.leads) return "";
