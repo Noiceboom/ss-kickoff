@@ -531,10 +531,15 @@ pre.raw{background:var(--char);color:var(--cream);border-radius:14px;padding:20p
 .nsneed{margin-top:18px;font-size:16px;color:#c9c3b4}
 .nsneed strong{color:var(--orange);font-family:"OSCondensed",sans-serif;font-weight:800;font-size:19px;
   letter-spacing:.3px;text-transform:uppercase}
-.nsrun{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:14px}
-.nsbucket{border:1px solid var(--char);border-radius:14px;padding:12px 14px;box-shadow:var(--sh-sm);background:var(--body)}
-.nsbucket .n{font-family:"OSCondensed",sans-serif;font-weight:800;font-size:18px;letter-spacing:.5px;text-transform:uppercase}
-.nsbucket .w{font-size:13px;color:var(--muted);margin-top:2px}
+.nsplan{list-style:none;margin:16px 0 0;padding:0;counter-reset:none}
+.nsplan li{display:flex;gap:14px;align-items:flex-start;padding:13px 0;border-bottom:1px solid var(--line)}
+.nsplan li:last-child{border-bottom:none}
+.nsplan .k{flex:none;width:30px;height:30px;border-radius:999px;background:var(--char);color:var(--cream);
+  display:flex;align-items:center;justify-content:center;font-family:"OSCondensed",sans-serif;font-weight:800;font-size:15px}
+.nsplan .w{font-family:"OSCondensed",sans-serif;font-weight:800;font-size:19px;letter-spacing:.4px;text-transform:uppercase;
+  line-height:1.2;padding-top:4px}
+.nsplan .y{font-size:14px;color:var(--muted);margin-top:3px}
+.nsreset.dark-on-light{color:var(--orange-h);margin-left:0;font-size:14px}
 .nsbye{text-align:center;padding:30px 0 10px}
 .nsbye h2{font-size:clamp(34px,5vw,54px)}
 .nsbye h2 .volt{font-size:1.12em}

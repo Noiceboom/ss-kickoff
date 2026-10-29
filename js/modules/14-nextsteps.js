@@ -3,53 +3,59 @@
 // ============================================================
 //
 // The last thing the client sees before the call ends. The AM walks it
-// top to bottom: where you are, where we're taking you, how we get
-// there, the next two weeks, when we talk next, goodbye.
+// top to bottom: where you are, where we're taking you, what to expect
+// next, when we talk next, goodbye.
 //
 // Most of it is read from other screens rather than asked again — the
-// revenue numbers from Goals, what we're running from the intro cards,
-// what leads the build from Services and Cities, what we need from them
-// from every screen's open items. The only new answers are the levers,
-// the two-week plan and the next meeting.
+// revenue numbers and funnel from Goals, the plan from the intro cards,
+// what we need from them from every screen's open items. The only new
+// answers are the goal-row rates and the next meeting.
 //
 // Kickoff only. A sales call ends on a proposal, not a plan.
 
-import {
-  sectionHeadFor, field, chipGroup, rowGroup, filled, money, esc, ICON,
-} from "../ui.js";
+import { sectionHeadFor, field, rowGroup, filled, money, esc, ICON } from "../ui.js";
 import { slot, getRows, getField, isSkipped } from "../state.js";
 import { OFFER } from "./00-intro.js";
 import { bookRate } from "./02-goals.js";
 
 const ID = "nextsteps";
 
-const LEVERS = [
-  { value: "budget", label: "Ad budget" },
-  { value: "offers", label: "Offers & promotions" },
-  { value: "targeting", label: "Bids & targeting" },
-  { value: "svcpages", label: "New service pages" },
-  { value: "citypages", label: "New city pages" },
-  { value: "reviews", label: "More reviews" },
-  { value: "booking", label: "Answering & booking rate" },
-  { value: "seasonal", label: "Seasonal pushes" },
-];
-
-// What "Start from the usual two weeks" fills in. Edit the rows on the
-// call; edit this list to change the default for everyone.
-const PLAN = [
-  { when: "Days 1–3", what: "Access and tracking: we get into your accounts and set up call tracking.", you: "Click the access link we send." },
-  { when: "Days 4–7", what: "We build the campaigns, pages and profile updates for the services and cities we ranked today.", you: "Send your logo, photos and brand files." },
-  { when: "Days 8–10", what: "You see everything before it goes live.", you: "Approve it or tell us what to change." },
-  { when: "Days 11–14", what: "We launch, then watch the first calls and leads closely.", you: "Tell us how the first leads look." },
-];
-
 const ASKS_SHOWN = 5;
 
 const PLAN_COLS = [
-  { key: "when", label: "When", placeholder: "Days 1–3", width: "130px" },
-  { key: "what", label: "What happens", type: "longtext", placeholder: "We get into your accounts and set up tracking" },
-  { key: "you", label: "From you", type: "longtext", placeholder: "Click the access link", width: "240px" },
+  { key: "what", label: "What happens", type: "longtext", placeholder: "We get access to everything you've got" },
+  { key: "you", label: "From you", type: "longtext", placeholder: "Click the access link we send", width: "260px" },
 ];
+
+/**
+ * What to expect next, built from the intro cards so a client who didn't
+ * buy SEO never hears about an SEO build. Edit the wording here to change
+ * it for everyone; "Edit the plan" copies it into rows for one client.
+ */
+function standardPlan(ctx) {
+  const on = (key) => !getField(ctx.state, "intro", key, false);
+  const items = (key, skip) => {
+    const b = OFFER.find((x) => x.key === key);
+    const names = b.items.map((it) => it[0]).filter((n) => n !== skip);
+    return names.length > 1 ? names.slice(0, -1).join(", ") + " and " + names[names.length - 1] : names[0] || "";
+  };
+  const others = items("noOrganic", "SEO");
+  const plan = [
+    { what: "We get access to everything you've got.", you: "Click the access link we send." },
+    { what: "We build out your plan.", you: "" },
+  ];
+  if (on("noWebsite")) plan.push({ what: "We build out the website.", you: "" });
+  if (on("noPaid")) plan.push({ what: "We build out your paid campaigns: " + items("noPaid") + ".", you: "" });
+  if (on("noOrganic")) plan.push({ what: "We build out your SEO campaigns" + (others ? ", plus " + others : "") + ".", you: "" });
+  plan.push({ what: "We get you launched.", you: "" });
+  return plan;
+}
+
+/** The rows the AM edited for this client, else the standard plan. */
+function planFor(ctx) {
+  const rows = getRows(ctx.state, ID, "plan").filter((r) => r && (r.what || r.you));
+  return { rows: rows.length ? rows : standardPlan(ctx), custom: rows.length > 0 };
+}
 
 export default {
   id: ID,
@@ -59,45 +65,28 @@ export default {
   skippable: false,
   notePrompt: "Anything they asked for before the next meeting, or anything to put in the follow-up email.",
 
-  seeds: { plan: PLAN },
+  seeds: { plan: standardPlan },
 
   render(ctx) {
     const s = slot(ctx.state, ID);
     const v = (k) => (s[k] !== undefined ? s[k] : "");
-    const plan = getRows(ctx.state, ID, "plan");
+    const edited = getRows(ctx.state, ID, "plan");
 
     return (
       sectionHeadFor(this, ctx) +
       gapCard(ctx) +
 
       '<div class="card">' +
-        '<div class="mlabel">How we get you there</div>' +
-        running(ctx) +
-        leading(ctx) +
-        '<div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--line)">' +
-          chipGroup(ID, "levers", "Levers we can pull", s.levers, LEVERS, {
-            multi: true,
-            help: "Tick the ones you talk through. These are what move the number if the first month is slow.",
-          }) +
-          '<div class="fields one" style="margin-top:14px">' +
-            field(ID, "leversOther", "Anything else", v("leversOther"), {
-              placeholder: "Financing offer in the ads once they have it set up",
-            }) +
-          "</div>" +
-        "</div>" +
-      "</div>" +
-
-      '<div class="card">' +
-        '<div class="mlabel">The next two weeks</div>' +
-        '<div style="margin-top:14px">' +
-          rowGroup(ID, "plan", PLAN_COLS, plan, {
-            addLabel: "Add a step",
-            empty: "Nothing planned yet.",
-          }) +
-        "</div>" +
-        (plan.length ? "" :
-          '<div style="margin-top:10px"><button class="btn sm" data-seedrows="' + ID + '|plan">' +
-            "Start from the usual two weeks</button></div>") +
+        '<div class="mlabel">What to expect next</div>' +
+        (edited.length
+          ? '<div style="margin-top:14px">' +
+              rowGroup(ID, "plan", PLAN_COLS, edited, { addLabel: "Add a step", empty: "Nothing planned yet." }) +
+            "</div>" +
+            '<div style="margin-top:10px"><button class="nsreset dark-on-light" data-clear="' + ID + '|plan">' +
+              "Back to the standard plan</button></div>"
+          : planList(standardPlan(ctx)) +
+            '<div style="margin-top:14px"><button class="btn ghost sm" data-seedrows="' + ID + '|plan">' +
+              "Edit the plan for this client</button></div>") +
         asksFromThem(ctx) +
       "</div>" +
 
@@ -128,9 +117,7 @@ export default {
   },
 
   status(ctx) {
-    const s = ctx.state.m[ID] || {};
-    const hits = [filled(s.meetDate), getRows(ctx.state, ID, "plan").length > 0].filter(Boolean).length;
-    return hits === 2 ? "done" : hits ? "partial" : "empty";
+    return filled((ctx.state.m[ID] || {}).meetDate) ? "done" : "empty";
   },
 
   summary(ctx) {
@@ -141,10 +128,6 @@ export default {
     put("Next meeting", [prettyDate(s.meetDate), prettyTime(s.meetTime)].filter(Boolean).join(", "));
     put("Where", s.meetHow);
     put("What it's for", s.meetFor);
-    const levers = (Array.isArray(s.levers) ? s.levers : [])
-      .map((x) => (LEVERS.find((l) => l.value === x) || { label: x }).label);
-    if (filled(s.leversOther)) levers.push(s.leversOther);
-    put("Levers we can pull", levers.join(", "));
 
     const { win, goal } = numbers(ctx);
     if (win.leads) {
@@ -152,22 +135,29 @@ export default {
         (win.appt ? win.appt + "% booking, " : "") + win.close + "% close and a " + money(win.ticket) + " average order");
     }
 
-    const plan = getRows(ctx.state, ID, "plan").filter((r) => r && (r.when || r.what || r.you));
     const open = [];
     if (!filled(s.meetDate)) {
       open.push({ what: "No next meeting booked", detail: "The call ended without a date for the next one." });
     }
-    if (!plan.length) {
-      open.push({ what: "No two-week plan", detail: "Nobody walked them through what happens next." });
-    }
 
-    const out = { rows, open };
-    if (plan.length) {
-      out.table = { head: ["when", "what happens", "from you"], body: plan.map((r) => [r.when || "", r.what || "", r.you || ""]) };
-    }
-    return rows.length || plan.length ? out : { open };
+    const plan = planFor(ctx).rows;
+    return {
+      rows, open,
+      table: { head: ["step", "what happens", "from you"], body: plan.map((r, i) => [String(i + 1), r.what || "", r.you || ""]) },
+    };
   },
 };
+
+function planList(plan) {
+  return (
+    '<ol class="nsplan">' + plan.map((r, i) =>
+      '<li><span class="k">' + (i + 1) + "</span><div>" +
+        '<div class="w">' + esc(r.what) + "</div>" +
+        (r.you ? '<div class="y">From you: ' + esc(r.you) + "</div>" : "") +
+      "</div></li>"
+    ).join("") + "</ol>"
+  );
+}
 
 /* ── blocks ───────────────────────────────────────────── */
 
@@ -308,49 +298,6 @@ function gapCard(ctx) {
         ? '<div style="margin-top:18px"><button class="btn xs" data-go="goals" style="color:var(--cream)">' +
             "Leads, rates, average order and the goal are on Goals</button></div>"
         : "") +
-    "</div>"
-  );
-}
-
-/** The intro cards that are switched on, with what's in each. */
-function running(ctx) {
-  const on = OFFER.filter((b) => !getField(ctx.state, "intro", b.key, false));
-  if (!on.length) {
-    return '<div style="margin-top:12px;font-size:15px;color:var(--muted)">Nothing is switched on in the intro cards.</div>';
-  }
-  return (
-    '<div class="nsrun">' + on.map((b) =>
-      '<div class="nsbucket"><div class="n">' + esc(b.name) + "</div>" +
-        '<div class="w">' + b.items.map((it) => esc(it[0])).join(" &middot; ") + "</div></div>"
-    ).join("") + "</div>"
-  );
-}
-
-/** The top of each ranked list, so the client hears what goes first. */
-function leading(ctx) {
-  const list = (id) => {
-    const m = ctx.modules.find((x) => x.id === id);
-    if (!m || !m.summary || isSkipped(ctx.state, id)) return [];
-    try {
-      const sum = m.summary(ctx);
-      return sum && sum.list && sum.list.items ? sum.list.items.slice(0, 3) : [];
-    } catch (e) { return []; }
-  };
-  const svc = list("services");
-  const loc = list("locations");
-  if (!svc.length && !loc.length) return "";
-
-  const col = (label, items) =>
-    "<div><div class=\"mlabel\">" + label + "</div>" +
-      (items.length
-        ? '<ol class="olist">' + items.map((it) =>
-            '<li><span class="k">' + it.n + '</span><span class="v">' + esc(it.name) + "</span></li>").join("") + "</ol>"
-        : '<div style="margin-top:12px;font-size:14px;color:var(--muted)">Not ranked yet.</div>') +
-    "</div>";
-
-  return (
-    '<div class="sumcols" style="margin-top:24px;padding-top:20px;border-top:1px solid var(--line)">' +
-      col("Services we lead with", svc) + col("Cities we start in", loc) +
     "</div>"
   );
 }

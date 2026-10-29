@@ -747,8 +747,9 @@ document.addEventListener("click", (e) => {
     const [mod, key] = el.getAttribute("data-seedrows").split("|");
     const owner = byId.get(mod);
     const seed = owner && owner.seeds && owner.seeds[key];
-    if (seed && !S.getRows(R.state, mod, key).length) {
-      S.ensure(R.state, mod)[key] = seed.map((r) => ({ ...r }));
+    const rows = typeof seed === "function" ? seed(ctx()) : seed;
+    if (rows && !S.getRows(R.state, mod, key).length) {
+      S.ensure(R.state, mod)[key] = rows.map((r) => ({ ...r }));
     }
     render(); queueSave(); return;
   }
