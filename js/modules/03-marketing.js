@@ -75,6 +75,17 @@ function selected(s) {
   return Array.isArray(s.chan) ? s.chan : [];
 }
 
+/** Leads a month across every ticked channel — the headline on the picker. */
+function totalLeads(s) {
+  const n = (v) => Number(String(v == null ? "" : v).replace(/[^0-9.]/g, "")) || 0;
+  return selected(s).reduce((t, id) => t + n(s[volKey(id)]), 0);
+}
+
+function leadCount(total) {
+  return '<span class="v' + (total ? "" : " zero") + '">' + total.toLocaleString() + "</span>" +
+    '<span class="l">leads / mo</span>';
+}
+
 /**
  * Channels added on the call that aren't in the built-in list.
  *
@@ -123,7 +134,6 @@ function tile(s, ch, on) {
 
 function picker(s, query, mode) {
   const on = new Set(selected(s));
-  const count = on.size;
 
   const body = CATEGORIES.map((cat) => {
     const tiles = ALL.filter((c) => c.cat === cat.name).map((c) => tile(s, c, on.has(c.id))).join("");
@@ -136,8 +146,7 @@ function picker(s, query, mode) {
       "<div><h3>" + sayer(COPY, mode)("pickerLabel") + "</h3>" +
         "<p>" + sayer(COPY, mode)("pickerLede") + " Then rate it &mdash; good, mixed, or a waste &mdash; " +
         "and log what it actually brings in.</p></div>" +
-      '<div class="pickcount"><span class="v' + (count ? "" : " zero") + '">' + count + "</span>" +
-        '<span class="l">tried</span></div>' +
+      '<div class="pickcount" data-derived="' + ID + ':leads">' + leadCount(totalLeads(s)) + "</div>" +
     "</div>" +
     '<div class="pickfilter">' +
       '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" ' +
@@ -263,6 +272,10 @@ export default {
         "</div>" +
       "</div>"
     );
+  },
+
+  derive(ctx) {
+    return { [ID + ":leads"]: leadCount(totalLeads(ctx.state.m[ID] || {})) };
   },
 
   status(ctx) {
