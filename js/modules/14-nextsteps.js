@@ -22,6 +22,10 @@ const ID = "nextsteps";
 
 const ASKS_SHOWN = 5;
 
+const ASK_COLS = [
+  { key: "ask", label: "What we need", type: "longtext", placeholder: "Send us your logo and a few job photos" },
+];
+
 const PLAN_COLS = [
   { key: "what", label: "What happens", type: "longtext", placeholder: "We get access to everything you've got" },
   { key: "you", label: "From you", type: "longtext", placeholder: "Click the access link we send", width: "260px" },
@@ -65,7 +69,11 @@ export default {
   skippable: false,
   notePrompt: "Anything they asked for before the next meeting, or anything to put in the follow-up email.",
 
-  seeds: { plan: standardPlan },
+  seeds: {
+    plan: standardPlan,
+    // what the AM sees is what gets frozen: the first five
+    asks: (ctx) => autoAsks(ctx).slice(0, ASKS_SHOWN).map((ask) => ({ ask })),
+  },
 
   render(ctx) {
     const s = slot(ctx.state, ID);
@@ -134,6 +142,9 @@ export default {
       put("To hit the goal", fmt(win.leads) + " leads a month for " + money(goal) + " a month, at " +
         (win.appt ? win.appt + "% booking, " : "") + win.close + "% close and a " + money(win.ticket) + " average order");
     }
+
+    const asks = editedAsks(ctx);
+    if (asks.length) put("What we need from you", asks.map((a, i) => (i + 1) + ". " + a).join("  "));
 
     const open = [];
     if (!filled(s.meetDate)) {
@@ -303,7 +314,7 @@ function gapCard(ctx) {
 }
 
 /** Every open item written for the client, from the screens before this one. */
-function asksFromThem(ctx) {
+function autoAsks(ctx) {
   const asks = [];
   for (const m of ctx.modules) {
     if (m.id === ID) break;
@@ -313,19 +324,50 @@ function asksFromThem(ctx) {
       for (const o of (sum && sum.open) || []) if (o.ask && asks.indexOf(o.ask) < 0) asks.push(o.ask);
     } catch (e) { /* a broken screen must not take this one down */ }
   }
-  if (!asks.length) return "";
+  return asks;
+}
+
+/** The asks the AM edited for this client, if any. */
+function editedAsks(ctx) {
+  return getRows(ctx.state, ID, "asks").map((r) => String((r && r.ask) || "").trim()).filter(Boolean);
+}
+
+/**
+ * What we need from them. Until the AM touches it, it follows the open
+ * items on every earlier screen, so an answer given later drops off it.
+ * "Edit these" or "Add one" freezes it into rows for this client.
+ */
+function asksFromThem(ctx) {
+  const rows = getRows(ctx.state, ID, "asks");
+  const head = '<div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--line)">' +
+    '<div class="mlabel">What we need from you</div>';
+
+  if (rows.length) {
+    return head +
+      '<div style="margin-top:14px">' +
+        rowGroup(ID, "asks", ASK_COLS, rows, { addLabel: "Add one", empty: "Nothing on the list." }) +
+      "</div>" +
+      '<div style="margin-top:10px"><button class="nsreset dark-on-light" data-clear="' + ID + '|asks">' +
+        "Back to the automatic list</button></div>" +
+    "</div>";
+  }
+
+  const asks = autoAsks(ctx);
   // Five is what can be said out loud at the end of a call; the rest are
   // in the readout and go out with the email.
   const more = asks.length - ASKS_SHOWN;
-  return (
-    '<div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--line)">' +
-      '<div class="mlabel">What we need from you</div>' +
-      '<ol class="asklist">' + asks.slice(0, ASKS_SHOWN).map((a) => '<li><span class="a">' + esc(a) + "</span></li>").join("") + "</ol>" +
-      (more > 0
-        ? '<div style="margin-top:8px;font-size:14px;color:var(--muted)">And ' + more + " more in the follow-up email.</div>"
-        : "") +
-    "</div>"
-  );
+  return head +
+    (asks.length
+      ? '<ol class="asklist">' + asks.slice(0, ASKS_SHOWN).map((a) => '<li><span class="a">' + esc(a) + "</span></li>").join("") + "</ol>"
+      : '<div style="margin-top:12px;font-size:15px;color:var(--muted)">Nothing outstanding from the earlier screens.</div>') +
+    (more > 0
+      ? '<div style="margin-top:8px;font-size:14px;color:var(--muted)">And ' + more + " more in the follow-up email.</div>"
+      : "") +
+    '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">' +
+      (asks.length ? '<button class="btn ghost sm" data-seedrows="' + ID + '|asks">Edit these</button>' : "") +
+      '<button class="btn ghost sm" data-seedrows="' + ID + '|asks|add">' + ICON.plus + " Add one</button>" +
+    "</div>" +
+  "</div>";
 }
 
 function closer(ctx) {

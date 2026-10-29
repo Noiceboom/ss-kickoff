@@ -744,12 +744,16 @@ document.addEventListener("click", (e) => {
   // A module's default rows, copied in only when there are none — so a
   // stray click can never overwrite rows someone has already edited.
   if ((el = t.closest("[data-seedrows]"))) {
-    const [mod, key] = el.getAttribute("data-seedrows").split("|");
+    // "mod|key|add" also appends an empty row, for an "add one" button
+    // that starts from the seeded list rather than replacing it.
+    const [mod, key, add] = el.getAttribute("data-seedrows").split("|");
     const owner = byId.get(mod);
     const seed = owner && owner.seeds && owner.seeds[key];
     const rows = typeof seed === "function" ? seed(ctx()) : seed;
     if (rows && !S.getRows(R.state, mod, key).length) {
-      S.ensure(R.state, mod)[key] = rows.map((r) => ({ ...r }));
+      const next = rows.map((r) => ({ ...r }));
+      if (add) next.push({});
+      S.ensure(R.state, mod)[key] = next;
     }
     render(); queueSave(); return;
   }
