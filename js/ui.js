@@ -305,7 +305,8 @@ export function formatSlider(v, mode, max) {
  * must never do. Until it is touched the readout shows a dash and the
  * track stays grey, and state holds nothing.
  *
- * opts: { min, max, curve, mode: "money"|"count"|"pct", unit, help, start }
+ * opts: { min, max, curve, mode: "money"|"count"|"pct", unit, help, start, check }
+ * check: a data-derived key for a live note under the slider, hidden while empty.
  */
 export function slider(mod, key, label, value, opts) {
   const o = opts || {};
@@ -335,6 +336,7 @@ export function slider(mod, key, label, value, opts) {
       '<div class="slscale"><span>' + esc(formatSlider(min, mode)) + "</span>" +
         "<span>" + esc(formatSlider(max, mode, max)) + "</span></div>" +
       (o.help ? '<div class="help">' + esc(o.help) + "</div>" : "") +
+      (o.check ? '<div class="slfix" data-derived="' + esc(o.check) + '"></div>' : "") +
     "</div>"
   );
 }

@@ -12,7 +12,7 @@
 // never do.
 
 import {
-  sectionHeadFor, skipRow, field, chipGroup, slider, derived, warnBox,
+  sectionHeadFor, skipRow, field, chipGroup, slider, derived,
   statusFor, filled, money, pct,
 } from "../ui.js";
 import { isSkipped, slot } from "../state.js";
@@ -224,13 +224,21 @@ export function leadWorth(s) {
 /** How far two figures can drift apart before the check calls it out. */
 const MISS = 0.2;
 
+/** Rounds a suggested figure to something a person would actually say. */
+function nice(v) {
+  const step = v < 100 ? 1 : v < 1000 ? 10 : v < 10000 ? 50 : v < 100000 ? 500 : 1000;
+  return Math.round(v / step) * step;
+}
+
 /**
- * Numbers on this screen that can't all be true at once. Each one is a
- * sentence the AM can read straight to the client, naming the figures
- * that disagree so the conversation goes to the shaky one.
+ * Numbers on this screen that can't all be true at once, as a yellow note
+ * under each figure involved saying what it would have to be for the rest
+ * to add up. Holding the others still, so the AM can ask the client which
+ * one is the shaky one and move just that.
  */
-function mathChecks(s) {
+function mathFixes(s) {
   const f = (v) => Math.round(v).toLocaleString("en-US");
+  const up = (v) => Math.ceil(v).toLocaleString("en-US");
   const far = (a, b) => Math.abs(a - b) / Math.max(a, b) > MISS;
   const revNow = num(s, "revNow");
   const revTarget = num(s, "revTarget");
@@ -240,49 +248,62 @@ function mathChecks(s) {
   const ticket = num(s, "avgTicket");
   const close = num(s, "closeRate");
   const typed = num(s, "apptRate");
-  const out = [];
+  const out = {};
+  const add = (key, html) => { out[key] = out[key] ? out[key] + " " + html : html; };
 
   if (leadsNow && appts && appts > leadsNow) {
-    out.push(f(appts) + " appointments from " + f(leadsNow) + " leads can&rsquo;t happen. One of the two is off.");
+    add("apptsNow", "Can&rsquo;t be more than the <strong>" + f(leadsNow) + " leads</strong>.");
+    add("leadsNow", "Needs to be at least <strong>" + f(appts) + "</strong> to book " + f(appts) + " appointments.");
   } else if (leadsNow && appts && typed && Math.abs(typed - (appts / leadsNow) * 100) > 10) {
-    out.push(f(appts) + " appointments from " + f(leadsNow) + " leads is a " + f((appts / leadsNow) * 100) +
-      "% booking rate, but the booking-rate slider says " + f(typed) + "%. The counts win.");
+    add("apptRate", "Their appointment and lead counts say <strong>" + f((appts / leadsNow) * 100) +
+      "%</strong>. Move this to match.");
   }
 
+  // today: leads → appointments → jobs → revenue
   const book = bookRate(s);
   const booked = appts || (leadsNow && book ? leadsNow * (book / 100) : 0);
   if (revNow && ticket && close && booked) {
-    const jobs = booked * (close / 100);
-    const made = jobs * ticket;
+    const made = booked * (close / 100) * ticket;
     if (far(made, revNow)) {
-      out.push("Today doesn&rsquo;t add up: " + (leadsNow ? f(leadsNow) + " leads &rarr; " : "") +
-        f(booked) + " appointments &rarr; " + f(jobs) + " jobs at " + money(ticket) + " is " +
-        money(Math.round(made)) + " a month, not " + money(revNow) +
-        ". Check revenue, leads, appointments, close rate and ticket.");
+      add("revNow", "Leads, appointments, close rate and ticket add up to <strong>" + money(nice(made)) + "</strong> a month. " +
+        "Move this to match, or fix whichever of those is off.");
+      if (appts) {
+        const need = revNow / ((close / 100) * ticket);
+        add("apptsNow", "To make " + money(revNow) + " at this close rate and ticket: about <strong>" +
+          up(need) + "</strong>" + (leadsNow && need > leadsNow ? ", more than their " + f(leadsNow) + " leads" : "") + ".");
+      } else if (leadsNow && book) {
+        add("leadsNow", "To make " + money(revNow) + " at these booking and close rates: about <strong>" +
+          up(revNow / ((book / 100) * (close / 100) * ticket)) + "</strong>.");
+      }
+      add("avgTicket", "To make " + money(revNow) + " from " + f(booked * (close / 100)) +
+        " jobs: about <strong>" + money(nice(revNow / (booked * (close / 100)))) + "</strong> a job.");
+      const needClose = (revNow / (booked * ticket)) * 100;
+      add("closeRate", needClose <= 100
+        ? "To make " + money(revNow) + " from " + f(booked) + " appointments: about <strong>" + f(needClose) + "%</strong>."
+        : "Even closing every appointment doesn&rsquo;t reach " + money(revNow) + ". Revenue, appointments or ticket is off.");
     }
   }
 
+  // the goal: leads goal × what a lead is worth → revenue goal
   const worth = leadWorth(s);
-  if (revTarget && leadsTarget && worth) {
-    const brings = leadsTarget * worth;
-    if (far(brings, revTarget)) {
-      out.push("The goals don&rsquo;t match: " + f(leadsTarget) + " leads a month at today&rsquo;s rates brings about " +
-        money(Math.round(brings)) + ", not " + money(revTarget) + ". That revenue takes about " +
-        f(revTarget / worth) + " leads, or a better booking rate, close rate or ticket.");
-    }
+  if (revTarget && leadsTarget && worth && far(leadsTarget * worth, revTarget)) {
+    add("revTarget", f(leadsTarget) + " leads a month at today&rsquo;s rates brings about <strong>" +
+      money(nice(leadsTarget * worth)) + "</strong>.");
+    add("leadsTarget", money(revTarget) + " a month at today&rsquo;s rates takes about <strong>" +
+      up(revTarget / worth) + " leads</strong>.");
   }
-
   if (revNow && revTarget && revTarget <= revNow) {
-    out.push("The revenue goal is at or below today&rsquo;s " + money(revNow) + ". Worth checking that&rsquo;s deliberate.");
+    add("revTarget", "At or below today&rsquo;s <strong>" + money(revNow) + "</strong>. Worth checking that&rsquo;s deliberate.");
   }
   if (leadsNow && leadsTarget && leadsTarget < leadsNow && (!revTarget || !revNow || revTarget > revNow)) {
-    out.push("The leads goal (" + f(leadsTarget) + ") is below today&rsquo;s " + f(leadsNow) + " while revenue is meant to grow.");
+    add("leadsTarget", "Below today&rsquo;s <strong>" + f(leadsNow) + "</strong> while revenue is meant to grow.");
   }
 
   const budget = num(s, "budget");
   const adSpend = num(s, "adSpend");
   if (budget && adSpend && adSpend > budget) {
-    out.push("Ad spend (" + money(adSpend) + ") is more than the whole marketing budget (" + money(budget) + ").");
+    add("adSpend", "More than the whole <strong>" + money(budget) + "</strong> budget.");
+    add("budget", "Needs to be at least the <strong>" + money(adSpend) + "</strong> ad spend.");
   }
   return out;
 }
@@ -322,28 +343,27 @@ export default {
         // number that matters — something you had to hold in your head.
         '<div class="fields sliders" style="margin-top:26px">' +
           slider(ID, "revNow", "Revenue per month, now", v("revNow"), {
-            ...SCALE.revenue, start: 120000, help: t("revNow"),
+            ...SCALE.revenue, check: "goals:fix_revNow", start: 120000, help: t("revNow"),
           }) +
           slider(ID, "revTarget", "Revenue per month, goal", v("revTarget"), {
-            ...SCALE.revenue, start: 250000, help: t("revTarget"),
+            ...SCALE.revenue, check: "goals:fix_revTarget", start: 250000, help: t("revTarget"),
           }) +
           slider(ID, "leadsNow", "Leads per month, now", v("leadsNow"), {
-            ...SCALE.leads, start: 150, help: t("leadsNow"),
+            ...SCALE.leads, check: "goals:fix_leadsNow", start: 150, help: t("leadsNow"),
           }) +
           slider(ID, "leadsTarget", "Leads per month, goal", v("leadsTarget"), {
-            ...SCALE.leads, start: 250,
+            ...SCALE.leads, check: "goals:fix_leadsTarget", start: 250,
           }) +
           slider(ID, "apptsNow", "Appointments per month", v("apptsNow"), {
-            ...SCALE.leads, start: 60, help: t("apptsNow"),
+            ...SCALE.leads, check: "goals:fix_apptsNow", start: 60, help: t("apptsNow"),
           }) +
           slider(ID, "avgTicket", "Average ticket", v("avgTicket"), {
-            ...SCALE.ticket, start: 900, help: t("avgTicket"),
+            ...SCALE.ticket, check: "goals:fix_avgTicket", start: 900, help: t("avgTicket"),
           }) +
         "</div>" +
         derived("goals:today") +
         derived("goals:gap") +
       "</div>" +
-      '<div class="mathcheck" data-derived="goals:check"></div>' +
 
       '<div class="card">' +
         '<div class="mlabel">What happens to a lead</div>' +
@@ -357,11 +377,11 @@ export default {
             help: "How long before someone gets back to a new lead. The single biggest lever on the three numbers below it.",
           }) +
           slider(ID, "apptRate", "Appointment booking rate", v("apptRate"), {
-            ...SCALE.rate, start: 45,
+            ...SCALE.rate, check: "goals:fix_apptRate", start: 45,
             help: "Of the leads that come in, how many end up as a booked appointment.",
           }) +
           slider(ID, "closeRate", "Sales booking rate", v("closeRate"), {
-            ...SCALE.rate, start: 40, help: t("closeRate"),
+            ...SCALE.rate, check: "goals:fix_closeRate", start: 40, help: t("closeRate"),
           }) +
           slider(ID, "reviewRate", "Review rate", v("reviewRate"), {
             ...SCALE.rate, start: 15,
@@ -374,10 +394,10 @@ export default {
         '<div class="mlabel">' + t("targetLabel") + "</div>" +
         '<div class="fields sliders" style="margin-top:22px">' +
           slider(ID, "budget", "Marketing budget per month", v("budget"), {
-            ...SCALE.budget, start: 8000, help: t("budget"),
+            ...SCALE.budget, check: "goals:fix_budget", start: 8000, help: t("budget"),
           }) +
           slider(ID, "adSpend", "Of that, ad spend", v("adSpend"), {
-            ...SCALE.budget, start: 5000,
+            ...SCALE.budget, check: "goals:fix_adSpend", start: 5000,
             help: "What reaches the platforms, separate from what it costs to have it run.",
           }) +
         "</div>" +
@@ -509,11 +529,8 @@ export default {
       out["goals:cpl"] = "Set a leads goal and this works out what a lead is allowed to cost.";
     }
 
-    const checks = mathChecks(s);
-    if (checks.length) {
-      out["goals:check"] = warnBox("<strong>The math isn&rsquo;t mathing</strong>" +
-        '<ul class="mclist">' + checks.map((c) => "<li>" + c + "</li>").join("") + "</ul>");
-    }
+    const fixes = mathFixes(s);
+    for (const k in fixes) out["goals:fix_" + k] = fixes[k];
 
     return out;
   },
