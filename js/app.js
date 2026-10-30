@@ -495,6 +495,8 @@ function refreshDerived() {
   // computed value on screen after an input is cleared shows stale maths
   // that reads exactly like current maths.
   document.querySelectorAll("[data-derived]").forEach((el) => {
+    // Never rebuild the box someone is typing in — it would drop the caret.
+    if (el.contains(document.activeElement)) return;
     const k = el.getAttribute("data-derived");
     el.innerHTML = Object.prototype.hasOwnProperty.call(out, k) ? out[k] : "";
   });
@@ -575,6 +577,9 @@ document.addEventListener("input", (e) => {
   if (f) {
     const [mod, key] = f.split("|");
     if (guardSecret(el.value)) { el.value = ""; S.setField(R.state, mod, key, ""); return; }
+    // A module can settle its own state before a typed value lands.
+    const owner = byId.get(mod);
+    if (owner && typeof owner.beforeField === "function") owner.beforeField(ctx(), key);
     if (el.getAttribute("data-slnum")) {
       // Store the parsed number, not whatever was typed — "$180k" and
       // "180,000" must not reach the exports as literal strings, and a

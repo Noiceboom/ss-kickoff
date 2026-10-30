@@ -14,7 +14,7 @@
 // Kickoff only. A sales call ends on a proposal, not a plan.
 
 import { sectionHeadFor, rowGroup, warnBox, filled, money, esc, ICON } from "../ui.js";
-import { getRows, getField, isSkipped } from "../state.js";
+import { getRows, getField, setField, isSkipped } from "../state.js";
 import { OFFER } from "./00-intro.js";
 import { bookRate } from "./02-goals.js";
 import { BY_ID } from "../channels.js";
@@ -112,6 +112,21 @@ export default {
     );
   },
 
+  /**
+   * The first number typed into the channel plan for a given goal pins
+   * the whole plan as it stands, against that goal. From then on a goal
+   * change refits the plan instead of leaving typed numbers stranded.
+   */
+  beforeField(ctx, key) {
+    if (key.indexOf("need_") !== 0) return;
+    const cp = channelPlan(ctx);
+    if (!cp.target) return;
+    const s = ctx.state.m[ID] || {};
+    if (Number(s.needAt) === cp.target && cp.rows.every((r) => r.fixed || r.edited)) return;
+    for (const r of cp.rows) if (!r.fixed) setField(ctx.state, ID, "need_" + r.id, String(r.need));
+    setField(ctx.state, ID, "needAt", String(cp.target));
+  },
+
   derive(ctx) {
     const { win, goal } = numbers(ctx);
     const out = {
@@ -122,9 +137,10 @@ export default {
     };
     const cp = channelPlan(ctx);
     if (cp.target) {
-      for (const r of cp.rows) out[ID + ":chg_" + r.id] = change(r.need - r.now);
-      const u = cp.rows.find((r) => r.fixed);
-      if (u) out[ID + ":needU"] = cnt(u.need);
+      for (const r of cp.rows) {
+        out[ID + ":chg_" + r.id] = change(r.need - r.now);
+        out[ID + ":need_" + r.id] = needCell(r);
+      }
       out[ID + ":chTotal"] = cnt(cp.planned);
       out[ID + ":chChg"] = change(cp.planned - cp.totalNow);
       out[ID + ":chGap"] = gapLine(cp);
@@ -260,10 +276,15 @@ const EXTRA_LABELS = { aeo: "AI search (AEO)", untracked: "Not tracked by channe
  * for get a row of their own, so the totals match Goals.
  *
  * The starting "needed" holds their own channels flat and splits the gap
- * evenly across ours. It is deliberately independent of any edits, so a
- * number typed on screen never moves another named channel. Whatever the
- * edits leave short of the goal lands on "Not tracked by channel", so the
- * total never drops below what the goal needs.
+ * evenly across ours. A number typed on screen never moves another named
+ * channel: whatever the edits leave short of the goal lands on "Not
+ * tracked by channel", so the total never drops below what the goal needs.
+ *
+ * Typed numbers belong to the goal they were typed against (needAt). When
+ * the goal's lead number moves — a better close rate, a bigger ticket —
+ * the plan is refitted: fewer leads come off "Not tracked" first, then off
+ * every channel's increase in proportion; more leads go onto the
+ * increases in proportion. No channel drops below what it brings today.
  */
 function channelPlan(ctx) {
   const m = ctx.state.m.marketing || {};
@@ -290,12 +311,18 @@ function channelPlan(ctx) {
   const untracked = Math.max(0, n(g.leadsNow) - tracked);
   const totalNow = tracked + untracked;
 
-  const target = numbers(ctx).win.leads || n(g.leadsTarget);
+  const goalLeads = numbers(ctx).win.leads || n(g.leadsTarget);
   // With a goal, the untracked row always shows: it's where a shortfall goes.
-  if (untracked || (target && rows.length)) {
+  if (untracked || (goalLeads && rows.length)) {
     rows.push({ id: "untracked", label: EXTRA_LABELS.untracked, ours: false, running: true, now: untracked, fixed: true });
   }
-  const gap = Math.max(0, target - totalNow);
+  const target = goalLeads;
+  const typedFor = n(s.needAt);
+  const anyEdit = rows.some((r) => !r.fixed && filled(s["need_" + r.id]));
+  const from = anyEdit && typedFor ? typedFor : target;
+
+  // the plan as it stood for the goal the numbers were typed against
+  const gap = Math.max(0, from - totalNow);
   const share = rows.filter((r) => r.ours);
   rows.forEach((r) => { r.base = r.now; });
   if (share.length && gap) {
@@ -310,15 +337,57 @@ function channelPlan(ctx) {
     if (r.edited) edited = true;
     r.need = r.edited ? n(s[k]) : r.base;
   }
-  let short = 0;
   const fixed = rows.find((r) => r.fixed);
-  if (fixed && target) {
+  if (fixed && from) {
     const named = rows.reduce((a, r) => a + (r.fixed ? 0 : r.need), 0);
-    fixed.need = Math.max(fixed.now, target - named);
-    short = fixed.need - fixed.now;
+    fixed.need = Math.max(fixed.now, from - named);
   }
+
+  // refit to the goal as it is now
+  const was = anyEdit && typedFor ? typedFor : rows.reduce((a, r) => a + r.need, 0);
+  if (target && target !== was) refit(rows, target - was, share);
+
+  const short = fixed && target ? fixed.need - fixed.now : 0;
   const planned = rows.reduce((a, r) => a + r.need, 0);
   return { rows, totalNow, target, planned, edited, short, ours: share.length };
+}
+
+/** Whole numbers in proportion to `weights` that add up to exactly `total`. */
+function apportion(weights, total) {
+  const sum = weights.reduce((a, w) => a + w, 0);
+  if (!sum || total <= 0) return weights.map(() => 0);
+  const exact = weights.map((w) => (w * total) / sum);
+  const out = exact.map(Math.floor);
+  let left = Math.round(total) - out.reduce((a, v) => a + v, 0);
+  exact.map((v, i) => [v - Math.floor(v), i]).sort((a, b) => b[0] - a[0])
+    .forEach(([, i]) => { if (left > 0) { out[i]++; left--; } });
+  return out;
+}
+
+/** Moves the plan by `delta` leads a month, the way channelPlan describes. */
+function refit(rows, delta, ours) {
+  const fixed = rows.find((r) => r.fixed);
+  const named = rows.filter((r) => !r.fixed);
+  const lift = named.map((r) => Math.max(0, r.need - r.now));
+  const lifted = lift.reduce((a, v) => a + v, 0);
+  const set = (list, adds) => list.forEach((r, i) => { r.need = r.now + adds[i]; });
+
+  if (delta < 0) {
+    let cut = -delta;
+    if (fixed) {
+      const take = Math.min(cut, fixed.need - fixed.now);
+      fixed.need -= take;
+      cut -= take;
+    }
+    if (cut > 0 && lifted) set(named, apportion(lift, Math.max(0, lifted - cut)));
+  } else if (lifted) {
+    set(named, apportion(lift, lifted + delta));
+  } else if (ours.length) {
+    const adds = apportion(ours.map(() => 1), delta);
+    ours.forEach((r, i) => { r.need += adds[i]; });
+  } else if (fixed) {
+    fixed.need += delta;
+  }
 }
 
 function gapLine(cp) {
@@ -330,6 +399,13 @@ function gapLine(cp) {
   if (left > 0) return "Still <strong>" + cnt(left) + " leads</strong> a month to find &mdash; put them on a channel.";
   if (left < 0) return "That plans <strong>" + cnt(-left) + " more</strong> than the " + cnt(cp.target) + " a month the goal needs.";
   return "That adds up to the <strong>" + cnt(cp.target) + " leads</strong> a month the goal needs.";
+}
+
+/** A channel's "leads needed": typeable, except the untracked row. */
+function needCell(r) {
+  return r.fixed ? cnt(r.need)
+    : '<input type="text" inputmode="numeric" class="nsin" data-f="' + ID + "|need_" + esc(r.id) +
+        '" value="' + r.need + '" aria-label="Leads needed from ' + esc(r.label) + '">';
 }
 
 function channelCard(ctx) {
@@ -345,9 +421,7 @@ function channelCard(ctx) {
       '<th scope="row">' + esc(r.label) + tag(r) + "</th>" +
       "<td>" + cnt(r.now) + "</td>" +
       (cp.target
-        ? "<td>" + (r.fixed ? live("needU", cnt(r.need))
-            : '<input type="text" inputmode="numeric" class="nsin" data-f="' + ID + "|need_" + esc(r.id) +
-                '" value="' + r.need + '" aria-label="Leads needed from ' + esc(r.label) + '">') + "</td>" +
+        ? "<td>" + live("need_" + r.id, needCell(r)) + "</td>" +
           '<td class="chg">' + live("chg_" + r.id, change(r.need - r.now)) + "</td>"
         : "") +
     "</tr>"
@@ -375,7 +449,7 @@ function channelCard(ctx) {
             "Change any number." +
             (cp.edited
               ? ' <button class="nsreset dark-on-light" data-clear="' + ID + "|" +
-                  cp.rows.filter((r) => r.edited).map((r) => "need_" + r.id).join(",") +
+                  cp.rows.filter((r) => !r.fixed).map((r) => "need_" + r.id).concat("needAt").join(",") +
                   '">Back to the starting split</button>'
               : "") +
           "</div>"
