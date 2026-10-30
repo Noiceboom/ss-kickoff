@@ -486,7 +486,8 @@ function chTotal(cp) {
  * Leads by channel as bars, in three buckets — Paid, Organic and
  * Aggregators — with "Not tracked by channel" on its own underneath.
  * Rows sort by leads needed when the screen draws; typing only redraws
- * the numbers and bars, so a row never moves under the cursor.
+ * the numbers and bars, so a row never moves under the cursor. Each
+ * bucket folds to its header; the subtotal stays in view.
  */
 function channelCard(ctx) {
   const cp = channelPlan(ctx);
@@ -514,20 +515,23 @@ function channelCard(ctx) {
     const shown = all.filter((r) => showOff || !isOff(r)).sort((x, y) => y.need - x.need || y.now - x.now);
     const off = all.filter(isOff);
     const t = bucketSum(cp, b.id);
+    const closed = !!getField(ctx.state, ID, "closed_" + b.id, false);
+    const toggle = ID + "|closed_" + b.id;
     return (
-      '<div class="nsbk ' + b.id + '">' +
-        '<div class="nsbkh">' +
-          '<div class="bn">' + esc(b.label) + "</div>" +
+      '<div class="nsbk ' + b.id + (closed ? " closed" : "") + '">' +
+        '<div class="nsbkh" data-toggle="' + toggle + '">' +
+          '<div class="bn"><button class="nsfold" data-toggle="' + toggle + '" aria-expanded="' + !closed + '" ' +
+            'aria-label="' + (closed ? "Open " : "Close ") + esc(b.label) + '">' + ICON.down + "</button>" + esc(b.label) + "</div>" +
           '<div class="bs">' + esc(b.blurb) + live("bks_" + b.id, bucketShare(cp, b.id)) + "</div>" +
           '<div class="ft">' + live("bk_" + b.id, bucketHead(cp, b.id)) + "</div>" +
           '<div class="chg">' + (cp.target ? live("bkc_" + b.id, change(t.need - t.now)) : "") + "</div>" +
         "</div>" +
-        (shown.length ? shown.map(row).join("") : '<div class="nsbkempty">Nothing here yet.</div>') +
+        (closed ? "" : (shown.length ? shown.map(row).join("") : '<div class="nsbkempty">Nothing here yet.</div>') +
         (off.length
           ? '<div class="nsbkoff">' + (showOff ? "" : "Not in the plan: " + off.map((r) => esc(r.label)).join(", ") + ". ") +
               '<button class="nsreset dark-on-light" data-toggle="' + ID + '|showOff">' +
                 (showOff ? "Hide the ones not in the plan" : "Show") + "</button></div>"
-          : "") +
+          : "")) +
       "</div>"
     );
   }).join("");

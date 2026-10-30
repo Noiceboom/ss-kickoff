@@ -509,7 +509,14 @@ pre.raw{background:var(--char);color:var(--cream);border-radius:14px;padding:20p
 .nsbk.paid{--bc:var(--green-text)} .nsbk.organic{--bc:var(--orange)} .nsbk.agg{--bc:var(--gold)}
 .nsbkh,.nsrow{display:grid;grid-template-columns:minmax(150px,216px) minmax(0,1fr) 96px 48px;align-items:center;gap:14px}
 .nsbkh{padding:2px 0 8px;border-bottom:1px solid var(--char)}
-.nsbkh .bn{font-family:"OSCondensed",sans-serif;font-weight:800;font-size:18px;letter-spacing:.6px;text-transform:uppercase}
+.nsbkh .bn{font-family:"OSCondensed",sans-serif;font-weight:800;font-size:18px;letter-spacing:.6px;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+.nsbkh{cursor:pointer;user-select:none}
+.nsbkh:hover .bn{color:var(--orange-h)}
+.nsfold{flex:none;display:inline-grid;place-items:center;width:24px;height:24px;padding:0;border:1px solid var(--line);
+  border-radius:7px;background:var(--body);color:var(--char);cursor:pointer;transition:transform 150ms var(--ease)}
+.nsfold:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+.nsbk.closed .nsfold{transform:rotate(-90deg)}
+.nsbk.closed .nsbkh{border-bottom-color:var(--line)}
 .nsbkh .bs{font-size:13px;color:var(--muted)}
 .nsrow{padding:9px 0;border-bottom:1px solid var(--line)}
 .nsbk .nsrow:last-of-type{border-bottom:0}
