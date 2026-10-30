@@ -75,6 +75,15 @@ export const COPY = {
   },
 
   targetLabel: { kickoff: "Where they want to be", discovery: "Where you want to be" },
+  targetLede: {
+    kickoff: "Their numbers, not ours. What it takes to get there is worked out underneath.",
+    discovery: "Your numbers. What it takes to get there is worked out underneath.",
+  },
+  leadsTarget: {
+    kickoff: "If they have one. Otherwise leave it and go by the revenue goal.",
+    discovery: "If you have one in mind. Otherwise the revenue goal is enough.",
+  },
+  budgetLabel: { kickoff: "What they spend on marketing", discovery: "What you spend on marketing" },
   revTarget: {
     kickoff: "The number that makes this engagement a win in their head.",
     discovery: "The number that would make this obviously worth doing.",
@@ -231,32 +240,27 @@ function nice(v) {
 }
 
 /**
- * Numbers on this screen that can't all be true at once, as a yellow note
+ * Today's numbers that can't all be true at once, as a yellow note
  * under each figure involved saying what it would have to be for the rest
  * to add up. Holding the others still, so the AM can ask the client which
- * one is the shaky one and move just that.
+ * one is the shaky one and move just that. Goals are never checked: a
+ * target is what they want, not a claim about what's true.
  */
 function mathFixes(s) {
   const f = (v) => Math.round(v).toLocaleString("en-US");
   const up = (v) => Math.ceil(v).toLocaleString("en-US");
   const far = (a, b) => Math.abs(a - b) / Math.max(a, b) > MISS;
   const revNow = num(s, "revNow");
-  const revTarget = num(s, "revTarget");
   const leadsNow = num(s, "leadsNow");
-  const leadsTarget = num(s, "leadsTarget");
   const appts = num(s, "apptsNow");
   const ticket = num(s, "avgTicket");
   const close = num(s, "closeRate");
-  const typed = num(s, "apptRate");
   const out = {};
   const add = (key, html) => { out[key] = out[key] ? out[key] + " " + html : html; };
 
   if (leadsNow && appts && appts > leadsNow) {
     add("apptsNow", "Can&rsquo;t be more than the <strong>" + f(leadsNow) + " leads</strong>.");
     add("leadsNow", "Needs to be at least <strong>" + f(appts) + "</strong> to book " + f(appts) + " appointments.");
-  } else if (leadsNow && appts && typed && Math.abs(typed - (appts / leadsNow) * 100) > 10) {
-    add("apptRate", "Their appointment and lead counts say <strong>" + f((appts / leadsNow) * 100) +
-      "%</strong>. Move this to match.");
   }
 
   // today: leads → appointments → jobs → revenue
@@ -265,14 +269,14 @@ function mathFixes(s) {
   if (revNow && ticket && close && booked) {
     const made = booked * (close / 100) * ticket;
     if (far(made, revNow)) {
-      add("revNow", "Leads, appointments, close rate and ticket add up to <strong>" + money(nice(made)) + "</strong> a month. " +
+      add("revNow", "Leads, appointments, sales booking rate and ticket add up to <strong>" + money(nice(made)) + "</strong> a month. " +
         "Move this to match, or fix whichever of those is off.");
       if (appts) {
         const need = revNow / ((close / 100) * ticket);
-        add("apptsNow", "To make " + money(revNow) + " at this close rate and ticket: about <strong>" +
+        add("apptsNow", "To make " + money(revNow) + " at this sales booking rate and ticket: about <strong>" +
           up(need) + "</strong>" + (leadsNow && need > leadsNow ? ", more than their " + f(leadsNow) + " leads" : "") + ".");
       } else if (leadsNow && book) {
-        add("leadsNow", "To make " + money(revNow) + " at these booking and close rates: about <strong>" +
+        add("leadsNow", "To make " + money(revNow) + " at this booking rate and sales booking rate: about <strong>" +
           up(revNow / ((book / 100) * (close / 100) * ticket)) + "</strong>.");
       }
       add("avgTicket", "To make " + money(revNow) + " from " + f(booked * (close / 100)) +
@@ -282,21 +286,6 @@ function mathFixes(s) {
         ? "To make " + money(revNow) + " from " + f(booked) + " appointments: about <strong>" + f(needClose) + "%</strong>."
         : "Even closing every appointment doesn&rsquo;t reach " + money(revNow) + ". Revenue, appointments or ticket is off.");
     }
-  }
-
-  // the goal: leads goal × what a lead is worth → revenue goal
-  const worth = leadWorth(s);
-  if (revTarget && leadsTarget && worth && far(leadsTarget * worth, revTarget)) {
-    add("revTarget", f(leadsTarget) + " leads a month at today&rsquo;s rates brings about <strong>" +
-      money(nice(leadsTarget * worth)) + "</strong>.");
-    add("leadsTarget", money(revTarget) + " a month at today&rsquo;s rates takes about <strong>" +
-      up(revTarget / worth) + " leads</strong>.");
-  }
-  if (revNow && revTarget && revTarget <= revNow) {
-    add("revTarget", "At or below today&rsquo;s <strong>" + money(revNow) + "</strong>. Worth checking that&rsquo;s deliberate.");
-  }
-  if (leadsNow && leadsTarget && leadsTarget < leadsNow && (!revTarget || !revNow || revTarget > revNow)) {
-    add("leadsTarget", "Below today&rsquo;s <strong>" + f(leadsNow) + "</strong> while revenue is meant to grow.");
   }
 
   const budget = num(s, "budget");
@@ -333,55 +322,61 @@ export default {
       sectionHeadFor(this, ctx) +
       skipRow(ID, isSkipped(ctx.state, ID)) +
 
+      // Today is the whole funnel, so the numbers can be checked against
+      // each other: leads → appointments → jobs → revenue. Anything that
+      // can't be true at once gets a yellow note under the figure.
       '<div class="card">' +
         '<div class="mlabel">' + t("todayLabel") + "</div>" +
         '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
           t("todayLede") +
         "</div>" +
-        // Now and goal sit side by side. Asking "what is it" here and
-        // "what should it be" three cards later made the gap — the only
-        // number that matters — something you had to hold in your head.
         '<div class="fields sliders" style="margin-top:26px">' +
           slider(ID, "revNow", "Revenue per month, now", v("revNow"), {
-            ...SCALE.revenue, check: "goals:fix_revNow", start: 120000, help: t("revNow"),
-          }) +
-          slider(ID, "revTarget", "Revenue per month, goal", v("revTarget"), {
-            ...SCALE.revenue, check: "goals:fix_revTarget", start: 250000, help: t("revTarget"),
+            ...SCALE.revenue, wide: true, check: "goals:fix_revNow", start: 120000, help: t("revNow"),
           }) +
           slider(ID, "leadsNow", "Leads per month, now", v("leadsNow"), {
             ...SCALE.leads, check: "goals:fix_leadsNow", start: 150, help: t("leadsNow"),
           }) +
-          slider(ID, "leadsTarget", "Leads per month, goal", v("leadsTarget"), {
-            ...SCALE.leads, check: "goals:fix_leadsTarget", start: 250,
-          }) +
           slider(ID, "apptsNow", "Appointments per month", v("apptsNow"), {
             ...SCALE.leads, check: "goals:fix_apptsNow", start: 60, help: t("apptsNow"),
+          }) +
+          slider(ID, "closeRate", "Sales booking rate", v("closeRate"), {
+            ...SCALE.rate, check: "goals:fix_closeRate", start: 40, help: t("closeRate"),
           }) +
           slider(ID, "avgTicket", "Average ticket", v("avgTicket"), {
             ...SCALE.ticket, check: "goals:fix_avgTicket", start: 900, help: t("avgTicket"),
           }) +
         "</div>" +
         derived("goals:today") +
+      "</div>" +
+
+      // The goal card sits straight under today so the gap reads at a
+      // glance. They're targets, so nothing here is checked against today.
+      '<div class="card">' +
+        '<div class="mlabel">' + t("targetLabel") + "</div>" +
+        '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
+          t("targetLede") +
+        "</div>" +
+        '<div class="fields sliders" style="margin-top:26px">' +
+          slider(ID, "revTarget", "Revenue per month, goal", v("revTarget"), {
+            ...SCALE.revenue, start: 250000, help: t("revTarget"),
+          }) +
+          slider(ID, "leadsTarget", "Leads per month, goal", v("leadsTarget"), {
+            ...SCALE.leads, start: 250, help: t("leadsTarget"),
+          }) +
+        "</div>" +
         derived("goals:gap") +
       "</div>" +
 
       '<div class="card">' +
-        '<div class="mlabel">What happens to a lead</div>' +
+        '<div class="mlabel">Speed and reviews</div>' +
         '<div style="font-size:14px;color:var(--muted);margin-top:4px">' +
-          "Everything between the phone ringing and the money arriving. Most of the money " +
-          "already in the building is sitting in these four numbers." +
+          "How fast a new lead hears back, and how many finished jobs turn into a review." +
         "</div>" +
         '<div class="fields sliders" style="margin-top:26px">' +
           slider(ID, "speedToLead", "Response time", v("speedToLead"), {
             ...SCALE.minutes, start: 15,
-            help: "How long before someone gets back to a new lead. The single biggest lever on the three numbers below it.",
-          }) +
-          slider(ID, "apptRate", "Appointment booking rate", v("apptRate"), {
-            ...SCALE.rate, check: "goals:fix_apptRate", start: 45,
-            help: "Of the leads that come in, how many end up as a booked appointment.",
-          }) +
-          slider(ID, "closeRate", "Sales booking rate", v("closeRate"), {
-            ...SCALE.rate, check: "goals:fix_closeRate", start: 40, help: t("closeRate"),
+            help: "How long before someone gets back to a new lead. The biggest lever on how many leads become appointments.",
           }) +
           slider(ID, "reviewRate", "Review rate", v("reviewRate"), {
             ...SCALE.rate, start: 15,
@@ -391,7 +386,7 @@ export default {
       "</div>" +
 
       '<div class="card">' +
-        '<div class="mlabel">' + t("targetLabel") + "</div>" +
+        '<div class="mlabel">' + t("budgetLabel") + "</div>" +
         '<div class="fields sliders" style="margin-top:22px">' +
           slider(ID, "budget", "Marketing budget per month", v("budget"), {
             ...SCALE.budget, check: "goals:fix_budget", start: 8000, help: t("budget"),
@@ -465,28 +460,25 @@ export default {
     const budget = num(s, "budget");
     const out = {};
 
-    // today — implied jobs a month, and whether the numbers agree
-    if (revNow && ticket) {
-      const jobs = Math.round(revNow / ticket);
-      let line = "That's about <strong>" + jobs.toLocaleString("en-US") + " closed jobs</strong> a month.";
-      const appts = num(s, "apptsNow");
-      const book = bookRate(s);
-      const base = appts || (leadsNow ? leadsNow * (book ? book / 100 : 1) : 0);
-      if (base && rate) {
-        const implied = Math.round(base * (rate / 100));
-        const off = implied ? Math.abs(implied - jobs) / jobs : 1;
-        const from = appts || book ? "appointment" : "lead";
-        if (off <= MISS) line += " Their " + from + " numbers and close rate line up with that.";
+    // today — the funnel written out, so the AM can read it back
+    const appts = num(s, "apptsNow");
+    const book = bookRate(s);
+    const booked = appts || (leadsNow && book ? leadsNow * (book / 100) : 0);
+    const f = (x) => Math.round(x).toLocaleString("en-US");
+    const steps = [];
+    if (leadsNow) steps.push(f(leadsNow) + " leads");
+    if (appts) steps.push(f(appts) + " appointments" + (leadsNow ? " (<strong>" + f((appts / leadsNow) * 100) + "% booked</strong>)" : ""));
+    const jobs = booked && rate ? booked * (rate / 100) : null;
+    if (jobs) steps.push(f(jobs) + " jobs (" + f(rate) + "% closed)");
+    if (jobs && ticket) steps.push("<strong>" + money(Math.round(jobs * ticket)) + " a month</strong> at " + money(ticket) + " a job");
+    if (steps.length > 1) {
+      let line = steps.join(" &rarr; ") + ".";
+      if (jobs && ticket && revNow && Math.abs(jobs * ticket - revNow) / Math.max(jobs * ticket, revNow) <= MISS) {
+        line += " That lines up with the revenue above.";
       }
       out["goals:today"] = line;
-    }
-    const apptsNow = num(s, "apptsNow");
-    if (leadsNow && apptsNow) {
-      const r = Math.round((apptsNow / leadsNow) * 100);
-      const typed = num(s, "apptRate");
-      out["goals:today"] = (out["goals:today"] ? out["goals:today"] + " " : "") +
-        apptsNow.toLocaleString("en-US") + " appointments from " + leadsNow.toLocaleString("en-US") +
-        " leads is a <strong>" + r + "% booking rate</strong>.";
+    } else if (revNow && ticket) {
+      out["goals:today"] = "That's about <strong>" + f(revNow / ticket) + " closed jobs</strong> a month at " + money(ticket) + " a job.";
     }
 
     // the gap — what the target actually costs in leads
@@ -497,13 +489,9 @@ export default {
       const worth = leadWorth(s);
       if (worth) {
         const leadsNeeded = Math.round(revTarget / worth);
-        line += " At their ticket, booking and close rates that needs about <strong>" +
+        line += " At today&rsquo;s booking rate, sales booking rate and ticket that takes about <strong>" +
           leadsNeeded.toLocaleString("en-US") + " leads a month</strong>";
-        line += leadsNow ? " — up from " + leadsNow.toLocaleString("en-US") + "." : ".";
-      }
-      if (budget && revTarget) {
-        line += " Budget is <strong>" + Math.round((budget / revTarget) * 100) +
-          "%</strong> of the target; owners who grow past $5M typically run 6–10%.";
+        line += leadsNow ? ", up from " + leadsNow.toLocaleString("en-US") + "." : ".";
       }
       out["goals:gap"] = line;
     }
@@ -527,6 +515,11 @@ export default {
       out["goals:cpl"] = line;
     } else if (adSpend && !leadsTarget) {
       out["goals:cpl"] = "Set a leads goal and this works out what a lead is allowed to cost.";
+    }
+    if (budget && revTarget) {
+      out["goals:cpl"] = (out["goals:cpl"] ? out["goals:cpl"] + " " : "") +
+        "The budget is <strong>" + Math.round((budget / revTarget) * 100) +
+        "%</strong> of the revenue goal; owners who grow past $5M typically run 6–10%.";
     }
 
     const fixes = mathFixes(s);
@@ -570,18 +563,19 @@ export default {
     put("Revenue / mo", span("revNow", "revTarget", money));
     put("Leads / mo", span("leadsNow", "leadsTarget", (x) => String(x)));
     put("Appointments / mo", filled(s.apptsNow) ? String(s.apptsNow) : "");
+    const bookS = bookRate(s);
+    put("Appointment booking rate", bookS ? Math.round(bookS) + "%" : "");
+    put("Sales booking rate", filled(s.closeRate) ? pct(s.closeRate) : "");
     put("Average ticket", filled(s.avgTicket) ? money(s.avgTicket) : "");
     if (revNow && revTarget && revTarget > revNow) {
       put("Gap to goal", money(revTarget - revNow) + " / mo (+" + Math.round(((revTarget - revNow) / revNow) * 100) + "%)");
     }
     const worthS = leadWorth(s);
     if (revTarget && worthS) {
-      put("Leads needed at goal", Math.round(revTarget / worthS).toLocaleString("en-US") + " / mo at this ticket, booking and close rate");
+      put("Leads needed at goal", Math.round(revTarget / worthS).toLocaleString("en-US") + " / mo at today's booking rate, sales booking rate and ticket");
     }
 
     put("Response time", filled(s.speedToLead) ? s.speedToLead + " min" : "");
-    put("Appointment booking rate", pct(s.apptRate));
-    put("Sales booking rate", filled(s.closeRate) ? pct(s.closeRate) : "");
     put("Review rate", pct(s.reviewRate));
     if (worthS) put("A lead is worth", money(Math.round(worthS)));
 
@@ -602,21 +596,6 @@ export default {
     put("Winning in 90 days", s.win90);
 
     const open = [];
-    // Two goals that cannot both be true. The screen works out the leads a
-    // revenue target needs; when the leads target they gave is well short of
-    // it, one of the two numbers is wrong, and that is worth knowing before
-    // anything is priced against either.
-    if (revTarget && worthS && leadsTarget) {
-      const needed = Math.round(revTarget / worthS);
-      if (needed > leadsTarget * 1.25) {
-        open.push({
-          what: "The two goals disagree",
-          detail: "A " + money(revTarget) + " month needs about " + needed.toLocaleString("en-US") +
-            " leads at their ticket and booking rate; their leads goal is " + leadsTarget.toLocaleString("en-US") +
-            ". Either the revenue goal, the ticket, or the booking rate is off.",
-        });
-      }
-    }
     if (filled(s.revTarget) && !filled(s.budget)) {
       open.push({ what: "Marketing budget", detail: "They named a target but no budget — nothing can be scoped against that",
         ask: "Confirm the monthly marketing budget you're comfortable with." });

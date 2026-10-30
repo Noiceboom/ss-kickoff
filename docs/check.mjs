@@ -2393,14 +2393,22 @@ for (const m of MODULES) {
   // Goals —
   const go = kick("goals");
   if (go.keys.has("horizon")) fail('kickoff/goals still asks "By when?"');
-  for (const k of ["revNow", "revTarget", "leadsNow", "leadsTarget",
-                   "speedToLead", "apptRate", "closeRate", "reviewRate", "budget", "adSpend"]) {
+  for (const k of ["revNow", "revTarget", "leadsNow", "leadsTarget", "apptsNow",
+                   "speedToLead", "closeRate", "avgTicket", "reviewRate", "budget", "adSpend"]) {
     if (!go.keys.has(k)) fail(`kickoff/goals is missing "${k}"`);
   }
-  // now and goal must sit together, not three cards apart
-  const order = ["revNow", "revTarget", "leadsNow", "leadsTarget"].map((k) => go.html.indexOf('goals|' + k));
-  if (order.some((n) => n < 0) || order[1] < order[0] || order[2] < order[1] || order[3] < order[2]) {
-    fail("goals does not pair each number with its target, in order");
+  // Today is the whole funnel in one card, and the goals card follows it
+  // directly, so the gap is never something you have to hold in your head.
+  {
+    const at = (k) => go.html.indexOf('data-f="goals|' + k + '"');
+    const today = ["revNow", "leadsNow", "apptsNow", "closeRate", "avgTicket"].map(at);
+    const goal = ["revTarget", "leadsTarget"].map(at);
+    if (today.concat(goal).some((n) => n < 0)) fail("goals is missing a today or goal slider");
+    else if (Math.max(...today) > Math.min(...goal)) fail("a goal slider sits among today's numbers");
+    else {
+      const between = go.html.slice(Math.max(...today), Math.min(...goal));
+      if ((between.match(/data-f="goals\|/g) || []).length > 1) fail("something sits between today's numbers and the goals");
+    }
   }
   {
     const g = S.fresh();
