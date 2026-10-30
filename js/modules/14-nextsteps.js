@@ -17,7 +17,7 @@ import { sectionHeadFor, rowGroup, warnBox, filled, money, esc, ICON } from "../
 import { getRows, getField, setField, isSkipped } from "../state.js";
 import { OFFER } from "./00-intro.js";
 import { bookRate } from "./02-goals.js";
-import { BY_ID } from "../channels.js";
+import { BY_ID, BUCKETS, bucketOf } from "../channels.js";
 
 const ID = "nextsteps";
 
@@ -137,12 +137,20 @@ export default {
     };
     const cp = channelPlan(ctx);
     if (cp.target) {
+      const max = chMax(cp);
       for (const r of cp.rows) {
         out[ID + ":chg_" + r.id] = change(r.need - r.now);
         out[ID + ":need_" + r.id] = needCell(r);
+        out[ID + ":bar_" + r.id] = chBar(r, max);
       }
-      out[ID + ":chTotal"] = cnt(cp.planned);
-      out[ID + ":chChg"] = change(cp.planned - cp.totalNow);
+      for (const b of BUCKETS) {
+        const t = bucketSum(cp, b.id);
+        out[ID + ":bk_" + b.id] = bucketHead(cp, b.id);
+        out[ID + ":bks_" + b.id] = bucketShare(cp, b.id);
+        out[ID + ":bkc_" + b.id] = change(t.need - t.now);
+      }
+      out[ID + ":chTotal"] = chTotal(cp);
+      out[ID + ":chMix"] = chMix(cp);
       out[ID + ":chGap"] = gapLine(cp);
     }
     return out;
@@ -164,8 +172,12 @@ export default {
     }
     const cp = channelPlan(ctx);
     if (cp.rows.length) {
-      put("Leads by channel, now → needed", cp.rows.map((r) =>
-        r.label + " " + cnt(r.now) + (cp.target ? " → " + cnt(r.need) : "")).join("; "));
+      const line = (r) => r.label + " " + cnt(r.now) + (cp.target ? " → " + cnt(r.need) : "");
+      const groups = BUCKETS.map((b) => {
+        const list = cp.rows.filter((r) => !r.fixed && bucketOf(r.id) === b.id && (r.now || r.need));
+        return list.length ? b.label + ": " + list.map(line).join(", ") : "";
+      }).concat(cp.rows.filter((r) => r.fixed).map(line)).filter(Boolean);
+      put("Leads by channel, now → needed", groups.join("; "));
     }
 
     const asks = editedAsks(ctx);
@@ -390,15 +402,16 @@ function refit(rows, delta, ours) {
   }
 }
 
+/** Over, short or on the goal, plus where a shortfall went. */
 function gapLine(cp) {
-  if (cp.short > 0) {
-    return "<strong>" + cnt(cp.short) + " leads</strong> a month aren&rsquo;t on a channel yet, so they sit under " +
-      "&ldquo;" + EXTRA_LABELS.untracked + "&rdquo;.";
-  }
   const left = cp.target - cp.planned;
-  if (left > 0) return "Still <strong>" + cnt(left) + " leads</strong> a month to find &mdash; put them on a channel.";
-  if (left < 0) return "That plans <strong>" + cnt(-left) + " more</strong> than the " + cnt(cp.target) + " a month the goal needs.";
-  return "That adds up to the <strong>" + cnt(cp.target) + " leads</strong> a month the goal needs.";
+  const chip = left < 0 ? '<span class="nsstat over">Over the goal by ' + cnt(-left) + "</span>"
+    : left > 0 ? '<span class="nsstat short">Short of the goal by ' + cnt(left) + "</span>"
+    : '<span class="nsstat ok">Adds up to the goal</span>';
+  return chip + (cp.short > 0
+    ? '<span class="nsstatwhy"><strong>' + cnt(cp.short) + " leads</strong> a month aren&rsquo;t on a channel yet, so they sit under " +
+      "&ldquo;" + EXTRA_LABELS.untracked + "&rdquo;.</span>"
+    : "");
 }
 
 /** A channel's "leads needed": typeable, except the untracked row. */
@@ -408,24 +421,117 @@ function needCell(r) {
         '" value="' + r.need + '" aria-label="Leads needed from ' + esc(r.label) + '">';
 }
 
+const UNTRACKED_COLOR = "#cfc9bc";
+const BUCKET_COLOR = { paid: "var(--green-text)", organic: "var(--orange)", agg: "var(--gold)" };
+
+/** A row's bar: leads now in dark, the growth on top in orange, a cut hatched. */
+function chBar(r, max) {
+  const pct = (v) => (v / max) * 100 + "%";
+  const lo = Math.min(r.now, r.need);
+  return '<div class="nsbar">' +
+    (lo ? '<div class="now" style="width:' + pct(lo) + '"></div>' : "") +
+    (r.need > r.now ? '<div class="add" style="left:' + pct(r.now) + ";width:" + pct(r.need - r.now) + '"></div>' : "") +
+    (r.need < r.now ? '<div class="cut" style="left:' + pct(r.need) + ";width:" + pct(r.now - r.need) + '"></div>' : "") +
+  "</div>";
+}
+
+/** Leads now and needed for one bucket. */
+function bucketSum(cp, id) {
+  const list = cp.rows.filter((r) => !r.fixed && bucketOf(r.id) === id);
+  return { now: list.reduce((a, r) => a + r.now, 0), need: list.reduce((a, r) => a + r.need, 0) };
+}
+
+function bucketHead(cp, id) {
+  const t = bucketSum(cp, id);
+  return cp.target ? '<span class="was">' + cnt(t.now) + " &rarr;</span> " + cnt(t.need) : cnt(t.now);
+}
+
+function bucketShare(cp, id) {
+  const total = cp.target ? cp.planned : cp.totalNow;
+  const v = bucketSum(cp, id)[cp.target ? "need" : "now"];
+  return total ? " &middot; " + Math.round((v / total) * 100) + "% of the " + (cp.target ? "plan" : "leads") : "";
+}
+
+/** Today and the plan as two bars split by bucket, with the goal marked. */
+function chMix(cp) {
+  const fixed = cp.rows.find((r) => r.fixed);
+  const scale = Math.max(cp.planned, cp.target, cp.totalNow, 1) * 1.08;
+  const parts = BUCKETS.map((b) => ({ ...b, color: BUCKET_COLOR[b.id], sum: bucketSum(cp, b.id) }))
+    .concat(fixed ? [{ id: "untracked", label: EXTRA_LABELS.untracked, color: UNTRACKED_COLOR,
+      sum: { now: fixed.now, need: fixed.need } }] : []);
+  const stack = (k, total) => '<div class="stack" style="width:' + (total / scale) * 100 + '%">' +
+    parts.filter((x) => x.sum[k]).map((x) =>
+      '<div class="' + x.id + '" style="flex:' + x.sum[k] + ";background:" + x.color + '" title="' + esc(x.label) + ": " +
+        cnt(x.sum[k]) + '">' + cnt(x.sum[k]) + "</div>").join("") + "</div>";
+  return (
+    '<div class="nsmixline"><span class="mlabel">Today</span><div class="nstrack">' + stack("now", cp.totalNow) + "</div></div>" +
+    (cp.target
+      ? '<div class="nsmixline plan"><span class="mlabel">Plan</span><div class="nstrack">' + stack("need", cp.planned) +
+          '<div class="mark' + (cp.target / scale > 0.7 ? " end" : "") + '" style="left:' + (cp.target / scale) * 100 + '%"><span>Goal ' + cnt(cp.target) + "</span></div>" +
+        "</div></div>"
+      : "") +
+    '<div class="nslegend">' + parts.map((x) => '<span><i style="background:' + x.color + '"></i>' +
+      esc(x.id === "untracked" ? "Not tracked" : x.label) + "</span>").join("") + "</div>"
+  );
+}
+
+function chTotal(cp) {
+  return cp.target
+    ? '<span class="was">' + cnt(cp.totalNow) + " &rarr;</span> " + cnt(cp.planned) +
+      ' <span class="chg">' + change(cp.planned - cp.totalNow) + "</span>"
+    : cnt(cp.totalNow);
+}
+
+/**
+ * Leads by channel as bars, in three buckets — Paid, Organic and
+ * Aggregators — with "Not tracked by channel" on its own underneath.
+ * Rows sort by leads needed when the screen draws; typing only redraws
+ * the numbers and bars, so a row never moves under the cursor.
+ */
 function channelCard(ctx) {
   const cp = channelPlan(ctx);
   if (!cp.rows.length) return "";
-  const live = (k, v) => '<span data-derived="' + ID + ":" + k + '">' + v + "</span>";
+  const live = (k, v, tag) => "<" + (tag || "span") + ' data-derived="' + ID + ":" + k + '">' + v + "</" + (tag || "span") + ">";
   const tag = (r) => r.ours
-    ? '<span class="nstag' + (r.running ? "" : " new") + '">' + (r.running ? "Ours" : "New") + "</span>"
+    ? '<span class="nstag' + (r.running ? "" : " new") + '">' + (r.running ? "Ours" : "New &middot; ours") + "</span>"
     : "";
+  const showOff = !!getField(ctx.state, ID, "showOff", false);
+  const isOff = (r) => !r.fixed && !r.now && !r.need;
+  const max = chMax(cp);
 
-  const body = cp.rows.map((r) =>
-    "<tr>" +
-      '<th scope="row">' + esc(r.label) + tag(r) + "</th>" +
-      "<td>" + cnt(r.now) + "</td>" +
-      (cp.target
-        ? "<td>" + live("need_" + r.id, needCell(r)) + "</td>" +
-          '<td class="chg">' + live("chg_" + r.id, change(r.need - r.now)) + "</td>"
-        : "") +
-    "</tr>"
-  ).join("");
+  const row = (r) =>
+    '<div class="nsrow' + (cp.target && r.need === r.now ? " flat" : "") + '">' +
+      '<div class="nm">' + esc(r.label) + tag(r) + "</div>" +
+      '<div class="nsbarw" data-derived="' + ID + ":bar_" + r.id + '">' + chBar(r, max) + "</div>" +
+      '<div class="ft">' + (cp.target
+        ? '<span class="was">' + cnt(r.now) + " &rarr;</span> " + live("need_" + r.id, needCell(r))
+        : cnt(r.now)) + "</div>" +
+      '<div class="chg">' + (cp.target ? live("chg_" + r.id, change(r.need - r.now)) : "") + "</div>" +
+    "</div>";
+
+  const buckets = BUCKETS.map((b) => {
+    const all = cp.rows.filter((r) => !r.fixed && bucketOf(r.id) === b.id);
+    const shown = all.filter((r) => showOff || !isOff(r)).sort((x, y) => y.need - x.need || y.now - x.now);
+    const off = all.filter(isOff);
+    const t = bucketSum(cp, b.id);
+    return (
+      '<div class="nsbk ' + b.id + '">' +
+        '<div class="nsbkh">' +
+          '<div class="bn">' + esc(b.label) + "</div>" +
+          '<div class="bs">' + esc(b.blurb) + live("bks_" + b.id, bucketShare(cp, b.id)) + "</div>" +
+          '<div class="ft">' + live("bk_" + b.id, bucketHead(cp, b.id)) + "</div>" +
+          '<div class="chg">' + (cp.target ? live("bkc_" + b.id, change(t.need - t.now)) : "") + "</div>" +
+        "</div>" +
+        (shown.length ? shown.map(row).join("") : '<div class="nsbkempty">Nothing here yet.</div>') +
+        (off.length
+          ? '<div class="nsbkoff">' + (showOff ? "" : "Not in the plan: " + off.map((r) => esc(r.label)).join(", ") + ". ") +
+              '<button class="nsreset dark-on-light" data-toggle="' + ID + '|showOff">' +
+                (showOff ? "Hide the ones not in the plan" : "Show") + "</button></div>"
+          : "") +
+      "</div>"
+    );
+  }).join("");
+  const fixed = cp.rows.find((r) => r.fixed);
 
   return (
     '<div class="card">' +
@@ -433,20 +539,22 @@ function channelCard(ctx) {
       '<p style="margin:8px 0 0;font-size:15px;color:var(--green-text)">' +
         "Where the leads come from today, and where they need to come from to hit the goal." +
       "</p>" +
-      '<div style="overflow-x:auto;margin-top:16px"><table class="nschan">' +
-        "<thead><tr><th>Channel</th><th>Leads now</th>" +
-          (cp.target ? "<th>Leads needed</th><th>Change</th>" : "") + "</tr></thead>" +
-        "<tbody>" + body + "</tbody>" +
-        '<tfoot><tr><th scope="row">Total a month</th><td>' + cnt(cp.totalNow) + "</td>" +
-          (cp.target ? "<td>" + live("chTotal", cnt(cp.planned)) + '</td><td class="chg">' +
-            live("chChg", change(cp.planned - cp.totalNow)) + "</td>" : "") +
-        "</tr></tfoot>" +
-      "</table></div>" +
+      '<div class="nschan">' +
+        buckets +
+        (fixed ? '<div class="nsun">' + row(fixed) + "</div>" : "") +
+        (cp.target
+          ? '<div class="nskey"><span><i class="now"></i>Leads now</span><span><i class="add"></i>Growth needed</span></div>'
+          : "") +
+        '<div class="nsmix">' +
+          '<div class="nstot"><span class="lbl">Total a month</span><span class="v">' + live("chTotal", chTotal(cp)) + "</span></div>" +
+          live("chMix", chMix(cp), "div") +
+          (cp.target ? live("chGap", gapLine(cp), "div") : "") +
+        "</div>" +
+      "</div>" +
       (cp.target
-        ? '<div class="nschgap">' + live("chGap", gapLine(cp)) + "</div>" +
-          '<div class="nshint" style="color:var(--muted)">' +
+        ? '<div class="nshint" style="color:var(--muted)">' +
             (cp.ours ? "Starts with their own channels flat and the gap spread across ours. " : "") +
-            "Change any number." +
+            "Change any number in the boxes." +
             (cp.edited
               ? ' <button class="nsreset dark-on-light" data-clear="' + ID + "|" +
                   cp.rows.filter((r) => !r.fixed).map((r) => "need_" + r.id).concat("needAt").join(",") +
@@ -456,6 +564,11 @@ function channelCard(ctx) {
         : '<div class="nshint" style="color:var(--muted);margin-top:12px">Set the goal and the funnel on Goals to see the leads each channel needs to bring.</div>') +
     "</div>"
   );
+}
+
+/** The bars' shared scale: the biggest number on any row. */
+function chMax(cp) {
+  return Math.max(1, ...cp.rows.map((r) => Math.max(r.now, r.need)));
 }
 
 function needLine(win, goal) {

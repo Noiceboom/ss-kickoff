@@ -38,6 +38,23 @@ export const CATEGORIES = [
   },
 ];
 
+/**
+ * The three buckets Next steps groups lead channels into. A channel not
+ * named in BUCKET_OF is an aggregator: every marketplace and directory,
+ * plus Nextdoor.
+ */
+export const BUCKETS = [
+  { id: "paid", label: "Paid", blurb: "Ads they pay for by the click or the lead" },
+  { id: "organic", label: "Organic", blurb: "Search, maps, AI answers and local groups" },
+  { id: "agg", label: "Aggregators", blurb: "Lead marketplaces, directories and Nextdoor" },
+];
+const BUCKET_OF = {
+  "google-ads": "paid", "local-services-ads-lsa": "paid", "meta-facebook-instagram": "paid", tiktok: "paid",
+  seo: "organic", "google-business-profile-maps": "organic", aeo: "organic",
+  chatgpt: "organic", perplexity: "organic", claude: "organic", "facebook-local-neighborhood-groups": "organic",
+};
+export function bucketOf(id) { return BUCKET_OF[id] || "agg"; }
+
 export const RATINGS = [
   { value: "good", label: "Good" },
   { value: "mixed", label: "Mixed" },
