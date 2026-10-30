@@ -452,26 +452,25 @@ function bucketShare(cp, id) {
   return total ? " &middot; " + Math.round((v / total) * 100) + "% of the " + (cp.target ? "plan" : "leads") : "";
 }
 
-/** Today and the plan as two bars split by bucket, with the goal marked. */
+/** The plan as one bar split by bucket, with the goal marked. Before there's a goal, today's split. */
 function chMix(cp) {
   const fixed = cp.rows.find((r) => r.fixed);
-  const scale = Math.max(cp.planned, cp.target, cp.totalNow, 1) * 1.08;
-  const parts = BUCKETS.map((b) => ({ ...b, color: BUCKET_COLOR[b.id], sum: bucketSum(cp, b.id) }))
-    .concat(fixed ? [{ id: "untracked", label: EXTRA_LABELS.untracked, color: UNTRACKED_COLOR,
-      sum: { now: fixed.now, need: fixed.need } }] : []);
-  const stack = (k, total) => '<div class="stack" style="width:' + (total / scale) * 100 + '%">' +
-    parts.filter((x) => x.sum[k]).map((x) =>
-      '<div class="' + x.id + '" style="flex:' + x.sum[k] + ";background:" + x.color + '" title="' + esc(x.label) + ": " +
-        cnt(x.sum[k]) + '">' + cnt(x.sum[k]) + "</div>").join("") + "</div>";
+  const k = cp.target ? "need" : "now";
+  const total = cp.target ? cp.planned : cp.totalNow;
+  const scale = Math.max(total, cp.target, 1) * 1.08;
+  const parts = BUCKETS.map((b) => ({ ...b, color: BUCKET_COLOR[b.id], v: bucketSum(cp, b.id)[k] }))
+    .concat(fixed ? [{ id: "untracked", label: "Not tracked", color: UNTRACKED_COLOR, v: fixed[k] }] : [])
+    .filter((x) => x.v);
   return (
-    '<div class="nsmixline"><span class="mlabel">Today</span><div class="nstrack">' + stack("now", cp.totalNow) + "</div></div>" +
-    (cp.target
-      ? '<div class="nsmixline plan"><span class="mlabel">Plan</span><div class="nstrack">' + stack("need", cp.planned) +
-          '<div class="mark' + (cp.target / scale > 0.7 ? " end" : "") + '" style="left:' + (cp.target / scale) * 100 + '%"><span>Goal ' + cnt(cp.target) + "</span></div>" +
-        "</div></div>"
-      : "") +
-    '<div class="nslegend">' + parts.map((x) => '<span><i style="background:' + x.color + '"></i>' +
-      esc(x.id === "untracked" ? "Not tracked" : x.label) + "</span>").join("") + "</div>"
+    '<div class="nstrack"><div class="stack" style="width:' + (total / scale) * 100 + '%">' +
+      parts.map((x) => '<div class="' + x.id + '" style="flex:' + x.v + ";background:" + x.color + '" title="' +
+        esc(x.label) + ": " + cnt(x.v) + '">' + cnt(x.v) + "</div>").join("") + "</div>" +
+      (cp.target
+        ? '<div class="mark' + (cp.target / scale > 0.7 ? " end" : "") + '" style="left:' + (cp.target / scale) * 100 + '%">' +
+            "<span>Goal " + cnt(cp.target) + "</span></div>"
+        : "") +
+    "</div>" +
+    '<div class="nslegend">' + parts.map((x) => '<span><i style="background:' + x.color + '"></i>' + esc(x.label) + "</span>").join("") + "</div>"
   );
 }
 
