@@ -251,17 +251,40 @@ function renderPills() {
       esc(navOf(m)) + '<span class="dot"></span></button>';
   }).join("");
 
-  const visible = steps();
-  const done = visible.filter((m) => { const s = statusOf(m); return s === "done" || s === "skipped"; }).length;
-  const pct = Math.round((done / (visible.length - 1)) * 100);
-  document.getElementById("pfill").style.width = Math.min(100, pct) + "%";
-  document.getElementById("ppct").textContent = Math.min(100, pct) + "%";
+  // How far through the call: the page you're on against the last page you
+  // walk the client through (Next steps; the readout after it is ours).
+  const list = steps();
+  let end = list.findIndex((m) => m.id === "nextsteps");
+  if (end < 0) end = Math.max(1, list.length - 2);
+  const at = Math.min(end, Math.max(0, list.findIndex((m) => m.id === cur)));
+  const pct = Math.round((at / end) * 100);
+  const left = end - at;
+  document.getElementById("pfill").style.width = pct + "%";
+  document.getElementById("ppct").textContent = pct + "%";
+  const prog = document.querySelector(".prog");
+  if (prog) prog.title = left ? left + (left === 1 ? " page" : " pages") + " to go" : "Last page";
 
+  // Bring the current page into view inside the list only. scrollIntoView
+  // also scrolls the window, which fought the page's own scroll.
   const active = el.querySelector(".pill.on");
-  if (active && active.scrollIntoView) {
-    active.scrollIntoView({ block: "nearest", inline: "nearest" });
+  if (active) {
+    const across = el.scrollWidth > el.clientWidth;
+    if (across) {
+      const l = active.getBoundingClientRect().left - el.getBoundingClientRect().left + el.scrollLeft;
+      if (l < el.scrollLeft || l + active.offsetWidth > el.scrollLeft + el.clientWidth) el.scrollLeft = l - 16;
+    } else {
+      const t = active.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop;
+      if (t < el.scrollTop || t + active.offsetHeight > el.scrollTop + el.clientHeight) el.scrollTop = t - 16;
+    }
   }
 }
+
+/** The sticky page list sits under the header, whatever height it wraps to. */
+function measureHeader() {
+  const h = document.querySelector("header");
+  if (h) document.documentElement.style.setProperty("--headh", h.offsetHeight + "px");
+}
+window.addEventListener("resize", measureHeader);
 
 function renderHeader() {
   const c = R.client.client;
@@ -273,6 +296,7 @@ function renderHeader() {
   ].filter(Boolean).join(" · ") + " · " + BUILD;
   document.getElementById("clientName").textContent = name;
   document.getElementById("clientSub").textContent = sub;
+  measureHeader();
 }
 
 /** Capture focus so a re-render doesn't drop the caret. */
